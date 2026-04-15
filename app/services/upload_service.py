@@ -32,7 +32,7 @@ async def classify_document(source: str, preview: str) -> dict:
         "오직 JSON만 출력하세요. 다른 텍스트는 절대 포함하지 마세요."
     )
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=180.0) as client:
             resp = await client.post(
                 _CHAT_URL,
                 json={

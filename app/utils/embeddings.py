@@ -18,7 +18,7 @@ def get_http_client() -> httpx.AsyncClient:
     """싱글턴 httpx 클라이언트 반환."""
     global _client
     if _client is None or _client.is_closed:
-        _client = httpx.AsyncClient(timeout=120.0)
+        _client = httpx.AsyncClient(timeout=300.0)
     return _client
 
 

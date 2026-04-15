@@ -1,7 +1,6 @@
 """
 services/chat_service.py — RAG 채팅 비즈니스 로직
 질문 세목 분류 → 벡터 검색 → 메모리 조회 → Ollama 답변 → 메모리 저장.
-OpenAI → Ollama (qwen3.5:35b-a3b) 로 변경.
 """
 import json
 import uuid as _uuid

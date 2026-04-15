@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, Request, Response
 from jose import JWTError, jwt
 
-from app.config import JWT_ALGORITHM, JWT_EXPIRE_MIN, JWT_SECRET
+from config import JWT_ALGORITHM, JWT_EXPIRE_MIN, JWT_SECRET
 
 
 def create_access_token(user_id: str, email: str) -> str:

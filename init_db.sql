@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- ── 2. 문서 벡터 저장소 ─────────────────────────────────────────
--- qwen3-embedding:4b = 2560차원 (기존 OpenAI 1536 → 2560으로 변경)
+-- qwen3-embedding:4b = 2560차원 
 CREATE TABLE IF NOT EXISTS documents (
     id          BIGSERIAL   PRIMARY KEY,
     content     TEXT        NOT NULL,
