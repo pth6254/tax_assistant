@@ -1,16 +1,12 @@
 """
-utils/jwt.py — JWT 생성·검증 유틸
-라우터의 Depends()에서 verify_token을 주입해 사용합니다.
+utils/jwt.py — JWT 생성·검증 유틸 (httpOnly 쿠키 방식)
 """
 from datetime import datetime, timedelta, timezone
 
-from fastapi import Depends, HTTPException, Request
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import HTTPException, Request, Response
 from jose import JWTError, jwt
 
-from config import JWT_ALGORITHM, JWT_EXPIRE_MIN, JWT_SECRET
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
+from app.config import JWT_ALGORITHM, JWT_EXPIRE_MIN, JWT_SECRET
 
 
 def create_access_token(user_id: str, email: str) -> str:
@@ -22,19 +18,25 @@ def create_access_token(user_id: str, email: str) -> str:
     )
 
 
-async def verify_token(
-    request: Request,
-    token: str = Depends(oauth2_scheme),
-) -> dict:
-    """
-    Authorization: Bearer <JWT> 검증.
-    성공 시 {"id": str, "email": str} 반환.
-    """
+def set_auth_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        secure=False,        # 로컬 개발환경은 False
+        samesite="lax",
+        max_age=60 * JWT_EXPIRE_MIN,
+    )
+
+
+def clear_auth_cookie(response: Response) -> None:
+    response.delete_cookie(key="access_token")
+
+
+async def verify_token(request: Request) -> dict:
+    token = request.cookies.get("access_token")
     if not token:
-        auth = request.headers.get("Authorization", "")
-        if not auth.startswith("Bearer "):
-            raise HTTPException(status_code=401, detail="인증 토큰이 없습니다.")
-        token = auth.split(" ", 1)[1]
+        raise HTTPException(status_code=401, detail="인증 토큰이 없습니다.")
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         user_id: str = payload.get("sub", "")
