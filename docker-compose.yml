@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB:       ${POSTGRES_DB:-tax_db}
     ports:
-      - "5432:5432"
+      - "5433:5432"  # 호스트 5433 → 컨테이너 내부 5432
     volumes:
       - pgvector_data:/var/lib/postgresql/data   # 데이터 영속성
       - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql  # 자동 초기화
