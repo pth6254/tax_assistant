@@ -13,10 +13,10 @@ DATABASE_URL: str = os.getenv(
     "postgresql://postgres:postgres@localhost:5432/tax_db",
 )
 
-# ── OpenAI ─────────────────────────────────────────────────────
-OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-EMBED_MODEL: str    = "text-embedding-3-small"   # 1536차원
-CHAT_MODEL: str     = "gpt-4o-mini"
+# ── Ollama ─────────────────────────────────────────────────────
+OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+CHAT_MODEL: str      = os.getenv("CHAT_MODEL",  "qwen3.5:35b-a3b")   # LLM
+EMBED_MODEL: str     = os.getenv("EMBED_MODEL", "qwen3-embedding:4b") # 임베딩
 
 # ── RAG 파라미터 ────────────────────────────────────────────────
 CHUNK_SIZE: int    = 800
@@ -24,8 +24,13 @@ CHUNK_OVERLAP: int = 100
 TOP_K: int         = 10
 MEMORY_TURNS: int  = 3   # 채팅 메모리 최근 N 턴
 
+# ── 임베딩 차원 ─────────────────────────────────────────────────
+# qwen3-embedding:4b = 2560차원 → init_db.sql도 함께 수정 필요
+EMBED_DIM: int = 2560
+
 # ── JWT ────────────────────────────────────────────────────────
-# 반드시 .env 에서 교체: python -c "import secrets; print(secrets.token_hex(32))"
-JWT_SECRET: str     = os.getenv("JWT_SECRET", "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET")
+JWT_SECRET: str     = os.environ.get("JWT_SECRET", "")
+if not JWT_SECRET:
+    raise ValueError("JWT_SECRET 환경변수가 설정되지 않았습니다. .env 파일을 확인하세요.")
 JWT_ALGORITHM: str  = "HS256"
 JWT_EXPIRE_MIN: int = int(os.getenv("JWT_EXPIRE_MIN", "1440"))  # 기본 24시간

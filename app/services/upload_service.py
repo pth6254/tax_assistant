@@ -1,22 +1,26 @@
 """
 services/upload_service.py — PDF 업로드 및 벡터 저장 비즈니스 로직
 PDF 파싱 → AI 분류 → 청크 분할 → 임베딩 → pgvector 저장 파이프라인.
+OpenAI → Ollama (qwen3.5:35b-a3b) 로 변경.
 """
 import json
 
+import httpx
 from fastapi import HTTPException
 
+from config import CHAT_MODEL, OLLAMA_BASE_URL
 from app.database import get_pool
-from app.utils.embeddings import embed_texts, get_openai_client
+from app.utils.embeddings import embed_texts
 from app.utils.pdf import extract_text_from_pdf, split_into_chunks
+
+_CHAT_URL = f"{OLLAMA_BASE_URL}/api/chat"
 
 
 async def classify_document(source: str, preview: str) -> dict:
     """
-    GPT로 세무 문서 카테고리·세목 자동 분류.
+    Ollama(qwen3.5)로 세무 문서 카테고리·세목 자동 분류.
     반환 예: {"category": "법령", "law_name": "소득세법"}
     """
-    client = get_openai_client()
     prompt = (
         "대한민국 세무 문서를 분석하여 JSON으로만 응답하세요.\n"
         "category 후보: 법령, 시행령, 시행규칙, 집행기준, 기타\n"
@@ -25,16 +29,26 @@ async def classify_document(source: str, preview: str) -> dict:
         f"파일명: {source}\n"
         f"내용 도입부: {preview[:800]}\n"
         '출력 예시: {"category": "법령", "law_name": "소득세법"}\n'
-        "오직 JSON만 출력하세요."
+        "오직 JSON만 출력하세요. 다른 텍스트는 절대 포함하지 마세요."
     )
     try:
-        resp = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
-            max_tokens=100,
-        )
-        return json.loads(resp.choices[0].message.content)
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                _CHAT_URL,
+                json={
+                    "model": CHAT_MODEL,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "stream": False,
+                    "format": "json",   # Ollama JSON 모드
+                    "options": {
+                        "temperature": 0.0,  # 분류는 결정적으로
+                        "num_predict": 100,
+                    },
+                },
+            )
+            resp.raise_for_status()
+            content = resp.json()["message"]["content"]
+            return json.loads(content)
     except Exception:
         return {"category": "기타", "law_name": "공통"}
 
@@ -47,9 +61,9 @@ async def process_upload(
     """
     업로드 파이프라인 전체 실행.
     1. PDF 파싱
-    2. AI 분류
+    2. AI 분류 (Ollama)
     3. 청크 분할
-    4. 임베딩 (배치 100개)
+    4. 임베딩 (Ollama, 배치 100개)
     5. pgvector 저장 (기존 동일 파일 덮어쓰기)
     """
     # 1. PDF 파싱

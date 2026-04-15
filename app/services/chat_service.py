@@ -1,13 +1,18 @@
 """
 services/chat_service.py — RAG 채팅 비즈니스 로직
-질문 세목 분류 → 벡터 검색 → 메모리 조회 → GPT 답변 → 메모리 저장.
+질문 세목 분류 → 벡터 검색 → 메모리 조회 → Ollama 답변 → 메모리 저장.
+OpenAI → Ollama (qwen3.5:35b-a3b) 로 변경.
 """
 import json
 import uuid as _uuid
 
-from app.config import CHAT_MODEL, MEMORY_TURNS, TOP_K
+import httpx
+
+from config import CHAT_MODEL, MEMORY_TURNS, OLLAMA_BASE_URL, TOP_K
 from app.database import get_pool
-from app.utils.embeddings import embed_texts, get_openai_client
+from app.utils.embeddings import embed_texts
+
+_CHAT_URL = f"{OLLAMA_BASE_URL}/api/chat"
 
 # 세목 키워드 매핑
 _LAW_KW: dict[str, list[str]] = {
@@ -32,7 +37,8 @@ _SYSTEM_PROMPT = (
     "규칙:\n"
     "- 항상 마크다운으로 작성\n"
     "- 법적 근거는 조문 번호까지 명시\n"
-    "- 불확실한 내용은 반드시 '전문가 상담 권장' 표시"
+    "- 불확실한 내용은 반드시 '전문가 상담 권장' 표시\n"
+    "- <think> 태그 내용은 출력하지 말 것"  # Qwen3.5 thinking 모드 제어
 )
 
 
@@ -43,21 +49,29 @@ async def detect_law_name(query: str) -> str:
         if any(kw in q for kw in kws):
             return law
 
-    # 키워드 매칭 실패 시 GPT로 판단
-    client = get_openai_client()
+    # 키워드 매핑 실패 시 Ollama로 판단
     try:
-        resp = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": (
-                "다음 질문이 어떤 세법과 관련 있는지 하나만 답하세요.\n"
-                "후보: 소득세법, 부가가치세법, 법인세법, 상속세및증여세법, "
-                "지방세법, 조세특례제한법, 국세기본법, ALL\n"
-                f"질문: {query}\n오직 세법 이름 하나만 출력"
-            )}],
-            max_tokens=20,
-        )
-        result = resp.choices[0].message.content.strip()
-        return result if result in _LAW_KW else "ALL"
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                _CHAT_URL,
+                json={
+                    "model": CHAT_MODEL,
+                    "messages": [{"role": "user", "content": (
+                        "다음 질문이 어떤 세법과 관련 있는지 하나만 답하세요.\n"
+                        "후보: 소득세법, 부가가치세법, 법인세법, 상속세및증여세법, "
+                        "지방세법, 조세특례제한법, 국세기본법, ALL\n"
+                        f"질문: {query}\n오직 세법 이름 하나만 출력하세요."
+                    )}],
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.0,
+                        "num_predict": 20,
+                    },
+                },
+            )
+            resp.raise_for_status()
+            result = resp.json()["message"]["content"].strip()
+            return result if result in _LAW_KW else "ALL"
     except Exception:
         return "ALL"
 
@@ -119,10 +133,9 @@ async def process_chat(
 ) -> str:
     """
     RAG 채팅 파이프라인 전체 실행.
-    반환: GPT 답변 문자열
+    반환: Ollama 답변 문자열
     """
     session_id = _uuid.UUID(user_id)
-    client     = get_openai_client()
 
     # 1. 세목 분류
     law_filter = await detect_law_name(query)
@@ -136,20 +149,30 @@ async def process_chat(
     # 4. 채팅 메모리 조회
     history = await _fetch_history(session_id)
 
-    # 5. GPT 답변 생성
+    # 5. Ollama 답변 생성
     messages = [{"role": "system", "content": _SYSTEM_PROMPT}]
     messages.extend(history)
     messages.append({"role": "user", "content": (
         f"[검색된 세무 법령 자료]\n{context}\n\n[사용자 질문]\n{query}"
     )})
 
-    resp = await client.chat.completions.create(
-        model=CHAT_MODEL,
-        messages=messages,
-        max_tokens=2000,
-        temperature=0.3,
-    )
-    answer = resp.choices[0].message.content
+    async with httpx.AsyncClient(timeout=180.0) as client:
+        resp = await client.post(
+            _CHAT_URL,
+            json={
+                "model":   CHAT_MODEL,
+                "messages": messages,
+                "stream":   False,
+                "options": {
+                    "temperature":  0.3,
+                    "num_predict":  2000,
+                    "num_ctx":      8192,  # 컨텍스트 윈도우
+                },
+            },
+        )
+        resp.raise_for_status()
+
+    answer = resp.json()["message"]["content"]
 
     # 6. 메모리 저장
     await _save_history(session_id, query, answer)
