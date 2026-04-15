@@ -7,7 +7,7 @@ from typing import Optional
 import asyncpg
 from pgvector.asyncpg import register_vector
 
-from app.config import DATABASE_URL
+from config import DATABASE_URL
 
 _pool: Optional[asyncpg.Pool] = None
 

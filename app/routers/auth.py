@@ -4,7 +4,8 @@ POST /api/auth/signup
 POST /api/auth/login
 """
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, Emailstr
+
 
 from app.services import auth_service
 
@@ -12,13 +13,13 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 class SignupRequest(BaseModel):
-    email:    str
-    password: str
+    email:    Emailstr
+    password: str = Field(min_length=1, max_length=72)
 
 
 class LoginRequest(BaseModel):
-    email:    str
-    password: str
+    email:    Emailstr
+    password: str = Field(min_length=1)
 
 
 @router.post("/signup", status_code=201)

@@ -6,7 +6,7 @@ import io
 import PyPDF2
 import tiktoken
 
-from app.config import CHUNK_OVERLAP, CHUNK_SIZE
+from config import CHUNK_OVERLAP, CHUNK_SIZE
 
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:

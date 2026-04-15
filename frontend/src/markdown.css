@@ -1,0 +1,27 @@
+.markdown-bubble h2 {
+  font-family: var(--font-serif);
+  font-size: 15px; font-weight: 600;
+  color: var(--accent2);
+  margin: 16px 0 8px;
+}
+.markdown-bubble h2:first-child { margin-top: 0; }
+.markdown-bubble p   { margin-bottom: 10px; }
+.markdown-bubble p:last-child { margin-bottom: 0; }
+.markdown-bubble ul, .markdown-bubble ol { padding-left: 20px; margin-bottom: 10px; }
+.markdown-bubble li  { margin-bottom: 4px; }
+.markdown-bubble code {
+  background: rgba(79,124,255,.12);
+  color: var(--accent2);
+  padding: 1px 6px; border-radius: 4px;
+  font-size: 13px;
+}
+.markdown-bubble pre {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 10px 0;
+}
+.markdown-bubble pre code { background: none; padding: 0; }
+.markdown-bubble strong { color: var(--accent2); }

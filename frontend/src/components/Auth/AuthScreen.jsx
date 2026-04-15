@@ -67,7 +67,6 @@ export default function AuthScreen({ onLogin, onSignup }) {
 
   const handleSubmit = async () => {
     if (!email || !pw) { setMsg({ text: '이메일과 비밀번호를 입력해주세요.', type: 'error' }); return }
-    if (pw.length < 8) { setMsg({ text: '비밀번호는 8자 이상이어야 합니다.', type: 'error' }); return }
     if (tab === 'signup' && pw !== pw2) { setMsg({ text: '비밀번호가 일치하지 않습니다.', type: 'error' }); return }
 
     setLoading(true)

@@ -1,8 +1,12 @@
 """
 main.py — 앱 진입점
 
-실행:
-  uvicorn main:app --reload --port 8000
+FastAPI 백엔드 실행:
+    uvicorn main:app --reload --port 8000
+
+React 프론트엔드 실행:
+    cd frontend
+    npm run dev
 """
 from contextlib import asynccontextmanager
 

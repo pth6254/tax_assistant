@@ -8,7 +8,7 @@ from fastapi import Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 
-from app.config import JWT_ALGORITHM, JWT_EXPIRE_MIN, JWT_SECRET
+from config import JWT_ALGORITHM, JWT_EXPIRE_MIN, JWT_SECRET
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 

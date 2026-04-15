@@ -8,7 +8,7 @@ from passlib.context import CryptContext
 from app.database import get_pool
 from app.utils.jwt import create_access_token
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__truncate_error=False)
 
 
 async def signup(email: str, password: str) -> dict:
