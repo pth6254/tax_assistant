@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: pgvector/pgvector:pg17        # PostgreSQL 17 + pgvector 내장
+    image: pgvector/pgvector:pg17
     container_name: tax_pgvector
     restart: unless-stopped
     environment:
@@ -8,15 +8,27 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB:       ${POSTGRES_DB:-tax_db}
     ports:
-      - "5433:5432"  # 호스트 5433 → 컨테이너 내부 5432
+      - "5433:5432"
     volumes:
-      - pgvector_data:/var/lib/postgresql/data   # 데이터 영속성
-      - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql  # 자동 초기화
+      - pgvector_data:/var/lib/postgresql/data
+      - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-tax_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: tax_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL:    ${PGADMIN_EMAIL:-admin@admin.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
 
 volumes:
   pgvector_data:
