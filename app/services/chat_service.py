@@ -7,11 +7,13 @@ import uuid as _uuid
 
 import httpx
 
-from config import CHAT_MODEL, MEMORY_TURNS, OLLAMA_BASE_URL, TOP_K
+from config import CHAT_MODEL, MEMORY_TURNS, OLLAMA_BASE_URL, TOP_K, TAVILY_API_KEY
 from app.database import get_pool
 from app.utils.embeddings import embed_texts
 
 _CHAT_URL = f"{OLLAMA_BASE_URL}/api/chat"
+
+_TAVILY_URL = "https://api.tavily.com/search"
 
 # 세목 키워드 매핑
 _LAW_KW: dict[str, list[str]] = {
@@ -153,55 +155,211 @@ async def _save_history(
             ],
         )
 
+# 채팅 답변 제시
 
-async def process_chat(
-    query: str,
-    user_id: str,
-) -> str:
-    """
-    RAG 채팅 파이프라인 전체 실행.
-    반환: Ollama 답변 문자열
-    """
-    session_id = _uuid.UUID(user_id)
+# ── 1단계: 자료 검색기 ─────────────────────────────────────────
+_RAG_PROMPT = (
+    "당신은 대한민국 최고의 'AI 세무 자동화 어시스턴트'입니다.\n"
+    "세무 법령 DB에서 검색된 자료를 1순위 근거로 사용하고, "
+    "부족한 경우 세법 일반 원칙을 적용하여 답변하세요.\n\n"
 
-    # 1. 세목 분류
-    law_filter = await detect_law_name(query)
+    "## 법령 위계 원칙 (반드시 준수)\n"
+    "1. 법령   — 최상위 근거, 반드시 인용\n"
+    "2. 시행령 — 법령의 위임 사항, 구체적 기준\n"
+    "3. 시행규칙 — 시행령의 위임 사항, 세부 절차\n"
+    "4. 집행기준 — 행정 해석, 참고용\n\n"
+    "- 법적 근거 인용 시 📌 category가 '법령'인 문서를 최우선으로 명시하세요.\n"
+    "- 시행령·시행규칙은 '법령 X조의 위임에 따라' 형식으로 연결하여 설명하세요.\n"
+    "- 집행기준만 검색된 경우 '행정 해석 기준이며 법적 구속력 없음'을 반드시 표시하세요.\n\n"
 
-    # 2. 질문 임베딩
-    q_emb = (await embed_texts([query]))[0]
+    "## 세법 일반 원칙\n"
+    "- 특별법 우선: 일반법보다 특별법(조세특례제한법)이 우선 적용\n"
+    "- 신법 우선: 같은 위계의 법령은 최신 개정령이 우선\n"
+    "- 엄격 해석: 비과세·감면 요건은 명확한 근거가 있어야 함\n\n"
 
-    # 3. 벡터 검색
-    context = await _fetch_context(q_emb, law_filter)
+    "## 출력 형식\n"
+    "## 1. 💡 핵심 요약\n"
+    "## 2. 📖 상세 가이드\n"
+    "## 3. ⚖️ 법적 근거 (위계 순서로 나열)\n"
+    "## 4. ⚡ 실무 대응 팁\n"
+    "## 5. ❓ 추가 확인 필요 사항 (웹 검색이 필요한 부분)\n\n"
 
-    # 4. 채팅 메모리 조회
-    history = await _fetch_history(session_id)
+    "규칙:\n"
+    "- 항상 마크다운으로 작성\n"
+    "- 법적 근거는 조문 번호까지 명시\n"
+    "- DB에서 확인 안 된 내용은 '확인하기 어렵다' 또는 '근거 조문 없음'으로 명시\n"
+    "- 불확실한 내용은 반드시 '전문가 상담 권장' 표시\n"
+    "- <think> 태그 내용은 출력하지 말 것\n"
+)
 
-    # 5. Ollama 답변 생성
-    messages = [{"role": "system", "content": _SYSTEM_PROMPT}]
-    messages.extend(history)
-    messages.append({"role": "user", "content": (
-        f"[검색된 세무 법령 자료]\n{context}\n\n[사용자 질문]\n{query}"
-    )})
+# ── 2단계: 웹 검색 Gap Analysis 프롬프트 ──────────────────────
+_GAP_PROMPT = (
+    "너는 1차 답변을 검토하여 부족한 부분을 웹 검색으로 보완하는 '지식 보완 전문가'이다.\n\n"
 
+    "## Task\n"
+    "아래 1차 답변에서 '확인하기 어렵다', '근거 조문 없음', '전문가 상담 권장'으로 표시된 "
+    "부분을 찾아 웹 검색 쿼리를 생성하라.\n\n"
+
+    "## 검색 쿼리 생성 규칙\n"
+    "1. 구어체를 법률 용어로 변환 (예: '알바비' → '인적용역 원천징수')\n"
+    "2. 아래 3가지 관점으로 쿼리 생성:\n"
+    "   - 법령/조문 관점: '소득세법 제XX조' 등 근거 검색\n"
+    "   - 실무/해석 관점: '국세청 유권해석', '최신 예규' 검색\n"
+    "   - 계산/방법 관점: 세액 산출 공식, 신고 방법 검색\n"
+    "3. 검색어 뒤에 '2026년' 또는 '최신' 키워드 포함\n\n"
+
+    "## 출력 형식 (JSON)\n"
+    "{\n"
+    '  "gap_found": "부족했던 정보 설명",\n'
+    '  "search_queries": ["검색어1", "검색어2", "검색어3"],\n'
+    '  "search_required": true/false\n'
+    "}\n\n"
+
+    "search_required가 false면 검색 없이 SKIP.\n"
+    "오직 JSON만 출력하세요.\n"
+    "- <think> 태그 내용은 출력하지 말 것\n"
+)
+
+# ── 3단계: 최종 답변 요약 프롬프트 ───────────────────────────
+_SUMMARY_PROMPT = (
+    "너는 내부 법령 DB 검색 결과와 외부 웹 검색 결과를 합성하여 "
+    "최종 답변을 생성하는 '프리미엄 세무 정책 가이드'이다.\n\n"
+
+    "## 합성 전략\n"
+    "1. 내부 DB 결과를 핵심 근거로 사용\n"
+    "2. 웹 검색 결과는 DB가 설명 못한 부분만 보조적으로 사용\n"
+    "3. 이전 대화 맥락을 반영하여 맞춤형 답변 생성\n\n"
+
+    "## 최종 출력 형식\n"
+    "## 1. 💡 결론 요약\n"
+    "## 2. 📖 상세 내용\n"
+    "## 3. ⚖️ 법적 근거 및 상세 결과\n"
+    "## 4. ⚡ 실무 대응 팁\n\n"
+
+    "규칙:\n"
+    "- 항상 마크다운으로 작성\n"
+    "- 법적 근거는 조문 번호까지 명시\n"
+    "- 불확실한 내용은 반드시 '전문가 상담 권장' 표시\n"
+    "- <think> 태그 내용은 출력하지 말 것\n"
+)
+
+
+async def _call_ollama(messages: list[dict], temperature: float = 0.3) -> str:
+    """Ollama 호출 공통 함수."""
     async with httpx.AsyncClient(timeout=180.0) as client:
         resp = await client.post(
             _CHAT_URL,
             json={
-                "model":   CHAT_MODEL,
+                "model":    CHAT_MODEL,
                 "messages": messages,
                 "stream":   False,
                 "options": {
-                    "temperature":  0.3,
-                    "num_predict":  2000,
-                    "num_ctx":      8192,  # 컨텍스트 윈도우
+                    "temperature": temperature,
+                    "num_predict": 2000,
+                    "num_ctx":     8192,
                 },
             },
         )
         resp.raise_for_status()
+        return resp.json()["message"]["content"]
 
-    answer = resp.json()["message"]["content"]
 
-    # 6. 메모리 저장
+async def _tavily_search(queries: list[str]) -> str:
+    """Tavily 웹 검색 실행."""
+    results = []
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        for query in queries[:3]:  # 최대 3개 쿼리
+            try:
+                resp = await client.post(
+                    _TAVILY_URL,
+                    headers={"Authorization": f"Bearer {TAVILY_API_KEY}"},
+                    json={
+                        "query":        query,
+                        "search_depth": "advanced",
+                        "max_results":  3,
+                        "include_domains": [
+                            "nts.go.kr",    # 국세청
+                            "law.go.kr",    # 법제처
+                            "moef.go.kr",   # 기획재정부
+                        ],
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                for r in data.get("results", []):
+                    results.append(
+                        f"[출처: {r.get('url','?')}]\n{r.get('content','')[:500]}"
+                    )
+            except Exception:
+                continue
+
+    return "\n\n---\n\n".join(results) if results else "웹 검색 결과 없음"
+
+
+async def process_chat(query: str, user_id: str) -> str:
+    """
+    3단계 RAG 파이프라인
+    1단계: 내부 법령 DB 검색 → 1차 답변
+    2단계: Gap Analysis → Tavily 웹 검색
+    3단계: 최종 답변 합성
+    """
+    answer = ""
+    session_id = _uuid.UUID(user_id)
+
+    # 세목 분류
+    law_filter = await detect_law_name(query)
+
+    # 질문 임베딩 + 벡터 검색
+    q_emb   = (await embed_texts([query]))[0]
+    context = await _fetch_context(q_emb, law_filter)
+
+    # 메모리 조회
+    history = await _fetch_history(session_id)
+
+    # ── 1단계: 자료 검색기 ──────────────────────────────────────
+    messages_1 = [{"role": "system", "content": _RAG_PROMPT}]
+    messages_1.extend(history)
+    messages_1.append({"role": "user", "content": (
+        f"[검색된 세무 법령 자료]\n{context}\n\n[사용자 질문]\n{query}"
+    )})
+
+    rag_answer = await _call_ollama(messages_1, temperature=0.3)
+
+    # ── 2단계: Gap Analysis + Tavily 웹 검색 ───────────────────
+    web_results = "웹 검색 생략"
+
+    if TAVILY_API_KEY:
+        messages_2 = [
+            {"role": "system", "content": _GAP_PROMPT},
+            {"role": "user",   "content": (
+                f"[사용자 질문]\n{query}\n\n"
+                f"[1차 답변]\n{rag_answer}"
+            )},
+        ]
+        gap_raw = await _call_ollama(messages_2, temperature=0.0)
+
+        try:
+            # <think> 태그 제거 후 JSON 파싱
+            clean = gap_raw.split("</think>")[-1].strip()
+            gap   = json.loads(clean)
+
+            if gap.get("search_required") and gap.get("search_queries"):
+                web_results = await _tavily_search(gap["search_queries"])
+        except Exception:
+            pass  # Gap Analysis 실패 시 웹 검색 생략
+
+    # ── 3단계: 최종 답변 요약 ──────────────────────────────────
+    messages_3 = [{"role": "system", "content": _SUMMARY_PROMPT}]
+    messages_3.extend(history)
+    messages_3.append({"role": "user", "content": (
+        f"[사용자 질문]\n{query}\n\n"
+        f"[내부 DB 검색 결과]\n{rag_answer}\n\n"
+        f"[웹 검색 결과]\n{web_results}"
+    )})
+
+    answer = await _call_ollama(messages_3, temperature=0.3)
+
+    # 메모리 저장
     await _save_history(session_id, query, answer)
 
     return answer

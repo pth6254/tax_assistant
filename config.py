@@ -34,3 +34,6 @@ if not JWT_SECRET:
     raise ValueError("JWT_SECRET 환경변수가 설정되지 않았습니다. .env 파일을 확인하세요.")
 JWT_ALGORITHM: str  = "HS256"
 JWT_EXPIRE_MIN: int = int(os.getenv("JWT_EXPIRE_MIN", "1440"))  # 기본 24시간
+
+# ── Tavily ─────────────────────────────────────────────────────
+TAVILY_API_KEY: str = os.getenv("TAVILY_API_KEY", "")
