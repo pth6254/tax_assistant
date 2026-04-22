@@ -62,28 +62,14 @@ RETURNS TABLE (
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    IF law_filter = 'ALL' THEN
-        RETURN QUERY
-        SELECT
-            d.id,
-            d.content,
-            d.metadata,
-            1 - (d.embedding <=> query_embedding) AS similarity
-        FROM documents d
-        ORDER BY d.embedding <=> query_embedding
-        LIMIT match_count;
-    ELSE
-        RETURN QUERY
-        SELECT
-            d.id,
-            d.content,
-            d.metadata,
-            1 - (d.embedding <=> query_embedding) AS similarity
-        FROM documents d
-        WHERE d.metadata->>'law_name' = law_filter
-        ORDER BY d.embedding <=> query_embedding
-        LIMIT match_count;
-    END IF;
+    RETURN QUERY
+    SELECT
+        d.id, d.content, d.metadata,
+        1 - (d.embedding <=> query_embedding) AS similarity
+    FROM documents d
+    WHERE (law_filter = 'ALL' OR d.metadata->>'law_name' = law_filter)
+    ORDER BY d.embedding <=> query_embedding
+    LIMIT match_count;
 END;
 $$;
 
