@@ -96,9 +96,9 @@ Agentic RAG 3단계 파이프라인
 
 | 화면 | 설명 |
 |------|------|
-| ![로그인](./assets/demo-login.png) | 이메일·비밀번호 로그인 |
-| ![업로드](./assets/demo-upload.png) | PDF 업로드 및 자동 분류 결과 |
-| ![채팅](./assets/demo-chat.png) | 법령 근거 포함 세무 답변 |
+| ![로그인](./assets/demo_login.png) | 이메일·비밀번호 로그인 |
+| ![업로드](./assets/demo_upload.png) | PDF 업로드 및 자동 분류 결과 |
+| ![채팅](./assets/demo_chat.png) | 법령 근거 포함 세무 답변 |
 
 > 이미지는 추후 추가 예정입니다.
 
@@ -539,32 +539,6 @@ ValueError: 임베딩 차원 불일치: 예상 2560, 실제 768
 # 모델 변경 시 DB를 재초기화하거나 EMBED_DIM을 맞춰야 함
 ```
 
-### Tavily API Key 누락
-- `.env`에 `TAVILY_API_KEY`가 없으면 웹검색 단계가 자동으로 생략됩니다.
-- 웹검색 없이도 내부 DB 기반 답변은 정상 동작합니다.
-
-### 프론트엔드 API Proxy 오류
-```
-CORS / 404 on /api/...
-```
-```js
-// frontend/vite.config.js 에 proxy 설정 확인
-server: {
-  proxy: {
-    '/api': 'http://localhost:8000'
-  }
-}
-```
-
-### 법령 수집 시 API Key 오류
-```
-ValueError: LAW_API_KEY가 설정되지 않았습니다.
-```
-```
-# .env에 발급받은 키 추가
-LAW_API_KEY=your-key-here
-# 발급: https://www.law.go.kr/LSO/openApi/openApiIntroPage.do
-```
 
 ---
 
@@ -580,20 +554,10 @@ LAW_API_KEY=your-key-here
 | pgvector 인덱스 미적용 | 2560차원 이하 모델 전환 시 HNSW 인덱스 추가 가능 |
 | 사용자별 문서 격리 없음 | `documents` 테이블에 `user_id` 필터 추가 |
 
-## 16. 실행 화면
-
-### 로그인 화면
-![로그인 화면](./assets/demo_login.png)
-
-### PDF 업로드 화면
-![PDF 업로드 화면](./assets/demo-upload.png) 이건 아직 이미지 없음
-
-### 세무 질의응답 화면
-![세무 질의응답 화면](./assets/demo_chat.png)
 
 ---
 
-## 17. 라이선스
+## 16. 라이선스
 
 라이선스는 추후 추가 예정입니다.
 
