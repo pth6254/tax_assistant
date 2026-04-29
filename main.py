@@ -8,6 +8,7 @@ React 프론트엔드 실행:
     cd frontend
     npm run dev
 """
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -16,6 +17,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import close_pool, get_pool
 from app.routers import auth, chat, upload
 from app.utils.embeddings import close_http_client
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-8s  %(name)s — %(message)s",
+    datefmt="%H:%M:%S",
+)
 
 
 @asynccontextmanager

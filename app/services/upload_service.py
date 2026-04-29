@@ -4,6 +4,8 @@ PDF 파싱 → AI 분류 → 청크 분할 → 임베딩 → pgvector 저장 파
 OpenAI → Ollama (qwen3.5:35b-a3b) 로 변경.
 """
 import json
+import logging
+import time
 
 import httpx
 from fastapi import HTTPException
@@ -12,6 +14,8 @@ from config import CHAT_MODEL, OLLAMA_BASE_URL
 from app.database import get_pool
 from app.utils.embeddings import embed_texts
 from app.utils.pdf import extract_text_from_pdf, split_into_chunks
+
+logger = logging.getLogger(__name__)
 
 _CHAT_URL = f"{OLLAMA_BASE_URL}/api/chat"
 
@@ -102,28 +106,31 @@ async def process_upload(
     filename: str,
     uploader_email: str,
 ) -> dict:
-    """
-    업로드 파이프라인 전체 실행.
-    1. PDF 파싱
-    2. AI 분류 (Ollama)
-    3. 청크 분할
-    4. 임베딩 (Ollama, 배치 100개)
-    5. pgvector 저장 (기존 동일 파일 덮어쓰기)
-    """
+    """업로드 파이프라인: PDF 파싱 → AI 분류 → 청크 분할 → 임베딩 → DB 저장."""
+    t0 = time.perf_counter()
+    logger.info("[UPLOAD] 시작: %s (%.1fKB) | 업로더: %s",
+                filename, len(file_bytes) / 1024, uploader_email)
+
     # 1. PDF 파싱
     try:
         full_text = extract_text_from_pdf(file_bytes)
     except Exception as e:
+        logger.error("[UPLOAD] PDF 파싱 실패: %s — %s", filename, e)
         raise HTTPException(status_code=422, detail=f"PDF 파싱 오류: {e}")
 
     if not full_text.strip():
+        logger.warning("[UPLOAD] 텍스트 추출 불가 (스캔 PDF): %s", filename)
         raise HTTPException(
             status_code=422,
             detail="텍스트를 추출할 수 없습니다. (스캔 PDF 미지원)",
         )
+    logger.info("[UPLOAD] PDF 파싱 완료: %d자", len(full_text))
 
     # 2. AI 분류
     meta = await classify_document(filename, full_text)
+    logger.info("[UPLOAD] 문서 분류: category=%s | law_name=%s",
+                meta.get("category"), meta.get("law_name"))
+
     metadata_base = {
         "source":   filename,
         "law_name": meta.get("law_name", "공통"),
@@ -133,31 +140,38 @@ async def process_upload(
 
     # 3. 청크 분할
     chunks = split_into_chunks(full_text)
+    logger.info("[UPLOAD] 청크 분할: %d개", len(chunks))
 
     # 4. 임베딩 (100개 배치)
+    t1 = time.perf_counter()
     embeddings: list[list[float]] = []
     for i in range(0, len(chunks), 100):
-        embeddings.extend(await embed_texts(chunks[i : i + 100]))
+        batch_end = min(i + 100, len(chunks))
+        logger.info("[UPLOAD] 임베딩 중 %d~%d / %d ...", i + 1, batch_end, len(chunks))
+        embeddings.extend(await embed_texts(chunks[i:batch_end]))
+    logger.info("[UPLOAD] 임베딩 완료 (%.1fs)", time.perf_counter() - t1)
 
     # 5. DB 저장
     pool = await get_pool()
     async with pool.acquire() as conn:
-        await conn.execute(
-            "DELETE FROM documents WHERE metadata->>'source' = $1",
-            filename,
+        deleted = await conn.fetchval(
+            "SELECT COUNT(*) FROM documents WHERE metadata->>'source' = $1", filename
         )
+        if deleted:
+            await conn.execute(
+                "DELETE FROM documents WHERE metadata->>'source' = $1", filename
+            )
+            logger.info("[UPLOAD] 기존 청크 %d개 삭제 (덮어쓰기)", deleted)
+
         await conn.executemany(
             "INSERT INTO documents (content, embedding, metadata) VALUES ($1, $2, $3)",
             [
-                (
-                    chunk,
-                    emb,
-                    json.dumps({**metadata_base, "chunk_index": idx}),
-                )
+                (chunk, emb, json.dumps({**metadata_base, "chunk_index": idx}))
                 for idx, (chunk, emb) in enumerate(zip(chunks, embeddings))
             ],
         )
 
+    logger.info("[UPLOAD] 완료 — %d청크 저장 | 총 %.1fs", len(chunks), time.perf_counter() - t0)
     return {
         "status":        "ok",
         "filename":      filename,

@@ -2,8 +2,12 @@
 services/chat_service.py — RAG 채팅 비즈니스 로직
 질문 세목 분류 → 벡터 검색 → 메모리 조회 → Ollama 답변 → 메모리 저장.
 """
+import asyncio
 import json
+import logging
+import time
 import uuid as _uuid
+from typing import AsyncGenerator
 
 import httpx
 
@@ -12,19 +16,36 @@ from app.database import get_pool
 from app.utils.embeddings import embed_texts
 from app.services.law.hybrid_search_service import fetch_hybrid_context
 
+logger = logging.getLogger(__name__)
+
 _CHAT_URL = f"{OLLAMA_BASE_URL}/api/chat"
 
 _TAVILY_URL = "https://api.tavily.com/search"
 
 # 세목 키워드 매핑
 _LAW_KW: dict[str, list[str]] = {
-    "소득세법":         ["소득세", "종합소득", "원천징수", "근로소득", "사업소득", "기타소득"],
-    "부가가치세법":     ["부가세", "부가가치세", "vat", "간이과세", "일반과세"],
-    "법인세법":         ["법인세", "법인소득"],
-    "상속세및증여세법": ["상속세", "증여세", "상속", "증여"],
-    "지방세법":         ["지방세", "취득세", "재산세", "주민세"],
-    "조세특례제한법":   ["조세특례", "감면", "공제", "세액공제", "조특법"],
-    "국세기본법":       ["국세기본", "가산세", "경정청구", "불복"],
+    "소득세법":              ["소득세", "종합소득", "원천징수", "근로소득", "사업소득", "기타소득", "양도소득"],
+    "부가가치세법":          ["부가세", "부가가치세", "vat", "간이과세", "일반과세", "매입세액", "매출세액"],
+    "법인세법":              ["법인세", "법인소득", "법인 세금"],
+    "상속세및증여세법":      ["상속세", "증여세", "상속", "증여", "유산"],
+    "지방세법":              ["지방세", "취득세", "재산세", "주민세", "자동차세", "등록면허세"],
+    "조세특례제한법":        ["조세특례", "감면", "공제", "세액공제", "조특법", "세제혜택"],
+    "국세기본법":            ["국세기본", "가산세", "경정청구", "불복", "과세전적부심사"],
+    "종합부동산세법":        ["종합부동산세", "종부세"],
+    "개별소비세법":          ["개별소비세", "특별소비세"],
+    "교통에너지환경세법":    ["교통에너지환경세", "교통세"],
+    "주세법":                ["주세", "주류세"],
+    "인지세법":              ["인지세"],
+    "농어촌특별세법":        ["농어촌특별세", "농특세"],
+    "교육세법":              ["교육세"],
+    "증권거래세법":          ["증권거래세"],
+    "국세징수법":            ["국세징수", "체납", "압류", "공매"],
+    "조세범처벌법":          ["조세범", "세금포탈", "조세포탈"],
+    "국제조세조정에관한법률": ["국제조세", "이전가격", "조세조약", "해외금융계좌"],
+    "관세법":                ["관세", "수입세", "수출입", "관세청"],
+    "지방세기본법":          ["지방세기본", "지방세 불복", "지방세 경정"],
+    "지방세특례제한법":      ["지방세특례", "지방세 감면"],
+    "지방세징수법":          ["지방세징수", "지방세 체납"],
 }
 
 
@@ -236,8 +257,11 @@ _SUMMARY_PROMPT = (
 )
 
 
+_OLLAMA_OPTIONS = {"temperature": 0.3, "num_predict": 2000, "num_ctx": 8192}
+
+
 async def _call_ollama(messages: list[dict], temperature: float = 0.3) -> str:
-    """Ollama 호출 공통 함수."""
+    """Ollama 비스트리밍 호출."""
     async with httpx.AsyncClient(timeout=180.0) as client:
         resp = await client.post(
             _CHAT_URL,
@@ -245,112 +269,209 @@ async def _call_ollama(messages: list[dict], temperature: float = 0.3) -> str:
                 "model":    CHAT_MODEL,
                 "messages": messages,
                 "stream":   False,
-                "options": {
-                    "temperature": temperature,
-                    "num_predict": 2000,
-                    "num_ctx":     8192,
-                },
+                "options":  {**_OLLAMA_OPTIONS, "temperature": temperature},
             },
         )
         resp.raise_for_status()
         return resp.json()["message"]["content"]
 
 
-async def _tavily_search(queries: list[str]) -> str:
-    """Tavily 웹 검색 실행."""
-    results = []
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        for query in queries[:3]:  # 최대 3개 쿼리
-            try:
-                resp = await client.post(
-                    _TAVILY_URL,
-                    headers={"Authorization": f"Bearer {TAVILY_API_KEY}"},
-                    json={
-                        "query":        query,
-                        "search_depth": "advanced",
-                        "max_results":  3,
-                        "include_domains": [
-                            "nts.go.kr",    # 국세청
-                            "law.go.kr",    # 법제처
-                            "moef.go.kr",   # 기획재정부
-                        ],
-                    },
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                for r in data.get("results", []):
-                    results.append(
-                        f"[출처: {r.get('url','?')}]\n{r.get('content','')[:500]}"
-                    )
-            except Exception:
-                continue
+async def _stream_ollama_response(
+    messages: list[dict],
+    temperature: float = 0.3,
+) -> AsyncGenerator[str, None]:
+    """
+    Ollama 스트리밍 호출. 토큰 청크를 yield한다.
+    <think>...</think> 블록은 필터링하여 출력하지 않는다.
+    """
+    buf = ""
+    past_think = False
 
+    async with httpx.AsyncClient(timeout=180.0) as client:
+        async with client.stream(
+            "POST",
+            _CHAT_URL,
+            json={
+                "model":    CHAT_MODEL,
+                "messages": messages,
+                "stream":   True,
+                "options":  {**_OLLAMA_OPTIONS, "temperature": temperature},
+            },
+        ) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                except Exception:
+                    continue
+
+                chunk = data.get("message", {}).get("content", "")
+
+                if past_think:
+                    if chunk:
+                        yield chunk
+                else:
+                    buf += chunk
+                    if "</think>" in buf:
+                        _, after = buf.split("</think>", 1)
+                        past_think = True
+                        buf = ""
+                        if after:
+                            yield after
+                    elif "<think>" not in buf and len(buf) > 30:
+                        # 모델이 thinking 없이 바로 답변하는 경우
+                        past_think = True
+                        yield buf
+                        buf = ""
+
+                if data.get("done"):
+                    break
+
+    # think 없이 끝난 경우 버퍼 잔여 출력
+    if buf and not buf.lstrip().startswith("<think>"):
+        yield buf
+
+
+async def _tavily_search(queries: list[str]) -> str:
+    """Tavily 웹 검색 — 최대 3개 쿼리를 병렬 실행."""
+    _DOMAINS = ["nts.go.kr", "law.go.kr", "moef.go.kr"]
+
+    async def _fetch_one(client: httpx.AsyncClient, query: str) -> list[str]:
+        try:
+            resp = await client.post(
+                _TAVILY_URL,
+                headers={"Authorization": f"Bearer {TAVILY_API_KEY}"},
+                json={
+                    "query":           query,
+                    "search_depth":    "advanced",
+                    "max_results":     3,
+                    "include_domains": _DOMAINS,
+                },
+            )
+            resp.raise_for_status()
+            return [
+                f"[출처: {r.get('url','?')}]\n{r.get('content','')[:500]}"
+                for r in resp.json().get("results", [])
+            ]
+        except Exception:
+            return []
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        nested = await asyncio.gather(*[_fetch_one(client, q) for q in queries[:3]])
+
+    results = [item for sub in nested for item in sub]
     return "\n\n---\n\n".join(results) if results else "웹 검색 결과 없음"
 
 
-async def process_chat(query: str, user_id: str) -> str:
+async def _fetch_rag_and_web_context(
+    query: str,
+    session_id: _uuid.UUID,
+) -> tuple[str, str, list[dict]]:
     """
-    3단계 RAG 파이프라인
-    1단계: 내부 법령 DB 검색 → 1차 답변
-    2단계: Gap Analysis → Tavily 웹 검색
-    3단계: 최종 답변 합성
+    세목 분류·법령 검색·Gap 분석·웹 검색을 수행하고
+    (rag_answer, web_results, history)를 반환한다.
+    세목 분류와 대화 히스토리 조회는 병렬로 실행한다.
     """
-    answer = ""
-    session_id = _uuid.UUID(user_id)
+    t0 = time.perf_counter()
 
-    # 세목 분류
-    law_filter = await detect_law_name(query)
+    law_filter, history = await asyncio.gather(
+        detect_law_name(query),
+        _fetch_history(session_id),
+    )
+    logger.info("[RAG] 세목=%s | 히스토리=%d턴", law_filter, len(history) // 2)
 
-    # 하이브리드 검색 (law_articles + documents 병합)
     context = await fetch_hybrid_context(query, law_filter)
+    logger.info("[RAG] 하이브리드 검색 완료 (%.1fs)", time.perf_counter() - t0)
 
-    # 메모리 조회
-    history = await _fetch_history(session_id)
-
-    # ── 1단계: 자료 검색기 ──────────────────────────────────────
-    messages_1 = [{"role": "system", "content": _RAG_PROMPT}]
-    messages_1.extend(history)
-    messages_1.append({"role": "user", "content": (
+    t1 = time.perf_counter()
+    messages_rag = [{"role": "system", "content": _RAG_PROMPT}]
+    messages_rag.extend(history)
+    messages_rag.append({"role": "user", "content": (
         f"[검색된 세무 법령 자료]\n{context}\n\n[사용자 질문]\n{query}"
     )})
+    rag_answer = await _call_ollama(messages_rag, temperature=0.3)
+    logger.info("[RAG] 1차 답변 완료 (%.1fs)", time.perf_counter() - t1)
 
-    rag_answer = await _call_ollama(messages_1, temperature=0.3)
-
-    # ── 2단계: Gap Analysis + Tavily 웹 검색 ───────────────────
     web_results = "웹 검색 생략"
-
     if TAVILY_API_KEY:
-        messages_2 = [
+        t2 = time.perf_counter()
+        messages_gap = [
             {"role": "system", "content": _GAP_PROMPT},
-            {"role": "user",   "content": (
-                f"[사용자 질문]\n{query}\n\n"
-                f"[1차 답변]\n{rag_answer}"
-            )},
+            {"role": "user",   "content": f"[사용자 질문]\n{query}\n\n[1차 답변]\n{rag_answer}"},
         ]
-        gap_raw = await _call_ollama(messages_2, temperature=0.0)
-
+        gap_raw = await _call_ollama(messages_gap, temperature=0.0)
         try:
-            # <think> 태그 제거 후 JSON 파싱
             clean = gap_raw.split("</think>")[-1].strip()
             gap   = json.loads(clean)
-
             if gap.get("search_required") and gap.get("search_queries"):
+                logger.info("[RAG] 웹 검색 실행: %s", gap["search_queries"])
                 web_results = await _tavily_search(gap["search_queries"])
-        except Exception:
-            pass  # Gap Analysis 실패 시 웹 검색 생략
+                logger.info("[RAG] 웹 검색 완료 (%.1fs)", time.perf_counter() - t2)
+            else:
+                logger.info("[RAG] Gap 없음 — 웹 검색 생략")
+        except Exception as e:
+            logger.warning("[RAG] Gap Analysis 파싱 실패: %s", e)
+    else:
+        logger.info("[RAG] TAVILY_API_KEY 없음 — 웹 검색 생략")
 
-    # ── 3단계: 최종 답변 요약 ──────────────────────────────────
-    messages_3 = [{"role": "system", "content": _SUMMARY_PROMPT}]
-    messages_3.extend(history)
-    messages_3.append({"role": "user", "content": (
+    logger.info("[RAG] 준비 단계 총 소요: %.1fs", time.perf_counter() - t0)
+    return rag_answer, web_results, history
+
+
+def _build_final_messages(
+    query: str,
+    rag_answer: str,
+    web_results: str,
+    history: list[dict],
+) -> list[dict]:
+    """최종 답변 합성용 메시지 목록을 생성한다."""
+    messages = [{"role": "system", "content": _SUMMARY_PROMPT}]
+    messages.extend(history)
+    messages.append({"role": "user", "content": (
         f"[사용자 질문]\n{query}\n\n"
         f"[내부 DB 검색 결과]\n{rag_answer}\n\n"
         f"[웹 검색 결과]\n{web_results}"
     )})
+    return messages
 
-    answer = await _call_ollama(messages_3, temperature=0.3)
 
-    # 메모리 저장
+async def process_chat(query: str, user_id: str) -> str:
+    """RAG 파이프라인 실행 후 최종 답변을 반환한다 (비스트리밍)."""
+    logger.info("[CHAT] 요청 수신: %.40s...", query)
+    t0 = time.perf_counter()
+
+    session_id = _uuid.UUID(user_id)
+    rag_answer, web_results, history = await _fetch_rag_and_web_context(query, session_id)
+
+    messages = _build_final_messages(query, rag_answer, web_results, history)
+    answer   = await _call_ollama(messages, temperature=0.3)
+
     await _save_history(session_id, query, answer)
-
+    logger.info("[CHAT] 응답 완료 — 총 %.1fs | 답변 %d자", time.perf_counter() - t0, len(answer))
     return answer
+
+
+async def stream_chat_response(
+    query: str,
+    user_id: str,
+) -> AsyncGenerator[str, None]:
+    """RAG 파이프라인 실행 후 최종 답변을 토큰 단위로 yield한다 (스트리밍)."""
+    logger.info("[STREAM] 요청 수신: %.40s...", query)
+    t0 = time.perf_counter()
+
+    session_id = _uuid.UUID(user_id)
+    rag_answer, web_results, history = await _fetch_rag_and_web_context(query, session_id)
+
+    messages     = _build_final_messages(query, rag_answer, web_results, history)
+    full_answer: list[str] = []
+
+    logger.info("[STREAM] 최종 답변 스트리밍 시작")
+    async for chunk in _stream_ollama_response(messages, temperature=0.3):
+        full_answer.append(chunk)
+        yield chunk
+
+    answer = "".join(full_answer)
+    await _save_history(session_id, query, answer)
+    logger.info("[STREAM] 완료 — 총 %.1fs | 답변 %d자", time.perf_counter() - t0, len(answer))

@@ -17,12 +17,16 @@ law_articles(공식 법령 조문)와 documents(PDF 업로드) 두 테이블을
 공개 법령(law_articles)은 모든 사용자에게 검색 가능.
 사용자 업로드 PDF(documents)는 현재 전체 공개 (TODO: uploader 기반 필터링).
 """
+import logging
 import math
+import time
 from dataclasses import dataclass
 
 from app.database import get_pool
 from app.utils.embeddings import embed_texts
 from config import TOP_K
+
+logger = logging.getLogger(__name__)
 
 # ── 우선순위 테이블 ──────────────────────────────────────────────
 
@@ -195,20 +199,23 @@ async def hybrid_search(
         priority 오름차순 → similarity_score 내림차순 정렬.
         두 테이블 모두 비어있으면 빈 리스트.
     """
-    # 임베딩 1회 생성 — 두 테이블에서 공유
+    t0 = time.perf_counter()
     q_emb = (await embed_texts([query]))[0]
 
-    # 각 테이블에서 top_k씩 검색 (병합 전 여유분 확보)
     law_results, doc_results = await _search_law_articles(
         q_emb, law_filter, top_k
     ), await _search_documents(q_emb, law_filter, top_k)
 
     merged = law_results + doc_results
-
-    # 우선순위 오름차순, 동순위는 유사도 내림차순
     merged.sort(key=lambda r: (r.priority, -r.similarity_score))
+    final = merged[:top_k]
 
-    return merged[:top_k]
+    logger.info(
+        "[SEARCH] 필터=%s | 법령조문=%d건 PDF=%d건 → 병합 상위 %d건 (%.2fs)",
+        law_filter, len(law_results), len(doc_results), len(final),
+        time.perf_counter() - t0,
+    )
+    return final
 
 
 def format_hybrid_context(results: list[HybridSearchResult]) -> str:

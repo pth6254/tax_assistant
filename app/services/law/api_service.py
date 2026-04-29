@@ -10,6 +10,7 @@ services/law_api_service.py — 국가법령정보 Open API 클라이언트
 API 문서: https://www.law.go.kr/LSO/openApi/openApiInfoPage.do
 인증키 발급: https://www.law.go.kr/LSO/openApi/openApiIntroPage.do
 """
+import asyncio
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 
@@ -44,6 +45,12 @@ def _require_api_key() -> str:
 
 
 def _parse_search_xml(xml_text: str) -> list[LawSummary]:
+    """법령 검색 API XML 응답 파싱. (laws만 반환, 하위호환용)"""
+    laws, _ = _parse_search_result(xml_text)
+    return laws
+
+
+def _parse_search_result(xml_text: str) -> tuple[list[LawSummary], int]:
     """
     법령 검색 API XML 응답 파싱.
 
@@ -59,9 +66,13 @@ def _parse_search_xml(xml_text: str) -> list[LawSummary]:
       </law>
     </LawSearch>
 
-    # TODO: 실제 API 응답 수신 후 태그명 검증 필요.
+    Returns:
+        (law_list, total_count)
     """
     root = ET.fromstring(xml_text)
+
+    total_el = root.find("totalCnt")
+    total_count = int(total_el.text.strip()) if total_el is not None and total_el.text else 0
 
     results: list[LawSummary] = []
     for law_el in root.findall("law"):
@@ -77,7 +88,7 @@ def _parse_search_xml(xml_text: str) -> list[LawSummary]:
             ministry=text("소관부처명"),
         ))
 
-    return results
+    return results, total_count
 
 
 async def search_law(
@@ -127,6 +138,60 @@ async def search_law(
         laws = [law for law in laws if law.law_name == law_name]
 
     return laws
+
+
+async def search_law_all_pages(
+    query: str,
+    *,
+    display: int = 100,
+    max_results: int = 2000,
+    request_delay: float = 0.3,
+) -> list[LawSummary]:
+    """
+    법령명 키워드로 전체 결과를 페이지네이션하여 가져온다.
+
+    Args:
+        query:         검색 키워드
+        display:       페이지당 결과 수 (최대 100)
+        max_results:   최대 수집 건수 (API 부하 방지용 상한)
+        request_delay: 페이지 요청 간 대기시간(초)
+
+    Returns:
+        LawSummary 리스트 (중복 MST 포함 가능 — 호출자가 de-dup)
+    """
+    api_key = _require_api_key()
+    all_laws: list[LawSummary] = []
+    page = 1
+
+    while len(all_laws) < max_results:
+        params = {
+            "OC":      api_key,
+            "target":  "law",
+            "type":    "XML",
+            "query":   query,
+            "display": str(display),
+            "page":    str(page),
+        }
+
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(_SEARCH_URL, params=params)
+            resp.raise_for_status()
+
+        laws, total_count = _parse_search_result(resp.text)
+        if not laws:
+            break
+
+        all_laws.extend(laws)
+
+        fetched_so_far = (page - 1) * display + len(laws)
+        if fetched_so_far >= min(total_count, max_results):
+            break
+
+        page += 1
+        if request_delay > 0:
+            await asyncio.sleep(request_delay)
+
+    return all_laws
 
 
 async def get_law_detail(mst: str) -> dict:
