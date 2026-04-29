@@ -41,18 +41,27 @@ async def embed_only(tax_type: str, batch_size: int) -> None:
     """embedding = NULL 인 조문에만 임베딩을 생성한다."""
     pool = await get_pool()
 
-    where_extra = "AND tax_type = $3" if tax_type else ""
-    count_params = [batch_size, 0, tax_type] if tax_type else [batch_size, 0]
-
+    # ID를 먼저 전부 수집 — OFFSET 기반 페이지네이션 버그 방지
     if tax_type:
-        total = await pool.fetchval(
-            "SELECT COUNT(*) FROM law_articles WHERE embedding IS NULL AND is_current = TRUE AND tax_type = $1",
+        id_rows = await pool.fetch(
+            """
+            SELECT id FROM law_articles
+            WHERE embedding IS NULL AND is_current = TRUE AND tax_type = $1
+            ORDER BY id
+            """,
             tax_type,
         )
     else:
-        total = await pool.fetchval(
-            "SELECT COUNT(*) FROM law_articles WHERE embedding IS NULL AND is_current = TRUE"
+        id_rows = await pool.fetch(
+            """
+            SELECT id FROM law_articles
+            WHERE embedding IS NULL AND is_current = TRUE
+            ORDER BY id
+            """
         )
+
+    all_ids = [r["id"] for r in id_rows]
+    total = len(all_ids)
 
     if total == 0:
         print("임베딩이 필요한 조문이 없습니다.")
@@ -62,34 +71,20 @@ async def embed_only(tax_type: str, batch_size: int) -> None:
 
     processed = 0
     failed = 0
-    offset = 0
 
-    while True:
-        if tax_type:
-            rows = await pool.fetch(
-                """
-                SELECT id, law_name, law_type, tax_type,
-                       article_no, article_title, article_text
-                FROM law_articles
-                WHERE embedding IS NULL AND is_current = TRUE AND tax_type = $1
-                ORDER BY id LIMIT $2 OFFSET $3
-                """,
-                tax_type, batch_size, offset,
-            )
-        else:
-            rows = await pool.fetch(
-                """
-                SELECT id, law_name, law_type, tax_type,
-                       article_no, article_title, article_text
-                FROM law_articles
-                WHERE embedding IS NULL AND is_current = TRUE
-                ORDER BY id LIMIT $1 OFFSET $2
-                """,
-                batch_size, offset,
-            )
+    for batch_start in range(0, total, batch_size):
+        batch_ids = all_ids[batch_start : batch_start + batch_size]
 
-        if not rows:
-            break
+        rows = await pool.fetch(
+            """
+            SELECT id, law_name, law_type, tax_type,
+                   article_no, article_title, article_text
+            FROM law_articles
+            WHERE id = ANY($1)
+            ORDER BY id
+            """,
+            batch_ids,
+        )
 
         texts = [
             f"법령명: {r['law_name']}\n문서유형: {r['law_type']}\n세목: {r['tax_type']}\n"
@@ -98,7 +93,7 @@ async def embed_only(tax_type: str, batch_size: int) -> None:
         ]
         ids = [r["id"] for r in rows]
 
-        print(f"  [{offset + 1}~{offset + len(rows)} / {total}] 임베딩 생성 중...")
+        print(f"  [{batch_start + 1}~{batch_start + len(rows)} / {total}] 임베딩 생성 중...")
 
         try:
             embeddings = await embed_texts(texts)
@@ -119,9 +114,7 @@ async def embed_only(tax_type: str, batch_size: int) -> None:
 
         except Exception as e:
             failed += len(rows)
-            print(f"  배치 실패: {e}")
-
-        offset += batch_size
+            print(f"  배치 실패 ({batch_start + 1}~{batch_start + len(rows)}): {e}")
 
     print(f"\n{'='*40}")
     print(f" 임베딩 완료 — 성공 {processed}건 | 실패 {failed}건")

@@ -46,7 +46,7 @@ _TAX_SEARCH_KEYWORDS = [
 # 세법으로 인정할 소관부처 (이 부처 소관이어야 수집)                                                                                                                                
 _TAX_MINISTRIES = {                                                                                                                                                                 
     "기획재정부",                                                                                                                                                                   
-    "행정안전부",   # 지방세                                                                                                                                                        
+    "행정안전부",                                                                                                                                                         
     "관세청",                                                                                                                                                                       
     "국세청",                                                                                                                                                                       
     "행정자치부",  
@@ -415,3 +415,57 @@ async def ingest_all_laws(
     print(f"{'='*40}")
 
     return results
+
+
+async def discover_tax_laws() -> list[dict]:
+    """
+    API 키워드 검색으로 세법 관련 법령을 전체 탐색한다.
+
+    _TAX_SEARCH_KEYWORDS 로 검색하고 _TAX_MINISTRIES 소관 법령만 필터링.
+    MST 기준으로 중복 제거 후 {"law_name": ..., "tax_type": ...} 리스트 반환.
+    """
+    seen_mst: set[str] = set()
+    discovered: list[dict] = []
+
+    for keyword in _TAX_SEARCH_KEYWORDS:
+        print(f"  [discover] 키워드 검색: '{keyword}'...")
+        try:
+            laws = await search_law_all_pages(keyword, display=100, request_delay=0.3)
+        except Exception as e:
+            print(f"  [discover] 키워드 '{keyword}' 검색 실패: {e}")
+            continue
+
+        for law in laws:
+            if law.mst in seen_mst:
+                continue
+            if not any(ministry in law.ministry for ministry in _TAX_MINISTRIES):
+                continue
+            seen_mst.add(law.mst)
+            tax_type = _infer_tax_type(law.law_name)
+            discovered.append({"law_name": law.law_name, "tax_type": tax_type})
+
+    print(f"  [discover] 탐색 완료 — {len(discovered)}개 세법 발견")
+    return discovered
+
+
+async def ingest_all_tax_laws(*, embed: bool = False) -> list[dict]:
+    """
+    세법 관련 법령을 API로 자동 탐색하고 전체 수집한다.
+
+    discover_tax_laws()로 법령 목록을 탐색한 뒤 ingest_all_laws()를 실행한다.
+
+    Args:
+        embed: True이면 수집 즉시 임베딩 생성
+
+    Returns:
+        법령별 ingest_law() 결과 리스트
+    """
+    print("세법 전체 자동 탐색 시작...")
+    targets = await discover_tax_laws()
+
+    if not targets:
+        print("탐색된 세법 없음. LAW_API_KEY 확인 필요.")
+        return []
+
+    print(f"\n총 {len(targets)}개 세법 수집 시작...\n")
+    return await ingest_all_laws(targets=targets, embed=embed)

@@ -580,8 +580,20 @@ LAW_API_KEY=your-key-here
 | pgvector 인덱스 미적용 | 2560차원 이하 모델 전환 시 HNSW 인덱스 추가 가능 |
 | 사용자별 문서 격리 없음 | `documents` 테이블에 `user_id` 필터 추가 |
 
+## 16. 실행 화면
+
+### 로그인 화면
+![로그인 화면](./assets/demo_login.png)
+
+### PDF 업로드 화면
+![PDF 업로드 화면](./assets/demo-upload.png) 이건 아직 이미지 없음
+
+### 세무 질의응답 화면
+![세무 질의응답 화면](./assets/demo_chat.png)
+
 ---
 
-## 16. 라이선스
+## 17. 라이선스
 
 라이선스는 추후 추가 예정입니다.
+

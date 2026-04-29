@@ -210,11 +210,18 @@ async def hybrid_search(
     merged.sort(key=lambda r: (r.priority, -r.similarity_score))
     final = merged[:top_k]
 
-    logger.info(
-        "[SEARCH] 필터=%s | 법령조문=%d건 PDF=%d건 → 병합 상위 %d건 (%.2fs)",
-        law_filter, len(law_results), len(doc_results), len(final),
-        time.perf_counter() - t0,
-    )
+    if not final:
+        logger.warning(
+            "[SEARCH] 검색 결과 없음 (필터=%s) — law_articles 또는 documents에 임베딩된 데이터가 없습니다. "
+            "scripts/ingest_laws.py --embed 실행 또는 PDF 업로드 필요",
+            law_filter,
+        )
+    else:
+        logger.info(
+            "[SEARCH] 필터=%s | 법령조문=%d건 PDF=%d건 → 병합 상위 %d건 (%.2fs)",
+            law_filter, len(law_results), len(doc_results), len(final),
+            time.perf_counter() - t0,
+        )
     return final
 
 

@@ -257,11 +257,18 @@ _SUMMARY_PROMPT = (
 )
 
 
-_OLLAMA_OPTIONS = {"temperature": 0.3, "num_predict": 2000, "num_ctx": 8192}
+_OLLAMA_OPTIONS        = {"temperature": 0.3, "num_predict": 3000, "num_ctx": 8192}
+_OLLAMA_OPTIONS_STREAM = {"temperature": 0.3, "num_predict": -1,   "num_ctx": 8192}  # -1 = 무제한
+_OLLAMA_OPTIONS_GAP    = {"temperature": 0.0, "num_predict": 300,  "num_ctx": 4096}  # JSON만 출력
 
 
-async def _call_ollama(messages: list[dict], temperature: float = 0.3) -> str:
+async def _call_ollama(
+    messages: list[dict],
+    temperature: float = 0.3,
+    options: dict | None = None,
+) -> str:
     """Ollama 비스트리밍 호출."""
+    merged_options = {**(options or _OLLAMA_OPTIONS), "temperature": temperature}
     async with httpx.AsyncClient(timeout=180.0) as client:
         resp = await client.post(
             _CHAT_URL,
@@ -269,7 +276,7 @@ async def _call_ollama(messages: list[dict], temperature: float = 0.3) -> str:
                 "model":    CHAT_MODEL,
                 "messages": messages,
                 "stream":   False,
-                "options":  {**_OLLAMA_OPTIONS, "temperature": temperature},
+                "options":  merged_options,
             },
         )
         resp.raise_for_status()
@@ -283,11 +290,12 @@ async def _stream_ollama_response(
     """
     Ollama 스트리밍 호출. 토큰 청크를 yield한다.
     <think>...</think> 블록은 필터링하여 출력하지 않는다.
+    num_predict 제한으로 </think>가 미출력된 경우도 처리한다.
     """
     buf = ""
     past_think = False
 
-    async with httpx.AsyncClient(timeout=180.0) as client:
+    async with httpx.AsyncClient(timeout=300.0) as client:
         async with client.stream(
             "POST",
             _CHAT_URL,
@@ -295,7 +303,7 @@ async def _stream_ollama_response(
                 "model":    CHAT_MODEL,
                 "messages": messages,
                 "stream":   True,
-                "options":  {**_OLLAMA_OPTIONS, "temperature": temperature},
+                "options":  {**_OLLAMA_OPTIONS_STREAM, "temperature": temperature},
             },
         ) as resp:
             resp.raise_for_status()
@@ -321,7 +329,6 @@ async def _stream_ollama_response(
                         if after:
                             yield after
                     elif "<think>" not in buf and len(buf) > 30:
-                        # 모델이 thinking 없이 바로 답변하는 경우
                         past_think = True
                         yield buf
                         buf = ""
@@ -329,9 +336,16 @@ async def _stream_ollama_response(
                 if data.get("done"):
                     break
 
-    # think 없이 끝난 경우 버퍼 잔여 출력
-    if buf and not buf.lstrip().startswith("<think>"):
-        yield buf
+    # </think> 없이 스트림 종료된 경우 (<think> 블록 강제 제거 후 출력)
+    if buf:
+        if "<think>" in buf:
+            # </think> 미출력 → <think> 이후 내용을 답변으로 사용
+            after_think = buf.split("<think>", 1)[-1]
+            if after_think.strip():
+                logger.warning("[STREAM] </think> 미출력 — 버퍼 내용을 답변으로 사용 (%d자)", len(after_think))
+                yield after_think
+        else:
+            yield buf
 
 
 async def _tavily_search(queries: list[str]) -> str:
@@ -401,16 +415,19 @@ async def _fetch_rag_and_web_context(
             {"role": "system", "content": _GAP_PROMPT},
             {"role": "user",   "content": f"[사용자 질문]\n{query}\n\n[1차 답변]\n{rag_answer}"},
         ]
-        gap_raw = await _call_ollama(messages_gap, temperature=0.0)
+        gap_raw = await _call_ollama(messages_gap, temperature=0.0, options=_OLLAMA_OPTIONS_GAP)
         try:
             clean = gap_raw.split("</think>")[-1].strip()
-            gap   = json.loads(clean)
-            if gap.get("search_required") and gap.get("search_queries"):
-                logger.info("[RAG] 웹 검색 실행: %s", gap["search_queries"])
-                web_results = await _tavily_search(gap["search_queries"])
-                logger.info("[RAG] 웹 검색 완료 (%.1fs)", time.perf_counter() - t2)
+            if not clean:
+                logger.warning("[RAG] Gap Analysis 응답 비어있음 — 웹 검색 생략")
             else:
-                logger.info("[RAG] Gap 없음 — 웹 검색 생략")
+                gap = json.loads(clean)
+                if gap.get("search_required") and gap.get("search_queries"):
+                    logger.info("[RAG] 웹 검색 실행: %s", gap["search_queries"])
+                    web_results = await _tavily_search(gap["search_queries"])
+                    logger.info("[RAG] 웹 검색 완료 (%.1fs)", time.perf_counter() - t2)
+                else:
+                    logger.info("[RAG] Gap 없음 — 웹 검색 생략")
         except Exception as e:
             logger.warning("[RAG] Gap Analysis 파싱 실패: %s", e)
     else:
