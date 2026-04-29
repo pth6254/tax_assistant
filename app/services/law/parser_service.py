@@ -1,5 +1,5 @@
 """
-services/law_parser_service.py — 국가법령정보 API XML 조문 파싱 (Phase 2)
+services/law_parser_service.py — 국가법령정보 API XML 조문 파싱
 
 law_api_service.get_law_detail()이 반환한 raw_xml을 받아
 조문 단위 LawArticle 리스트로 변환한다.

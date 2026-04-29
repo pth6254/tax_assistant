@@ -1,5 +1,5 @@
 """
-services/law_search_service.py — law_articles 벡터 유사도 검색 (Phase 6)
+services/law_search_service.py — law_articles 벡터 유사도 검색 
 
 사용자 질문을 임베딩하여 law_articles 테이블에서 유사한 조문을 검색한다.
 기존 PDF RAG(documents 테이블)와는 독립적으로 동작한다.

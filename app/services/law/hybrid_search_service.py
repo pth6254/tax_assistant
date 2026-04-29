@@ -1,5 +1,5 @@
 """
-services/hybrid_search_service.py — 하이브리드 RAG 검색 (Phase 7)
+services/hybrid_search_service.py — 하이브리드 RAG 검색
 
 law_articles(공식 법령 조문)와 documents(PDF 업로드) 두 테이블을
 동시에 벡터 검색하고 우선순위에 따라 병합하여 LLM 컨텍스트를 생성한다.

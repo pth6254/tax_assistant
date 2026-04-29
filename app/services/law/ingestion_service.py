@@ -1,8 +1,8 @@
 """
 services/law_ingestion_service.py — 법령 조문 수집·저장·임베딩 파이프라인
 
-Phase 4: 조문 메타데이터 저장 (embedding=NULL)
-Phase 5: 신규 조문 임베딩 생성 및 저장
+조문 메타데이터 저장 (embedding=NULL)
+신규 조문 임베딩 생성 및 저장
 
 주요 함수:
   ingest_law(law_name, tax_type, embed=False)   단일 법령 수집
