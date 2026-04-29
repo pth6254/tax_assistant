@@ -26,11 +26,7 @@ CREATE TABLE IF NOT EXISTS documents (
     metadata    JSONB       NOT NULL DEFAULT '{}'
 );
 
-CREATE INDEX IF NOT EXISTS documents_embedding_idx
-    ON documents
-    USING ivfflat (embedding vector_cosine_ops)
-    WITH (lists = 100);
-
+-- ivfflat/hnsw 인덱스는 최대 2000차원까지만 지원 → 2560차원은 sequential scan 사용
 CREATE INDEX IF NOT EXISTS documents_metadata_law_idx
     ON documents
     USING gin (metadata);

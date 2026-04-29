@@ -2,6 +2,7 @@
 database.py — PostgreSQL 커넥션 풀 단독 관리
 앱 전역에서 get_pool()로 풀을 가져다 씁니다.
 """
+import json
 from typing import Optional
 
 import asyncpg
@@ -12,6 +13,16 @@ from config import DATABASE_URL
 _pool: Optional[asyncpg.Pool] = None
 
 
+async def _init_connection(conn: asyncpg.Connection) -> None:
+    await register_vector(conn)
+    await conn.set_type_codec(
+        "jsonb",
+        encoder=json.dumps,
+        decoder=json.loads,
+        schema="pg_catalog",
+    )
+
+
 async def get_pool() -> asyncpg.Pool:
     """싱글턴 커넥션 풀 반환. 없으면 생성."""
     global _pool
@@ -20,7 +31,7 @@ async def get_pool() -> asyncpg.Pool:
             DATABASE_URL,
             min_size=2,
             max_size=10,
-            init=register_vector,
+            init=_init_connection,
         )
     return _pool
 

@@ -11,7 +11,9 @@ services:
       - "5433:5432"
     volumes:
       - pgvector_data:/var/lib/postgresql/data
-      - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init_db.sql
+      # z_ 접두어: initdb.d는 알파벳 순 실행 → init_db.sql(확장 생성) 이후 실행 보장
+      - ./db/migrations/V002__add_law_articles.sql:/docker-entrypoint-initdb.d/z_V002__add_law_articles.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-tax_db}"]
       interval: 10s
