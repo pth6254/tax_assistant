@@ -29,10 +29,13 @@ law_api_service.get_law_detail()이 반환한 raw_xml을 받아
 
 주의: 태그명은 API 버전마다 다를 수 있으므로 방어적으로 파싱한다.
 """
+import logging
 import re
 import unicodedata
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -197,14 +200,14 @@ def parse_articles(
     try:
         root = ET.fromstring(raw_xml)
     except ET.ParseError as e:
-        print(f"[law_parser] XML 파싱 실패: {e}")
+        logger.warning("[law_parser] XML 파싱 실패: %s", e)
         return []
 
     # 기본정보 추출
     try:
         info = _parse_basic_info(root)
     except Exception as e:
-        print(f"[law_parser] 기본정보 추출 실패: {e}")
+        logger.warning("[law_parser] 기본정보 추출 실패: %s", e)
         info = {}
 
     law_name       = info.get("law_name", "")       or law_name_hint
@@ -216,7 +219,7 @@ def parse_articles(
     try:
         units = _parse_article_units(root)
     except Exception as e:
-        print(f"[law_parser] 조문 섹션 추출 실패: {e}")
+        logger.warning("[law_parser] 조문 섹션 추출 실패: %s", e)
         return []
 
     articles: list[LawArticle] = []
@@ -253,7 +256,7 @@ def parse_articles(
             ))
 
         except Exception as e:
-            print(f"[law_parser] 조문단위 파싱 실패 (건너뜀): {e}")
+            logger.warning("[law_parser] 조문단위 파싱 실패 (건너뜀): %s", e)
             continue
 
     return articles

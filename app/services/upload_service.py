@@ -1,11 +1,11 @@
 """
-services/upload_service.py — PDF 업로드 및 벡터 저장 비즈니스 로직
+services/upload_service.py — PDF 업로드·목록·삭제 비즈니스 로직
 PDF 파싱 → AI 분류 → 청크 분할 → 임베딩 → pgvector 저장 파이프라인.
-OpenAI → Ollama (qwen3.5:35b-a3b) 로 변경.
 """
 import json
 import logging
 import time
+import uuid as _uuid
 
 import httpx
 from fastapi import HTTPException
@@ -153,7 +153,6 @@ async def process_upload(
     logger.info("[UPLOAD] 임베딩 완료 (%.1fs)", time.perf_counter() - t1)
 
     # 5. DB 저장
-    import uuid as _uuid
     uid = _uuid.UUID(user_id)
 
     pool = await get_pool()
@@ -185,3 +184,54 @@ async def process_upload(
         "category":      meta.get("category"),
         "chunks_stored": len(chunks),
     }
+
+
+async def list_documents(user_id: str) -> list[dict]:
+    """사용자가 업로드한 파일 목록을 파일 단위로 반환한다 (청크 단위 아님)."""
+    uid = _uuid.UUID(user_id)
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT
+                metadata->>'source'   AS filename,
+                metadata->>'law_name' AS law_name,
+                metadata->>'category' AS category,
+                COUNT(*)              AS chunk_count,
+                MIN(created_at)       AS uploaded_at
+            FROM documents
+            WHERE user_id = $1
+            GROUP BY
+                metadata->>'source',
+                metadata->>'law_name',
+                metadata->>'category'
+            ORDER BY MIN(created_at) DESC
+            """,
+            uid,
+        )
+    return [
+        {
+            "filename":    r["filename"],
+            "law_name":    r["law_name"],
+            "category":    r["category"],
+            "chunk_count": r["chunk_count"],
+            "uploaded_at": r["uploaded_at"].isoformat() if r["uploaded_at"] else None,
+        }
+        for r in rows
+    ]
+
+
+async def delete_document(filename: str, user_id: str) -> dict:
+    """사용자 소유 파일의 모든 청크를 삭제한다."""
+    uid = _uuid.UUID(user_id)
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "DELETE FROM documents WHERE metadata->>'source' = $1 AND user_id = $2 RETURNING id",
+            filename, uid,
+        )
+    deleted_count = len(rows)
+    if deleted_count == 0:
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
+    logger.info("[DELETE] '%s' 삭제 완료 — %d청크", filename, deleted_count)
+    return {"status": "ok", "filename": filename, "deleted_chunks": deleted_count}

@@ -19,14 +19,21 @@ CHAT_MODEL: str      = os.getenv("CHAT_MODEL",  "qwen3.5:9b")   # LLM
 EMBED_MODEL: str     = os.getenv("EMBED_MODEL", "qwen3-embedding:4b") # 임베딩
 
 # ── RAG 파라미터 ────────────────────────────────────────────────
-CHUNK_SIZE: int    = 800
-CHUNK_OVERLAP: int = 100
-TOP_K: int         = 10
-MEMORY_TURNS: int  = 3   # 채팅 메모리 최근 N 턴
+CHUNK_SIZE: int         = 800
+CHUNK_OVERLAP: int      = 100
+TOP_K: int              = 10
+MEMORY_TURNS: int       = 3     # 채팅 메모리 최근 N 턴
+SIMILARITY_THRESHOLD: float = float(os.getenv("SIMILARITY_THRESHOLD", "0.4"))
+
+# ── 업로드 제한 ─────────────────────────────────────────────────
+MAX_UPLOAD_MB: int = int(os.getenv("MAX_UPLOAD_MB", "50"))  # PDF 최대 크기 (MB)
 
 # ── 임베딩 차원 ─────────────────────────────────────────────────
 # qwen3-embedding:4b = 2560차원 → init_db.sql도 함께 수정 필요
 EMBED_DIM: int = 2560
+
+# ── 쿠키 보안 ───────────────────────────────────────────────────
+COOKIE_SECURE: bool = os.getenv("COOKIE_SECURE", "false").lower() == "true"
 
 # ── JWT ────────────────────────────────────────────────────────
 JWT_SECRET: str     = os.environ.get("JWT_SECRET", "")

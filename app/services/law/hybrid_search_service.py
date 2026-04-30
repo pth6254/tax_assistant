@@ -17,14 +17,16 @@ law_articles(공식 법령 조문)와 documents(PDF 업로드) 두 테이블을
 공개 법령(law_articles)은 모든 사용자에게 검색 가능.
 사용자 업로드 PDF(documents)는 현재 전체 공개 (TODO: uploader 기반 필터링).
 """
+import asyncio
 import logging
 import math
 import time
+import uuid as _uuid
 from dataclasses import dataclass
 
 from app.database import get_pool
 from app.utils.embeddings import embed_texts
-from config import TOP_K
+from config import SIMILARITY_THRESHOLD, TOP_K
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +156,6 @@ async def _search_documents(
     user_id: str,
 ) -> list[HybridSearchResult]:
     """documents 테이블(PDF 업로드) 벡터 검색. user_id 소유 문서만 반환."""
-    import uuid as _uuid
     if not user_id:
         raise ValueError("documents 검색에는 user_id가 필요합니다.")
     uid = _uuid.UUID(user_id)
@@ -211,11 +212,13 @@ async def hybrid_search(
     t0 = time.perf_counter()
     q_emb = (await embed_texts([query]))[0]
 
-    law_results, doc_results = await _search_law_articles(
-        q_emb, law_filter, top_k
-    ), await _search_documents(q_emb, law_filter, top_k, user_id)
+    law_results, doc_results = await asyncio.gather(
+        _search_law_articles(q_emb, law_filter, top_k),
+        _search_documents(q_emb, law_filter, top_k, user_id),
+    )
 
     merged = law_results + doc_results
+    merged = [r for r in merged if r.similarity_score >= SIMILARITY_THRESHOLD]
     merged.sort(key=lambda r: (r.priority, -r.similarity_score))
     final = merged[:top_k]
 

@@ -246,9 +246,7 @@ tax-assistant/
 │   └── ingest_laws.py           # 법령 수집 CLI (수집/임베딩/재수집)
 │
 ├── db/
-│   ├── init.sql                 # DB 초기화 (users, documents, chat_logs)
-│   └── migrations/
-│       └── V002__add_law_articles.sql  # law_articles 테이블 마이그레이션
+│   └── init.sql                 # DB 초기화 (users, documents, chat_logs, law_articles 전체 스키마)
 │
 ├── frontend/                    # React 프론트엔드 (Vite)
 │   └── src/
@@ -329,13 +327,11 @@ ollama pull qwen3-embedding:4b
 ### 3단계: DB 실행 및 초기화
 
 ```bash
-# PostgreSQL + pgvector 컨테이너 실행
+# PostgreSQL + pgvector 컨테이너 실행 (init.sql 자동 적용)
 docker compose up -d
-
-# 마이그레이션 적용 (law_articles 테이블)
-psql -U postgres -h localhost -p 5433 -d tax_db \
-     -f db/migrations/V002__add_law_articles.sql
 ```
+
+> 컨테이너 최초 생성 시 `db/init.sql`이 자동으로 실행되어 전체 스키마가 구성됩니다.
 
 ### 4단계: 법령 데이터 수집 (선택)
 
@@ -436,10 +432,13 @@ pytest --lf
 | `DATABASE_URL` | ✅ | `postgresql://postgres:postgres@localhost:5432/tax_db` | PostgreSQL 연결 URL |
 | `JWT_SECRET` | ✅ | — | JWT 서명 비밀키 (32바이트 이상 권장) |
 | `JWT_EXPIRE_MIN` | — | `1440` | JWT 만료 시간 (분, 기본 24시간) |
+| `COOKIE_SECURE` | — | `false` | `true` 설정 시 HTTPS 전용 쿠키 (운영 환경에서 활성화) |
 | `OLLAMA_BASE_URL` | — | `http://localhost:11434` | Ollama 서버 URL |
 | `CHAT_MODEL` | — | `qwen3.5:35b-a3b` | 답변 생성 LLM 모델명 |
 | `EMBED_MODEL` | — | `qwen3-embedding:4b` | 임베딩 모델명 |
 | `EMBED_DIM` | — | `2560` | 임베딩 차원 수 (모델과 DB 일치 필수) |
+| `SIMILARITY_THRESHOLD` | — | `0.4` | 검색 결과 최소 유사도 (0~1, 낮출수록 더 많은 결과 반환) |
+| `MAX_UPLOAD_MB` | — | `50` | PDF 업로드 최대 크기 (MB) |
 | `TAVILY_API_KEY` | — | — | Tavily 검색 API 키 (없으면 웹검색 생략) |
 | `LAW_API_KEY` | — | — | 국가법령정보 Open API 키 (법령 수집 시 필요) |
 
@@ -453,6 +452,8 @@ pytest --lf
 | POST | `/api/auth/login` | 로그인 (httpOnly 쿠키 발급) | 불필요 |
 | POST | `/api/auth/logout` | 로그아웃 (쿠키 삭제) | 불필요 |
 | POST | `/api/upload` | PDF 업로드 및 벡터 저장 | ✅ 필요 |
+| GET | `/api/documents` | 내가 업로드한 파일 목록 | ✅ 필요 |
+| DELETE | `/api/documents/{filename}` | 파일 삭제 (전체 청크 제거) | ✅ 필요 |
 | POST | `/api/chat` | 채팅 질문 (일반 응답) | ✅ 필요 |
 | POST | `/api/chat/stream` | 채팅 질문 (SSE 스트리밍) | ✅ 필요 |
 | GET | `/api/health` | 서버·DB 상태 확인 | 불필요 |
@@ -531,6 +532,7 @@ AI 호출은 파일명으로 분류가 불가능한 경우에만 실행됩니다
 ### 비동기 병렬 처리
 
 세목 분류와 대화 메모리 조회는 `asyncio.gather`로 병렬 실행합니다.
+하이브리드 검색에서 `law_articles`와 `documents` 두 테이블도 동시에 쿼리합니다.
 Tavily 다중 쿼리도 병렬로 처리하여 대기 시간을 줄입니다.
 
 ### SSE 스트리밍
@@ -552,8 +554,10 @@ Tavily 다중 쿼리도 병렬로 처리하여 대기 시간을 줄입니다.
 | 인증 토큰 저장 | JWT를 httpOnly 쿠키에 저장 (XSS로 탈취 불가) |
 | API 보호 | 인증 필요 엔드포인트는 `Depends(verify_token)` 적용 |
 | 비밀번호 저장 | bcrypt 해싱 (평문 저장 없음) |
+| 쿠키 보안 | `COOKIE_SECURE=true` 설정 시 HTTPS 전용 쿠키 활성화 |
 | 세무 데이터 보호 | 로컬 Ollama 사용으로 세무 데이터 외부 LLM 전송 없음 |
 | 대화 데이터 | `session_id`(=user_id) 기준으로 사용자별 분리 저장 |
+| 문서 격리 | `documents` 테이블 조회 시 `user_id` 필터링 적용 (타인 문서 접근 불가) |
 
 ---
 

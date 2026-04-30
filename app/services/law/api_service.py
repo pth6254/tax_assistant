@@ -125,7 +125,6 @@ async def search_law(
         "query":   law_name,
         "display": str(display),
         "page":    str(page),
-        # TODO: "sort" 파라미터로 공포일자 내림차순 정렬 가능한지 API 문서 확인 필요
     }
 
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
@@ -202,7 +201,7 @@ async def get_law_detail(mst: str) -> dict:
         {"mst": mst, "raw_xml": xml문자열}
         조문 파싱은 law_parser_service.parse_articles(raw_xml) 사용.
 
-    # TODO: target="law" vs "lsInfoP" — 조문 전체 포함 여부 실제 응답으로 검증 필요
+
     """
     api_key = _require_api_key()
 

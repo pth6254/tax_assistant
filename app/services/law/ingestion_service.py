@@ -12,6 +12,9 @@ services/law_ingestion_service.py — 법령 조문 수집·저장·임베딩 �
 """
 import asyncio
 import hashlib
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.database import get_pool
 from app.services.law.api_service import LawSummary, get_law_detail, search_law, search_law_all_pages
@@ -191,7 +194,7 @@ async def _embed_and_update(
         texts  = [_build_embed_text(art, tax_type) for art, _ in batch]
         db_ids = [db_id for _, db_id in batch]
 
-        print(f"  [embed] {batch_start + 1}~{batch_end} / {total} 임베딩 중...")
+        logger.info("[embed] %d~%d / %d 임베딩 중...", batch_start + 1, batch_end, total)
 
         try:
             embeddings = await embed_texts(texts)
@@ -213,11 +216,11 @@ async def _embed_and_update(
                 )
 
             embedded_count += len(batch)
-            print(f"  [embed] {batch_end} / {total} 완료")
+            logger.info("[embed] %d / %d 완료", batch_end, total)
 
         except Exception as e:
             embed_failed_count += len(batch)
-            print(f"  [embed] 배치 실패 ({batch_start + 1}~{batch_end}): {e}")
+            logger.error("[embed] 배치 실패 (%d~%d): %s", batch_start + 1, batch_end, e)
 
     return embedded_count, embed_failed_count
 
@@ -269,7 +272,7 @@ async def ingest_law(
     resolved_law_type = law_summary.law_type or law_type
 
     # ── 2. 법령 원문 XML 조회 ────────────────────────────────────
-    print(f"  [api] '{law_name}' XML 조회 중 (MST={mst})...")
+    logger.info("[api] '%s' XML 조회 중 (MST=%s)...", law_name, mst)
     detail  = await get_law_detail(mst)
     raw_xml = detail["raw_xml"]
 
@@ -279,7 +282,7 @@ async def ingest_law(
         law_name_hint=law_name,
         law_type_hint=resolved_law_type,
     )
-    print(f"  [parse] {len(articles)}개 조문 파싱 완료")
+    logger.info("[parse] %d개 조문 파싱 완료", len(articles))
 
     if not articles:
         return {
@@ -314,11 +317,11 @@ async def ingest_law(
                     skipped_count += 1
             except Exception as e:
                 failed_count += 1
-                print(f"  [db] 저장 실패: {article.article_no} — {e}")
+                logger.error("[db] 저장 실패: %s — %s", article.article_no, e)
 
-    print(
-        f"  [db] 저장 완료 — 신규 {inserted_count}건 | "
-        f"스킵 {skipped_count}건 | 실패 {failed_count}건"
+    logger.info(
+        "[db] 저장 완료 — 신규 %d건 | 스킵 %d건 | 실패 %d건",
+        inserted_count, skipped_count, failed_count,
     )
 
     # ── 5. 임베딩 생성 (신규 삽입 조문만) ─────────────────────────
@@ -326,13 +329,11 @@ async def ingest_law(
     embed_failed_count = 0
 
     if embed and new_items:
-        print(f"  [embed] {len(new_items)}건 임베딩 시작...")
+        logger.info("[embed] %d건 임베딩 시작...", len(new_items))
         embedded_count, embed_failed_count = await _embed_and_update(new_items, tax_type)
-        print(
-            f"  [embed] 완료 — 성공 {embedded_count}건 | 실패 {embed_failed_count}건"
-        )
+        logger.info("[embed] 완료 — 성공 %d건 | 실패 %d건", embedded_count, embed_failed_count)
     elif embed and not new_items:
-        print(f"  [embed] 신규 조문 없음, 임베딩 생략")
+        logger.info("[embed] 신규 조문 없음, 임베딩 생략")
 
     return {
         "law_name":           law_name,
@@ -369,7 +370,7 @@ async def ingest_all_laws(
     for i, target in enumerate(targets, 1):
         law_name = target["law_name"]
         tax_type = target["tax_type"]
-        print(f"\n[{i}/{len(targets)}] '{law_name}' 수집 시작...")
+        logger.info("[%d/%d] '%s' 수집 시작...", i, len(targets), law_name)
 
         try:
             result = await ingest_law(
@@ -377,42 +378,33 @@ async def ingest_all_laws(
                 tax_type=tax_type,
                 embed=embed,
             )
-            embed_info = (
-                f" | 임베딩 {result['embedded_count']}건"
-                if embed else ""
-            )
-            print(
-                f"  완료 — 파싱 {result['total_articles']}건 | "
-                f"저장 {result['inserted_count']}건 | "
-                f"스킵 {result['skipped_count']}건 | "
-                f"실패 {result['failed_count']}건"
-                f"{embed_info}"
+            logger.info(
+                "  완료 — 파싱 %d건 | 저장 %d건 | 스킵 %d건 | 실패 %d건%s",
+                result["total_articles"], result["inserted_count"],
+                result["skipped_count"],  result["failed_count"],
+                f" | 임베딩 {result['embedded_count']}건" if embed else "",
             )
             results.append(result)
 
         except Exception as e:
-            print(f"  오류 — {type(e).__name__}: {e}")
+            logger.error("  오류 — %s: %s", type(e).__name__, e)
             results.append({"law_name": law_name, "error": str(e)})
 
     # 최종 요약
     success        = [r for r in results if "error" not in r]
-    total_inserted = sum(r["inserted_count"]    for r in success)
-    total_skipped  = sum(r["skipped_count"]     for r in success)
-    total_failed   = sum(r["failed_count"]      for r in success)
-    total_embedded = sum(r["embedded_count"]    for r in success)
+    total_inserted = sum(r["inserted_count"] for r in success)
+    total_skipped  = sum(r["skipped_count"]  for r in success)
+    total_failed   = sum(r["failed_count"]   for r in success)
+    total_embedded = sum(r["embedded_count"] for r in success)
     error_laws     = [r["law_name"] for r in results if "error" in r]
 
-    print(f"\n{'='*40}")
-    print(f" 전체 수집 완료")
-    print(f"  법령 수:   {len(results)}개 ({len(success)}개 성공, {len(error_laws)}개 오류)")
-    print(f"  신규 저장: {total_inserted}건")
-    print(f"  중복 스킵: {total_skipped}건")
-    print(f"  저장 실패: {total_failed}건")
-    if embed:
-        print(f"  임베딩:    {total_embedded}건")
-    if error_laws:
-        print(f"  오류 법령: {', '.join(error_laws)}")
-    print(f"{'='*40}")
+    logger.info(
+        "전체 수집 완료 | 법령 %d개 (%d 성공 / %d 오류) | 저장 %d건 | 스킵 %d건 | 실패 %d건%s%s",
+        len(results), len(success), len(error_laws),
+        total_inserted, total_skipped, total_failed,
+        f" | 임베딩 {total_embedded}건" if embed else "",
+        f" | 오류 법령: {', '.join(error_laws)}" if error_laws else "",
+    )
 
     return results
 
@@ -428,11 +420,11 @@ async def discover_tax_laws() -> list[dict]:
     discovered: list[dict] = []
 
     for keyword in _TAX_SEARCH_KEYWORDS:
-        print(f"  [discover] 키워드 검색: '{keyword}'...")
+        logger.info("[discover] 키워드 검색: '%s'...", keyword)
         try:
             laws = await search_law_all_pages(keyword, display=100, request_delay=0.3)
         except Exception as e:
-            print(f"  [discover] 키워드 '{keyword}' 검색 실패: {e}")
+            logger.warning("[discover] 키워드 '%s' 검색 실패: %s", keyword, e)
             continue
 
         for law in laws:
@@ -444,7 +436,7 @@ async def discover_tax_laws() -> list[dict]:
             tax_type = _infer_tax_type(law.law_name)
             discovered.append({"law_name": law.law_name, "tax_type": tax_type})
 
-    print(f"  [discover] 탐색 완료 — {len(discovered)}개 세법 발견")
+    logger.info("[discover] 탐색 완료 — %d개 세법 발견", len(discovered))
     return discovered
 
 
@@ -460,12 +452,12 @@ async def ingest_all_tax_laws(*, embed: bool = False) -> list[dict]:
     Returns:
         법령별 ingest_law() 결과 리스트
     """
-    print("세법 전체 자동 탐색 시작...")
+    logger.info("세법 전체 자동 탐색 시작...")
     targets = await discover_tax_laws()
 
     if not targets:
-        print("탐색된 세법 없음. LAW_API_KEY 확인 필요.")
+        logger.warning("탐색된 세법 없음. LAW_API_KEY 확인 필요.")
         return []
 
-    print(f"\n총 {len(targets)}개 세법 수집 시작...\n")
+    logger.info("총 %d개 세법 수집 시작...", len(targets))
     return await ingest_all_laws(targets=targets, embed=embed)

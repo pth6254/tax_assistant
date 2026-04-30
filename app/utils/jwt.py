@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, Request, Response
 from jose import JWTError, jwt
 
-from config import JWT_ALGORITHM, JWT_EXPIRE_MIN, JWT_SECRET
+from config import COOKIE_SECURE, JWT_ALGORITHM, JWT_EXPIRE_MIN, JWT_SECRET
 
 
 def create_access_token(user_id: str, email: str) -> str:
@@ -23,7 +23,7 @@ def set_auth_cookie(response: Response, token: str) -> None:
         key="access_token",
         value=token,
         httponly=True,
-        secure=False,        # 로컬 개발환경은 False
+        secure=COOKIE_SECURE,
         samesite="lax",
         max_age=60 * JWT_EXPIRE_MIN,
     )
