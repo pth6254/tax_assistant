@@ -84,32 +84,6 @@ async def detect_law_name(query: str) -> str:
         return "ALL"
 
 
-async def _fetch_context(q_emb: list[float], law_filter: str) -> str:
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT * FROM match_documents($1::vector, $2, $3)",
-            q_emb, TOP_K, law_filter,
-        )
-    if not rows:
-        return "관련 문서를 찾지 못했습니다."
-    
-    # ↓ category를 위계 순서로 정렬 후 포맷
-    CATEGORY_ORDER = {"법령": 0, "시행령": 1, "시행규칙": 2, "집행기준": 3, "기타": 4}
-    
-    sorted_rows = sorted(
-        rows,
-        key=lambda r: CATEGORY_ORDER.get(r['metadata'].get('category', '기타'), 4)
-    )
-    
-    return "\n\n---\n\n".join(
-        f"[출처: {r['metadata'].get('source','?')} | "
-        f"{r['metadata'].get('law_name','?')} | "
-        f"📌 {r['metadata'].get('category','?')}]\n"  # category 추가
-        f"{r['content']}"
-        for r in sorted_rows
-    )
-
 
 async def _fetch_history(session_id: _uuid.UUID) -> list[dict]:
     """Postgres에서 최근 대화 메모리 조회."""
@@ -382,6 +356,7 @@ async def _tavily_search(queries: list[str]) -> str:
 async def _fetch_rag_and_web_context(
     query: str,
     session_id: _uuid.UUID,
+    user_id: str,
 ) -> tuple[str, str, list[dict]]:
     """
     세목 분류·법령 검색·Gap 분석·웹 검색을 수행하고
@@ -396,7 +371,7 @@ async def _fetch_rag_and_web_context(
     )
     logger.info("[RAG] 세목=%s | 히스토리=%d턴", law_filter, len(history) // 2)
 
-    context = await fetch_hybrid_context(query, law_filter)
+    context = await fetch_hybrid_context(query, law_filter, user_id=user_id)
     logger.info("[RAG] 하이브리드 검색 완료 (%.1fs)", time.perf_counter() - t0)
 
     t1 = time.perf_counter()
@@ -460,7 +435,7 @@ async def process_chat(query: str, user_id: str) -> str:
     t0 = time.perf_counter()
 
     session_id = _uuid.UUID(user_id)
-    rag_answer, web_results, history = await _fetch_rag_and_web_context(query, session_id)
+    rag_answer, web_results, history = await _fetch_rag_and_web_context(query, session_id, user_id)
 
     messages = _build_final_messages(query, rag_answer, web_results, history)
     answer   = await _call_ollama(messages, temperature=0.3)
@@ -479,7 +454,7 @@ async def stream_chat_response(
     t0 = time.perf_counter()
 
     session_id = _uuid.UUID(user_id)
-    rag_answer, web_results, history = await _fetch_rag_and_web_context(query, session_id)
+    rag_answer, web_results, history = await _fetch_rag_and_web_context(query, session_id, user_id)
 
     messages     = _build_final_messages(query, rag_answer, web_results, history)
     full_answer: list[str] = []

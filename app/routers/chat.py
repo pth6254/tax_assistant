@@ -18,9 +18,8 @@ router = APIRouter(prefix="/api", tags=["chat"])
 
 
 class ChatRequest(BaseModel):
-    query:  str
-    userId: str = ""
-    name:   str = "사용자"
+    query: str
+    name:  str = "사용자"
 
 
 @router.get("/health")

@@ -22,5 +22,6 @@ async def upload_file(
     return await upload_service.process_upload(
         file_bytes=file_bytes,
         filename=file.filename,
+        user_id=user["id"],
         uploader_email=user["email"],
     )

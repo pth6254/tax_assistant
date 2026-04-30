@@ -81,7 +81,7 @@ ORDER BY embedding <=> $1::vector
 LIMIT $3
 """
 
-# documents 검색 — 기존 match_documents()와 동일한 방식
+# documents 검색 — user_id 기준으로 격리
 _DOCUMENTS_SQL = """
 SELECT
     content,
@@ -89,9 +89,10 @@ SELECT
     1 - (embedding <=> $1::vector) AS similarity_score
 FROM documents
 WHERE embedding IS NOT NULL
-  AND ($2 = 'ALL' OR metadata->>'law_name' = $2)
+  AND user_id = $2::uuid
+  AND ($3 = 'ALL' OR metadata->>'law_name' = $3)
 ORDER BY embedding <=> $1::vector
-LIMIT $3
+LIMIT $4
 """
 
 
@@ -150,11 +151,17 @@ async def _search_documents(
     q_emb: list[float],
     law_filter: str,
     top_k: int,
+    user_id: str,
 ) -> list[HybridSearchResult]:
-    """documents 테이블(PDF 업로드) 벡터 검색."""
+    """documents 테이블(PDF 업로드) 벡터 검색. user_id 소유 문서만 반환."""
+    import uuid as _uuid
+    if not user_id:
+        raise ValueError("documents 검색에는 user_id가 필요합니다.")
+    uid = _uuid.UUID(user_id)
+
     pool = await get_pool()
     async with pool.acquire() as conn:
-        rows = await conn.fetch(_DOCUMENTS_SQL, q_emb, law_filter, top_k)
+        rows = await conn.fetch(_DOCUMENTS_SQL, q_emb, uid, law_filter, top_k)
 
     results = []
     for r in rows:
@@ -185,6 +192,7 @@ async def hybrid_search(
     query: str,
     law_filter: str = "ALL",
     top_k: int = TOP_K,
+    user_id: str = "",  # 반드시 전달해야 함 — 빈 문자열이면 _search_documents에서 오류
 ) -> list[HybridSearchResult]:
     """
     law_articles + documents를 동시에 검색하고 우선순위 순으로 병합한다.
@@ -193,6 +201,7 @@ async def hybrid_search(
         query:      사용자 질문
         law_filter: 세목 필터 (예: "소득세법"). "ALL"이면 전체 검색.
         top_k:      최종 반환 결과 수
+        user_id:    로그인 사용자 UUID — documents 격리에 사용
 
     Returns:
         HybridSearchResult 리스트.
@@ -204,7 +213,7 @@ async def hybrid_search(
 
     law_results, doc_results = await _search_law_articles(
         q_emb, law_filter, top_k
-    ), await _search_documents(q_emb, law_filter, top_k)
+    ), await _search_documents(q_emb, law_filter, top_k, user_id)
 
     merged = law_results + doc_results
     merged.sort(key=lambda r: (r.priority, -r.similarity_score))
@@ -240,10 +249,14 @@ def format_hybrid_context(results: list[HybridSearchResult]) -> str:
     )
 
 
-async def fetch_hybrid_context(query: str, law_filter: str = "ALL") -> str:
+async def fetch_hybrid_context(
+    query: str,
+    law_filter: str = "ALL",
+    user_id: str = "",
+) -> str:
     """
-    chat_service._fetch_context()의 하이브리드 대체 함수.
-    동일한 시그니처로 교체 가능하도록 문자열을 반환한다.
+    chat_service에서 호출하는 하이브리드 검색 진입점.
+    law_articles(공개 법령)와 user_id 소유 documents(PDF)를 병합하여 반환한다.
     """
-    results = await hybrid_search(query, law_filter=law_filter)
+    results = await hybrid_search(query, law_filter=law_filter, user_id=user_id)
     return format_hybrid_context(results)

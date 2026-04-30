@@ -42,33 +42,6 @@ CREATE TABLE IF NOT EXISTS chat_logs (
 CREATE INDEX IF NOT EXISTS chat_logs_session_idx
     ON chat_logs (session_id, created_at DESC);
 
--- ── 4. 유사도 검색 함수 ─────────────────────────────────────────
--- 차원을 2560으로 변경
-CREATE OR REPLACE FUNCTION match_documents(
-    query_embedding VECTOR(2560),
-    match_count     INT,
-    law_filter      TEXT DEFAULT 'ALL'
-)
-RETURNS TABLE (
-    id         BIGINT,
-    content    TEXT,
-    metadata   JSONB,
-    similarity FLOAT
-)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    RETURN QUERY
-    SELECT
-        d.id, d.content, d.metadata,
-        1 - (d.embedding <=> query_embedding) AS similarity
-    FROM documents d
-    WHERE (law_filter = 'ALL' OR d.metadata->>'law_name' = law_filter)
-    ORDER BY d.embedding <=> query_embedding
-    LIMIT match_count;
-END;
-$$;
-
 DO $$
 BEGIN
     RAISE NOTICE '✅ DB 초기화 완료 (Ollama qwen3-embedding:4b, 2560차원)';

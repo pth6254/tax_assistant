@@ -104,6 +104,7 @@ async def classify_document(source: str, preview: str) -> dict:
 async def process_upload(
     file_bytes: bytes,
     filename: str,
+    user_id: str,
     uploader_email: str,
 ) -> dict:
     """업로드 파이프라인: PDF 파싱 → AI 분류 → 청크 분할 → 임베딩 → DB 저장."""
@@ -152,21 +153,26 @@ async def process_upload(
     logger.info("[UPLOAD] 임베딩 완료 (%.1fs)", time.perf_counter() - t1)
 
     # 5. DB 저장
+    import uuid as _uuid
+    uid = _uuid.UUID(user_id)
+
     pool = await get_pool()
     async with pool.acquire() as conn:
         deleted = await conn.fetchval(
-            "SELECT COUNT(*) FROM documents WHERE metadata->>'source' = $1", filename
+            "SELECT COUNT(*) FROM documents WHERE metadata->>'source' = $1 AND user_id = $2",
+            filename, uid,
         )
         if deleted:
             await conn.execute(
-                "DELETE FROM documents WHERE metadata->>'source' = $1", filename
+                "DELETE FROM documents WHERE metadata->>'source' = $1 AND user_id = $2",
+                filename, uid,
             )
             logger.info("[UPLOAD] 기존 청크 %d개 삭제 (덮어쓰기)", deleted)
 
         await conn.executemany(
-            "INSERT INTO documents (content, embedding, metadata) VALUES ($1, $2, $3)",
+            "INSERT INTO documents (content, embedding, metadata, user_id) VALUES ($1, $2, $3, $4)",
             [
-                (chunk, emb, json.dumps({**metadata_base, "chunk_index": idx}))
+                (chunk, emb, json.dumps({**metadata_base, "chunk_index": idx}), uid)
                 for idx, (chunk, emb) in enumerate(zip(chunks, embeddings))
             ],
         )
