@@ -15,14 +15,15 @@
 6. [기술 스택](#6-기술-스택)
 7. [프로젝트 구조](#7-프로젝트-구조)
 8. [시작하기](#8-시작하기)
-9. [환경 변수](#9-환경-변수)
-10. [API 엔드포인트](#10-api-엔드포인트)
-11. [사용 예시](#11-사용-예시)
-12. [핵심 구현 포인트](#12-핵심-구현-포인트)
-13. [보안 설계](#13-보안-설계)
-14. [트러블슈팅](#14-트러블슈팅)
-15. [한계 및 개선 과제](#15-한계-및-개선-과제)
-16. [라이선스](#16-라이선스)
+9. [테스트](#9-테스트)
+10. [환경 변수](#10-환경-변수)
+11. [API 엔드포인트](#11-api-엔드포인트)
+12. [사용 예시](#12-사용-예시)
+13. [핵심 구현 포인트](#13-핵심-구현-포인트)
+14. [보안 설계](#14-보안-설계)
+15. [트러블슈팅](#15-트러블슈팅)
+16. [한계 및 개선 과제](#16-한계-및-개선-과제)
+17. [라이선스](#17-라이선스)
 
 ---
 
@@ -271,8 +272,7 @@ tax-assistant/
     │       ├── api_service.py       # 국가법령정보 API 클라이언트
     │       ├── parser_service.py    # 법령 XML 조문 파싱
     │       ├── ingestion_service.py # 법령 수집·저장·임베딩 파이프라인
-    │       ├── hybrid_search_service.py  # law_articles + documents 하이브리드 검색
-    │       └── search_service.py    # 벡터 유사도 검색
+    │       └── hybrid_search_service.py  # law_articles + documents 하이브리드 검색
     │
     ├── utils/                   # 공통 유틸
     │   ├── jwt.py               # JWT 생성·검증, httpOnly 쿠키 설정
@@ -368,7 +368,68 @@ npm run dev
 
 ---
 
-## 9. 환경 변수
+## 9. 테스트
+
+### 테스트 패키지 설치 (최초 1회)
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+### 전체 테스트 실행
+
+```bash
+pytest
+```
+
+### 상세 출력
+
+```bash
+pytest -v
+```
+
+```
+tests/test_parser.py::test_normalize_text_strips_whitespace PASSED
+tests/test_parser.py::test_parse_articles_skips_deleted PASSED
+tests/test_ingestion.py::test_make_hash_is_deterministic PASSED
+tests/test_jwt.py::test_create_access_token_sub_claim PASSED
+tests/test_api_auth.py::test_signup_duplicate_email_returns_409 PASSED
+...
+```
+
+### 특정 파일만 실행
+
+```bash
+pytest tests/test_parser.py -v       # XML 파싱 로직
+pytest tests/test_ingestion.py -v    # 수집 유틸
+pytest tests/test_jwt.py -v          # JWT 토큰
+pytest tests/test_api_auth.py -v     # 인증 API
+pytest tests/test_api_upload.py -v   # 업로드 API
+pytest tests/test_api_chat.py -v     # 채팅 API
+```
+
+### 실패한 테스트만 재실행
+
+```bash
+pytest --lf
+```
+
+### 테스트 구성
+
+| 파일 | 테스트 대상 | 비고 |
+|------|-------------|------|
+| `test_parser.py` | XML 파싱, 조문번호 포맷, 텍스트 정규화 | DB·외부 의존 없음 |
+| `test_ingestion.py` | SHA-256 해시, 세목 추론, 임베딩 텍스트 빌드 | DB·외부 의존 없음 |
+| `test_jwt.py` | JWT 토큰 생성 및 클레임 검증 | DB·외부 의존 없음 |
+| `test_api_auth.py` | 회원가입·로그인 유효성 검사 및 응답 코드 | 서비스 레이어 mock |
+| `test_api_upload.py` | 인증 확인(401), 파일 형식 검사(400), 정상 업로드 | 서비스 레이어 mock |
+| `test_api_chat.py` | 인증 확인(401), 유효성 검사(422), 정상 응답 | 서비스 레이어 mock |
+
+> API 테스트는 실제 DB·Ollama 없이 실행됩니다. 서비스 레이어를 mock으로 대체하여 HTTP 계층의 동작을 검증합니다.
+
+---
+
+## 10. 환경 변수
 
 | 변수명 | 필수 | 기본값 | 설명 |
 |--------|------|--------|------|
@@ -384,7 +445,7 @@ npm run dev
 
 ---
 
-## 10. API 엔드포인트
+## 11. API 엔드포인트
 
 | 메서드 | 경로 | 설명 | 인증 |
 |--------|------|------|------|
@@ -400,7 +461,7 @@ npm run dev
 
 ---
 
-## 11. 사용 예시
+## 12. 사용 예시
 
 ### 세무 질문 예시
 
@@ -445,7 +506,7 @@ npm run dev
 
 ---
 
-## 12. 핵심 구현 포인트
+## 13. 핵심 구현 포인트
 
 ### 하이브리드 검색 (법령 조문 + PDF)
 
@@ -484,7 +545,7 @@ Tavily 다중 쿼리도 병렬로 처리하여 대기 시간을 줄입니다.
 
 ---
 
-## 13. 보안 설계
+## 14. 보안 설계
 
 | 항목 | 구현 방식 |
 |------|-----------|
@@ -496,7 +557,7 @@ Tavily 다중 쿼리도 병렬로 처리하여 대기 시간을 줄입니다.
 
 ---
 
-## 14. 트러블슈팅
+## 15. 트러블슈팅
 
 ### Ollama 연결 실패
 ```
@@ -542,7 +603,7 @@ ValueError: 임베딩 차원 불일치: 예상 2560, 실제 768
 
 ---
 
-## 15. 한계 및 개선 과제
+## 16. 한계 및 개선 과제
 
 | 한계 | 개선 방향 |
 |------|-----------|
@@ -552,12 +613,11 @@ ValueError: 임베딩 차원 불일치: 예상 2560, 실제 768
 | Cross-Encoder Re-ranker 미적용 | `bge-reranker` 추가로 검색 품질 향상 |
 | 법령 개정 수동 재수집 | 주기적 자동 동기화 스케줄러 추가 |
 | pgvector 인덱스 미적용 | 2560차원 이하 모델 전환 시 HNSW 인덱스 추가 가능 |
-| 사용자별 문서 격리 없음 | `documents` 테이블에 `user_id` 필터 추가 |
 
 
 ---
 
-## 16. 라이선스
+## 17. 라이선스
 
 라이선스는 추후 추가 예정입니다.
 
