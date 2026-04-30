@@ -11,7 +11,7 @@ test_law_search.py — law_articles 벡터 검색 수동 테스트
 import asyncio
 import sys
 
-from app.services.law.search_service import format_search_results, search_law_articles
+from app.services.law.hybrid_search_service import format_search_results, search_law_articles
 
 TEST_QUERIES = [
     ("프리랜서 노트북 비용처리 돼?",           None),
