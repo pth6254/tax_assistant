@@ -15,7 +15,7 @@ law_articles(공식 법령 조문)와 documents(PDF 업로드) 두 테이블을
   7 — 기타 PDF      (documents, category=기타)
 
 공개 법령(law_articles)은 모든 사용자에게 검색 가능.
-사용자 업로드 PDF(documents)는 현재 전체 공개 (TODO: uploader 기반 필터링).
+사용자 업로드 PDF(documents)는 user_id 기준으로 격리하여 현재 로그인 사용자의 문서만 검색 가능.
 """
 import asyncio
 import logging
