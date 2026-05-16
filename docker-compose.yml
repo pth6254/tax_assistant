@@ -31,8 +31,6 @@ services:
     environment:
       # Docker 내부에서는 서비스명(postgres)으로 접속
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-tax_db}
-    ports:
-      - "8000:8000"   # 직접 API 접근용 (선택적)
     depends_on:
       postgres:
         condition: service_healthy
