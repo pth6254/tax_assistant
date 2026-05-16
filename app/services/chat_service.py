@@ -14,8 +14,7 @@ import httpx
 
 from config import CHAT_MODEL, MEMORY_TURNS, OLLAMA_BASE_URL, TOP_K, TAVILY_API_KEY
 from app.database import get_pool
-from app.utils.embeddings import embed_texts
-from app.services.law.hybrid_search_service import fetch_hybrid_context, fetch_hybrid_context_multi
+from app.services.law.hybrid_search_service import fetch_hybrid_context_multi
 
 logger = logging.getLogger(__name__)
 
@@ -121,8 +120,8 @@ async def _save_history(
 
 # 채팅 답변 제시
 
-# ── 1단계: 자료 검색기 ─────────────────────────────────────────
-_RAG_PROMPT = (
+# ── 단일 답변 프롬프트 (RAG 컨텍스트 + 웹 검색 결과 통합) ────────
+_COMBINED_PROMPT = (
     "당신은 대한민국 세무 법령 전문 AI 어시스턴트입니다.\n"
     "검색된 자료의 출처 유형(source_type)에 따라 아래 우선순위를 엄격히 적용하세요.\n\n"
 
@@ -133,17 +132,19 @@ _RAG_PROMPT = (
     "| 2        | regulation      | 대통령령 (시행령)             | 법률 요건의 세부 기준     |\n"
     "| 3        | rule            | 총리령·부령 (시행규칙)        | 절차·서식 세부 사항       |\n"
     "| 4        | practice_pdf    | 집행기준·실무자료 PDF         | 해설·사례 보완, 구속력 없음 |\n"
-    "| 5        | user_pdf        | 사용자 업로드 PDF             | 참고용, 법적 효력 없음    |\n\n"
+    "| 5        | user_pdf        | 사용자 업로드 PDF             | 참고용, 법적 효력 없음    |\n"
+    "| 6        | 웹 검색 결과    | 최신 인터넷 자료              | DB 미수록 최신 해석·예규만 |\n\n"
 
     "## 근거 사용 규칙\n"
     "1. 공식 법령 조문(law)을 최우선 근거로 사용한다.\n"
     "2. 시행령(regulation)·시행규칙(rule)은 법률의 세부 요건 보완 자료로 사용한다.\n"
     "3. PDF 실무자료(practice_pdf, user_pdf)는 해설 또는 사례 보완으로만 사용한다.\n"
-    "4. 법령(law)과 PDF 자료가 충돌하면 법령을 우선한다.\n"
-    "5. 제공된 자료에서 명확한 근거를 찾지 못한 경우, "
+    "4. 웹 검색 결과는 DB가 다루지 못한 최신 해석·예규 보완에만 사용한다.\n"
+    "5. 법령(law)과 다른 자료가 충돌하면 법령을 우선한다.\n"
+    "6. 제공된 자료에서 명확한 근거를 찾지 못한 경우, "
     "추정하거나 일반론을 제시하지 말고 "
     "'제공된 자료에서 명확한 근거를 찾지 못했습니다'라고 명시한다.\n"
-    "6. 세무 리스크가 있는 판단은 반드시 '전문가 확인 권장'을 표시한다.\n\n"
+    "7. 세무 리스크가 있는 판단은 반드시 '전문가 확인 권장'을 표시한다.\n\n"
 
     "## 세법 일반 원칙\n"
     "- 특별법 우선: 조세특례제한법이 일반 세법보다 우선 적용\n"
@@ -154,13 +155,13 @@ _RAG_PROMPT = (
     "## 1. 💡 결론\n"
     "## 2. 📖 상세 설명\n"
     "## 3. ⚖️ 법적 근거\n"
-    "## 4. ⚡ 실무 주의사항\n"
-    "## 5. ❓ 추가 확인 필요 사항\n\n"
+    "## 4. ⚡ 실무 주의사항\n\n"
     "## 📋 근거 출처 목록\n"
     "(아래 형식으로 인용한 자료를 모두 나열)\n"
     "[법률] 법령명 제X조 - 조문제목\n"
     "[시행령] 법령명 시행령 제X조\n"
     "[시행규칙] 법령명 시행규칙 제X조\n"
+    "[웹출처] URL 또는 자료명\n"
     "[실무자료] 출처명 (구속력 없음)\n\n"
 
     "규칙:\n"
@@ -170,35 +171,7 @@ _RAG_PROMPT = (
     "- <think> 태그 내용은 출력하지 말 것\n"
 )
 
-# ── 2단계: 웹 검색 Gap Analysis 프롬프트 ──────────────────────
-_GAP_PROMPT = (
-    "너는 1차 답변을 검토하여 부족한 부분을 웹 검색으로 보완하는 '지식 보완 전문가'이다.\n\n"
-
-    "## Task\n"
-    "아래 1차 답변에서 '명확한 근거를 찾지 못했습니다', '근거 없음', '전문가 확인 권장'으로 "
-    "표시된 부분을 찾아 웹 검색 쿼리를 생성하라.\n\n"
-
-    "## 검색 쿼리 생성 규칙\n"
-    "1. 구어체를 법률 용어로 변환 (예: '알바비' → '인적용역 원천징수')\n"
-    "2. 아래 3가지 관점으로 쿼리 생성:\n"
-    "   - 법령/조문 관점: '소득세법 제XX조' 등 근거 검색\n"
-    "   - 실무/해석 관점: '국세청 유권해석', '최신 예규' 검색\n"
-    "   - 계산/방법 관점: 세액 산출 공식, 신고 방법 검색\n"
-    "3. 검색어 뒤에 '2026년' 또는 '최신' 키워드 포함\n\n"
-
-    "## 출력 형식 (JSON)\n"
-    "{\n"
-    '  "gap_found": "부족했던 정보 설명",\n'
-    '  "search_queries": ["검색어1", "검색어2", "검색어3"],\n'
-    '  "search_required": true/false\n'
-    "}\n\n"
-
-    "search_required가 false면 검색 없이 SKIP.\n"
-    "오직 JSON만 출력하세요.\n"
-    "- <think> 태그 내용은 출력하지 말 것\n"
-)
-
-# ── 0단계: 멀티쿼리 생성 프롬프트 ────────────────────────────
+# ── 멀티쿼리 생성 프롬프트 ────────────────────────────
 _MULTI_QUERY_PROMPT = (
     "한국 세무 법령 검색을 위한 검색어 3개를 서로 다른 관점으로 생성하라.\n\n"
     "## 관점\n"
@@ -212,44 +185,9 @@ _MULTI_QUERY_PROMPT = (
     "- <think> 태그 내용은 출력하지 말 것\n"
 )
 
-# ── 3단계: 최종 답변 요약 프롬프트 ───────────────────────────
-_SUMMARY_PROMPT = (
-    "너는 내부 법령 DB 검색 결과와 외부 웹 검색 결과를 합성하여 "
-    "최종 답변을 생성하는 세무 법령 전문 AI이다.\n\n"
-
-    "## 합성 전략\n"
-    "1. 내부 DB의 공식 법령 조문(source_type=law)을 최우선 근거로 사용한다.\n"
-    "2. 시행령·시행규칙은 법률 요건의 세부 기준으로 보완한다.\n"
-    "3. 웹 검색 결과는 DB가 다루지 못한 최신 해석·예규 보완에만 사용한다.\n"
-    "4. 이전 대화 맥락을 반영하여 맞춤형 답변을 생성한다.\n"
-    "5. 근거가 없는 내용은 추정하지 말고 '근거 없음'으로 명시한다.\n\n"
-
-    "## 최종 출력 형식\n"
-    "## 1. 💡 결론 요약\n"
-    "## 2. 📖 상세 내용\n"
-    "## 3. ⚖️ 법적 근거\n"
-    "## 4. ⚡ 실무 주의사항\n\n"
-    "## 📋 근거 출처 목록\n"
-    "(인용한 모든 자료를 아래 형식으로 나열)\n"
-    "[법률] 법령명 제X조 - 조문제목\n"
-    "[시행령] 법령명 시행령 제X조\n"
-    "[시행규칙] 법령명 시행규칙 제X조\n"
-    "[웹출처] URL 또는 자료명\n"
-    "[실무자료] 출처명 (구속력 없음)\n\n"
-
-    "규칙:\n"
-    "- 항상 마크다운으로 작성\n"
-    "- 법적 근거는 조문 번호까지 명시\n"
-    "- 불확실한 내용은 반드시 '전문가 확인 권장' 표시\n"
-    "- 근거 없는 내용은 절대 추정하지 말 것\n"
-    "- <think> 태그 내용은 출력하지 말 것\n"
-)
-
-
-_OLLAMA_OPTIONS         = {"temperature": 0.3, "num_predict": 3000, "num_ctx": 8192}
-_OLLAMA_OPTIONS_STREAM  = {"temperature": 0.3, "num_predict": -1,   "num_ctx": 8192}  # -1 = 무제한
-_OLLAMA_OPTIONS_GAP     = {"temperature": 0.0, "num_predict": 300,  "num_ctx": 4096}  # JSON만 출력
-_OLLAMA_OPTIONS_MULTI_QUERY = {"temperature": 0.0, "num_predict": 150,  "num_ctx": 2048}  # JSON 배열 출력
+_OLLAMA_OPTIONS             = {"temperature": 0.3, "num_predict": 500,  "num_ctx": 4096}
+_OLLAMA_OPTIONS_STREAM      = {"temperature": 0.3, "num_predict": -1,   "num_ctx": 8192}
+_OLLAMA_OPTIONS_MULTI_QUERY = {"temperature": 0.0, "num_predict": 150,  "num_ctx": 2048}
 
 
 async def _call_ollama(
@@ -396,54 +334,14 @@ async def generate_search_queries(query: str) -> list[str]:
     return [query]
 
 
-def _extract_gap_json(raw: str) -> dict | None:
-    """
-    LLM 응답에서 Gap Analysis JSON을 추출하고 스키마를 정규화한다.
-    처리 순서:
-      1) </think> 이후 텍스트만 사용
-      2) 마크다운 코드펜스(```json ... ```) 안의 내용 우선 탐색
-      3) 첫 번째 '{' ~ 마지막 '}'로 JSON 객체 추출
-      4) search_queries 타입 정규화 (str → list)
-    """
-    text = raw.split("</think>")[-1].strip()
-
-    # 코드펜스 내부를 첫 번째 후보로, 전체 텍스트를 두 번째 후보로
-    fence = re.search(r"```(?:json)?\s*\n?([\s\S]*?)\n?```", text)
-    candidates = [fence.group(1).strip()] if fence else []
-    candidates.append(text)
-
-    for candidate in candidates:
-        start = candidate.find("{")
-        end   = candidate.rfind("}") + 1
-        if start == -1 or end == 0:
-            continue
-        try:
-            data = json.loads(candidate[start:end])
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(data, dict):
-            continue
-
-        # search_queries 타입 정규화
-        queries = data.get("search_queries", [])
-        if isinstance(queries, str):
-            queries = [queries]
-        data["search_queries"] = [q for q in (queries if isinstance(queries, list) else []) if isinstance(q, str)]
-        data["search_required"] = bool(data.get("search_required", False))
-        return data
-
-    return None
-
-
 async def _fetch_rag_and_web_context(
     query: str,
     session_id: _uuid.UUID,
     user_id: str,
 ) -> tuple[str, str, list[dict]]:
     """
-    세목 분류·법령 검색·Gap 분석·웹 검색을 수행하고
-    (rag_answer, web_results, history)를 반환한다.
-    세목 분류와 대화 히스토리 조회는 병렬로 실행한다.
+    세목 분류·법령 검색·웹 검색을 수행하고 (context, web_results, history)를 반환한다.
+    하이브리드 검색과 Tavily 웹 검색을 병렬로 실행하여 지연을 최소화한다.
     """
     t0 = time.perf_counter()
 
@@ -454,56 +352,35 @@ async def _fetch_rag_and_web_context(
     )
     logger.info("[RAG] 세목=%s | 히스토리=%d턴 | 검색쿼리=%d개", law_filter, len(history) // 2, len(search_queries))
 
-    context = await fetch_hybrid_context_multi(search_queries, law_filter, user_id=user_id, original_query=query)
-    logger.info("[RAG] 하이브리드 검색 완료 (%.1fs)", time.perf_counter() - t0)
-
-    t1 = time.perf_counter()
-    messages_rag = [{"role": "system", "content": _RAG_PROMPT}]
-    messages_rag.extend(history)
-    messages_rag.append({"role": "user", "content": (
-        f"[검색된 세무 법령 자료]\n{context}\n\n[사용자 질문]\n{query}"
-    )})
-    rag_answer = await _call_ollama(messages_rag, temperature=0.3)
-    logger.info("[RAG] 1차 답변 완료 (%.1fs)", time.perf_counter() - t1)
-
-    web_results = "웹 검색 생략"
     if TAVILY_API_KEY:
-        t2 = time.perf_counter()
-        messages_gap = [
-            {"role": "system", "content": _GAP_PROMPT},
-            {"role": "user",   "content": f"[사용자 질문]\n{query}\n\n[1차 답변]\n{rag_answer}"},
-        ]
-        gap_raw = await _call_ollama(messages_gap, temperature=0.0, options=_OLLAMA_OPTIONS_GAP)
-        gap = _extract_gap_json(gap_raw)
-        if gap is None:
-            logger.warning("[RAG] Gap Analysis 파싱 실패 — 원본(200자): %.200s", gap_raw)
-        elif gap["search_required"] and gap["search_queries"]:
-            logger.info("[RAG] 웹 검색 실행: %s", gap["search_queries"])
-            web_results = await _tavily_search(gap["search_queries"])
-            logger.info("[RAG] 웹 검색 완료 (%.1fs)", time.perf_counter() - t2)
-        else:
-            logger.info("[RAG] Gap 없음 — 웹 검색 생략")
+        context, web_results = await asyncio.gather(
+            fetch_hybrid_context_multi(search_queries, law_filter, user_id=user_id, original_query=query),
+            _tavily_search([query]),
+        )
+        logger.info("[RAG] 하이브리드 검색 + 웹 검색 병렬 완료 (%.1fs)", time.perf_counter() - t0)
     else:
-        logger.info("[RAG] TAVILY_API_KEY 없음 — 웹 검색 생략")
+        context = await fetch_hybrid_context_multi(search_queries, law_filter, user_id=user_id, original_query=query)
+        web_results = "웹 검색 생략"
+        logger.info("[RAG] 하이브리드 검색 완료 (%.1fs)", time.perf_counter() - t0)
 
     logger.info("[RAG] 준비 단계 총 소요: %.1fs", time.perf_counter() - t0)
-    return rag_answer, web_results, history
+    return context, web_results, history
 
 
 def _build_final_messages(
     query: str,
-    rag_answer: str,
+    context: str,
     web_results: str,
     history: list[dict],
 ) -> list[dict]:
-    """최종 답변 합성용 메시지 목록을 생성한다."""
-    messages = [{"role": "system", "content": _SUMMARY_PROMPT}]
+    """최종 답변용 메시지 목록을 생성한다."""
+    messages = [{"role": "system", "content": _COMBINED_PROMPT}]
     messages.extend(history)
-    messages.append({"role": "user", "content": (
-        f"[사용자 질문]\n{query}\n\n"
-        f"[내부 DB 검색 결과]\n{rag_answer}\n\n"
-        f"[웹 검색 결과]\n{web_results}"
-    )})
+    user_content = f"[검색된 세무 법령 자료]\n{context}"
+    if web_results and web_results != "웹 검색 생략":
+        user_content += f"\n\n[웹 검색 결과]\n{web_results}"
+    user_content += f"\n\n[사용자 질문]\n{query}"
+    messages.append({"role": "user", "content": user_content})
     return messages
 
 
@@ -513,9 +390,9 @@ async def process_chat(query: str, user_id: str) -> str:
     t0 = time.perf_counter()
 
     session_id = _uuid.UUID(user_id)
-    rag_answer, web_results, history = await _fetch_rag_and_web_context(query, session_id, user_id)
+    context, web_results, history = await _fetch_rag_and_web_context(query, session_id, user_id)
 
-    messages = _build_final_messages(query, rag_answer, web_results, history)
+    messages = _build_final_messages(query, context, web_results, history)
     answer   = await _call_ollama(messages, temperature=0.3)
 
     await _save_history(session_id, query, answer)
@@ -532,9 +409,9 @@ async def stream_chat_response(
     t0 = time.perf_counter()
 
     session_id = _uuid.UUID(user_id)
-    rag_answer, web_results, history = await _fetch_rag_and_web_context(query, session_id, user_id)
+    context, web_results, history = await _fetch_rag_and_web_context(query, session_id, user_id)
 
-    messages     = _build_final_messages(query, rag_answer, web_results, history)
+    messages     = _build_final_messages(query, context, web_results, history)
     full_answer: list[str] = []
 
     logger.info("[STREAM] 최종 답변 스트리밍 시작")
