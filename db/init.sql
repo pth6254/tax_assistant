@@ -28,7 +28,12 @@ CREATE TABLE IF NOT EXISTS documents (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- ivfflat/hnsw 인덱스는 최대 2000차원까지만 지원 → 2560차원은 sequential scan 사용
+-- halfvec 캐스팅으로 HNSW 인덱스 적용 (pgvector 0.7+, 최대 4000차원 지원)
+CREATE INDEX IF NOT EXISTS documents_embedding_hnsw_idx
+    ON documents
+    USING hnsw ((embedding::halfvec(2560)) halfvec_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
+
 CREATE INDEX IF NOT EXISTS documents_metadata_law_idx
     ON documents
     USING gin (metadata);
@@ -68,6 +73,12 @@ CREATE TABLE IF NOT EXISTS law_articles (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- halfvec 캐스팅으로 HNSW 인덱스 적용 (pgvector 0.7+, 최대 4000차원 지원)
+CREATE INDEX IF NOT EXISTS law_articles_embedding_hnsw_idx
+    ON law_articles
+    USING hnsw ((embedding::halfvec(2560)) halfvec_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
 
 -- 완전 중복 방지 (동일 법령 + 조문 + 내용)
 CREATE UNIQUE INDEX IF NOT EXISTS law_articles_dedup_idx

@@ -32,7 +32,7 @@ async def get_pool() -> asyncpg.Pool:
             min_size=2,
             max_size=10,
             init=_init_connection,
-        )
+        ) 
     return _pool
 
 

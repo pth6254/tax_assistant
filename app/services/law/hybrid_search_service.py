@@ -25,8 +25,8 @@ import uuid as _uuid
 from dataclasses import dataclass
 
 from app.database import get_pool
-from app.utils.embeddings import embed_texts
-from config import SIMILARITY_THRESHOLD, TOP_K
+from app.utils.embeddings import embed_texts, get_http_client
+from config import OLLAMA_BASE_URL, RERANK_MODEL, SIMILARITY_THRESHOLD, TOP_K
 
 logger = logging.getLogger(__name__)
 
@@ -66,20 +66,25 @@ _DOC_CATEGORY_SOURCE_TYPE: dict[str, str] = {
 }
 _DOC_CATEGORY_DEFAULT_SOURCE_TYPE = "user_pdf"
 
+# ── 리랭킹 설정 ─────────────────────────────────────────────────
+_RERANK_URL           = f"{OLLAMA_BASE_URL}/api/rerank"
+_RERANK_CONTENT_LIMIT = 500  # 리랭커에 전달할 문서 내용 최대 길이 (자)
+
 # ── 검색 SQL ────────────────────────────────────────────────────
 
 # law_articles 검색 — is_current=TRUE, embedding 있는 것만
+# halfvec 캐스팅으로 HNSW 인덱스 활용 (pgvector 0.7+, 2560차원 지원)
 _LAW_ARTICLES_SQL = """
 SELECT
     law_name, law_type, tax_type,
     article_no, article_title, article_text,
     source_url,
-    1 - (embedding <=> $1::vector) AS similarity_score
+    1 - (embedding::halfvec(2560) <=> $1::vector::halfvec(2560)) AS similarity_score
 FROM law_articles
 WHERE is_current = TRUE
   AND embedding IS NOT NULL
   AND ($2::text IS NULL OR tax_type = $2)
-ORDER BY embedding <=> $1::vector
+ORDER BY embedding::halfvec(2560) <=> $1::vector::halfvec(2560)
 LIMIT $3
 """
 
@@ -88,12 +93,12 @@ _DOCUMENTS_SQL = """
 SELECT
     content,
     metadata,
-    1 - (embedding <=> $1::vector) AS similarity_score
+    1 - (embedding::halfvec(2560) <=> $1::vector::halfvec(2560)) AS similarity_score
 FROM documents
 WHERE embedding IS NOT NULL
   AND user_id = $2::uuid
   AND ($3 = 'ALL' OR metadata->>'law_name' = $3)
-ORDER BY embedding <=> $1::vector
+ORDER BY embedding::halfvec(2560) <=> $1::vector::halfvec(2560)
 LIMIT $4
 """
 
@@ -187,13 +192,89 @@ async def _search_documents(
     return results
 
 
+# ── 멀티쿼리 유틸리티 ─────────────────────────────────────────────
+
+def _rrf_merge(
+    results_per_query: list[list[HybridSearchResult]],
+    top_k: int,
+    k: int = 60,
+) -> list[HybridSearchResult]:
+    """여러 쿼리 결과를 RRF(Reciprocal Rank Fusion)로 결합. k=60은 표준값."""
+    scores: dict[str, float] = {}
+    result_map: dict[str, HybridSearchResult] = {}
+
+    for results in results_per_query:
+        for rank, r in enumerate(results):
+            key = r.content
+            scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank + 1)
+            if key not in result_map:
+                result_map[key] = r
+
+    sorted_keys = sorted(scores, key=lambda key: -scores[key])
+    return [result_map[key] for key in sorted_keys[:top_k]]
+
+
+async def _search_all(
+    q_emb: list[float],
+    law_filter: str,
+    fetch_k: int,
+    user_id: str,
+) -> list[HybridSearchResult]:
+    """한 임베딩으로 law_articles + documents 검색 후 임계값 필터링, 우선순위 정렬."""
+    law_results, doc_results = await asyncio.gather(
+        _search_law_articles(q_emb, law_filter, fetch_k),
+        _search_documents(q_emb, law_filter, fetch_k, user_id),
+    )
+    merged = law_results + doc_results
+    merged = [r for r in merged if r.similarity_score >= SIMILARITY_THRESHOLD]
+    merged.sort(key=lambda r: (r.priority, -r.similarity_score))
+    return merged
+
+
+# ── 리랭킹 ───────────────────────────────────────────────────────
+
+async def _rerank(
+    original_query: str,
+    results: list[HybridSearchResult],
+    top_k: int,
+) -> list[HybridSearchResult]:
+    """
+    Ollama /api/rerank로 결과를 재정렬한다.
+    RERANK_MODEL 미설정 또는 실패 시 원본 리스트에서 top_k 슬라이싱.
+    """
+    if not RERANK_MODEL or not results:
+        return results[:top_k]
+
+    documents = [r.content[:_RERANK_CONTENT_LIMIT] for r in results]
+    t0 = time.perf_counter()
+    try:
+        client = get_http_client()
+        resp = await client.post(
+            _RERANK_URL,
+            json={
+                "model":     RERANK_MODEL,
+                "query":     original_query,
+                "documents": documents,
+            },
+        )
+        resp.raise_for_status()
+        ranked = resp.json().get("results", [])
+        reranked = [results[item["index"]] for item in ranked[:top_k]]
+        logger.info("[RERANK] %d→%d건 재정렬 완료 (%.2fs)", len(results), len(reranked), time.perf_counter() - t0)
+        return reranked
+    except Exception as e:
+        logger.warning("[RERANK] 실패 — 기존 정렬 사용: %s", e)
+        return results[:top_k]
+
+
 # ── 공개 함수 ────────────────────────────────────────────────────
 
 async def hybrid_search(
     query: str,
     law_filter: str = "ALL",
     top_k: int = TOP_K,
-    user_id: str = "",  # 반드시 전달해야 함 — 빈 문자열이면 _search_documents에서 오류
+    user_id: str = "",        # 반드시 전달해야 함 — 빈 문자열이면 _search_documents에서 오류
+    original_query: str = "", # 리랭킹용 원본 질문 (미전달 시 query 사용)
 ) -> list[HybridSearchResult]:
     """
     law_articles + documents를 동시에 검색하고 우선순위 순으로 병합한다.
@@ -212,15 +293,9 @@ async def hybrid_search(
     t0 = time.perf_counter()
     q_emb = (await embed_texts([query]))[0]
 
-    law_results, doc_results = await asyncio.gather(
-        _search_law_articles(q_emb, law_filter, top_k),
-        _search_documents(q_emb, law_filter, top_k, user_id),
-    )
-
-    merged = law_results + doc_results
-    merged = [r for r in merged if r.similarity_score >= SIMILARITY_THRESHOLD]
-    merged.sort(key=lambda r: (r.priority, -r.similarity_score))
-    final = merged[:top_k]
+    fetch_k = top_k * 3 if RERANK_MODEL else top_k
+    merged = await _search_all(q_emb, law_filter, fetch_k, user_id)
+    final  = await _rerank(original_query or query, merged, top_k)
 
     if not final:
         logger.warning(
@@ -230,8 +305,8 @@ async def hybrid_search(
         )
     else:
         logger.info(
-            "[SEARCH] 필터=%s | 법령조문=%d건 PDF=%d건 → 병합 상위 %d건 (%.2fs)",
-            law_filter, len(law_results), len(doc_results), len(final),
+            "[SEARCH] 필터=%s | 후보 %d건 → 최종 %d건 (%.2fs)",
+            law_filter, len(merged), len(final),
             time.perf_counter() - t0,
         )
     return final
@@ -256,10 +331,42 @@ async def fetch_hybrid_context(
     query: str,
     law_filter: str = "ALL",
     user_id: str = "",
+    original_query: str = "",
+) -> str:
+    """단일 쿼리 하이브리드 검색 진입점."""
+    results = await hybrid_search(query, law_filter=law_filter, user_id=user_id, original_query=original_query)
+    return format_hybrid_context(results)
+
+
+async def fetch_hybrid_context_multi(
+    queries: list[str],
+    law_filter: str = "ALL",
+    user_id: str = "",
+    original_query: str = "",
 ) -> str:
     """
-    chat_service에서 호출하는 하이브리드 검색 진입점.
-    law_articles(공개 법령)와 user_id 소유 documents(PDF)를 병합하여 반환한다.
+    멀티쿼리 하이브리드 검색 진입점.
+    queries 각각으로 병렬 검색 후 RRF 결합 → 리랭킹 → 컨텍스트 반환.
+    쿼리가 1개이면 fetch_hybrid_context와 동일하게 동작.
     """
-    results = await hybrid_search(query, law_filter=law_filter, user_id=user_id)
-    return format_hybrid_context(results)
+    if len(queries) <= 1:
+        q = queries[0] if queries else (original_query or "")
+        return await fetch_hybrid_context(q, law_filter, user_id, original_query)
+
+    t0 = time.perf_counter()
+    fetch_k = TOP_K * 2
+
+    q_embs = await embed_texts(queries)
+    results_per_query = await asyncio.gather(*[
+        _search_all(q_emb, law_filter, fetch_k, user_id)
+        for q_emb in q_embs
+    ])
+
+    merged = _rrf_merge(list(results_per_query), top_k=TOP_K * 2)
+    final  = await _rerank(original_query or queries[0], merged, TOP_K)
+
+    logger.info(
+        "[MULTI-QUERY] %d개 쿼리 → RRF %d건 → 최종 %d건 (%.2fs)",
+        len(queries), len(merged), len(final), time.perf_counter() - t0,
+    )
+    return format_hybrid_context(final)

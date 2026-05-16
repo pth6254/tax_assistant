@@ -5,6 +5,7 @@ services/chat_service.py — RAG 채팅 비즈니스 로직
 import asyncio
 import json
 import logging
+import re
 import time
 import uuid as _uuid
 from typing import AsyncGenerator
@@ -14,7 +15,7 @@ import httpx
 from config import CHAT_MODEL, MEMORY_TURNS, OLLAMA_BASE_URL, TOP_K, TAVILY_API_KEY
 from app.database import get_pool
 from app.utils.embeddings import embed_texts
-from app.services.law.hybrid_search_service import fetch_hybrid_context
+from app.services.law.hybrid_search_service import fetch_hybrid_context, fetch_hybrid_context_multi
 
 logger = logging.getLogger(__name__)
 
@@ -197,6 +198,20 @@ _GAP_PROMPT = (
     "- <think> 태그 내용은 출력하지 말 것\n"
 )
 
+# ── 0단계: 멀티쿼리 생성 프롬프트 ────────────────────────────
+_MULTI_QUERY_PROMPT = (
+    "한국 세무 법령 검색을 위한 검색어 3개를 서로 다른 관점으로 생성하라.\n\n"
+    "## 관점\n"
+    "1. 법령/조문 관점: 관련 법령명·조문 번호·법령 용어 중심\n"
+    "2. 요건/대상 관점: 적용 대상·요건·예외사항 중심\n"
+    "3. 계산/절차 관점: 세액 산출·신고 방법·실무 절차 중심\n\n"
+    "## 규칙\n"
+    "- 구어체를 법령 용어로 변환 (예: '알바비' → '인적용역 원천징수')\n"
+    "- 각 검색어는 50자 이내 키워드 나열\n"
+    "- JSON 배열만 출력: [\"검색어1\", \"검색어2\", \"검색어3\"]\n"
+    "- <think> 태그 내용은 출력하지 말 것\n"
+)
+
 # ── 3단계: 최종 답변 요약 프롬프트 ───────────────────────────
 _SUMMARY_PROMPT = (
     "너는 내부 법령 DB 검색 결과와 외부 웹 검색 결과를 합성하여 "
@@ -231,9 +246,10 @@ _SUMMARY_PROMPT = (
 )
 
 
-_OLLAMA_OPTIONS        = {"temperature": 0.3, "num_predict": 3000, "num_ctx": 8192}
-_OLLAMA_OPTIONS_STREAM = {"temperature": 0.3, "num_predict": -1,   "num_ctx": 8192}  # -1 = 무제한
-_OLLAMA_OPTIONS_GAP    = {"temperature": 0.0, "num_predict": 300,  "num_ctx": 4096}  # JSON만 출력
+_OLLAMA_OPTIONS         = {"temperature": 0.3, "num_predict": 3000, "num_ctx": 8192}
+_OLLAMA_OPTIONS_STREAM  = {"temperature": 0.3, "num_predict": -1,   "num_ctx": 8192}  # -1 = 무제한
+_OLLAMA_OPTIONS_GAP     = {"temperature": 0.0, "num_predict": 300,  "num_ctx": 4096}  # JSON만 출력
+_OLLAMA_OPTIONS_MULTI_QUERY = {"temperature": 0.0, "num_predict": 150,  "num_ctx": 2048}  # JSON 배열 출력
 
 
 async def _call_ollama(
@@ -353,6 +369,72 @@ async def _tavily_search(queries: list[str]) -> str:
     return "\n\n---\n\n".join(results) if results else "웹 검색 결과 없음"
 
 
+async def generate_search_queries(query: str) -> list[str]:
+    """질문으로부터 다각도 검색 쿼리 3개 생성. 실패 시 원본만 반환."""
+    try:
+        raw = await _call_ollama(
+            [
+                {"role": "system", "content": _MULTI_QUERY_PROMPT},
+                {"role": "user",   "content": query},
+            ],
+            temperature=0.0,
+            options=_OLLAMA_OPTIONS_MULTI_QUERY,
+        )
+        text  = raw.split("</think>")[-1].strip()
+        fence = re.search(r"```(?:json)?\s*\n?([\s\S]*?)\n?```", text)
+        candidate = fence.group(1).strip() if fence else text
+        match = re.search(r"\[[\s\S]*?\]", candidate)
+        if match:
+            queries = json.loads(match.group(0))
+            if isinstance(queries, list):
+                result = [q for q in queries if isinstance(q, str) and q.strip()][:3]
+                if result:
+                    logger.info("[MULTI-QUERY] %d개 생성: %s", len(result), result)
+                    return result
+    except Exception as e:
+        logger.warning("[MULTI-QUERY] 생성 실패 — 원본 사용: %s", e)
+    return [query]
+
+
+def _extract_gap_json(raw: str) -> dict | None:
+    """
+    LLM 응답에서 Gap Analysis JSON을 추출하고 스키마를 정규화한다.
+    처리 순서:
+      1) </think> 이후 텍스트만 사용
+      2) 마크다운 코드펜스(```json ... ```) 안의 내용 우선 탐색
+      3) 첫 번째 '{' ~ 마지막 '}'로 JSON 객체 추출
+      4) search_queries 타입 정규화 (str → list)
+    """
+    text = raw.split("</think>")[-1].strip()
+
+    # 코드펜스 내부를 첫 번째 후보로, 전체 텍스트를 두 번째 후보로
+    fence = re.search(r"```(?:json)?\s*\n?([\s\S]*?)\n?```", text)
+    candidates = [fence.group(1).strip()] if fence else []
+    candidates.append(text)
+
+    for candidate in candidates:
+        start = candidate.find("{")
+        end   = candidate.rfind("}") + 1
+        if start == -1 or end == 0:
+            continue
+        try:
+            data = json.loads(candidate[start:end])
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(data, dict):
+            continue
+
+        # search_queries 타입 정규화
+        queries = data.get("search_queries", [])
+        if isinstance(queries, str):
+            queries = [queries]
+        data["search_queries"] = [q for q in (queries if isinstance(queries, list) else []) if isinstance(q, str)]
+        data["search_required"] = bool(data.get("search_required", False))
+        return data
+
+    return None
+
+
 async def _fetch_rag_and_web_context(
     query: str,
     session_id: _uuid.UUID,
@@ -365,13 +447,14 @@ async def _fetch_rag_and_web_context(
     """
     t0 = time.perf_counter()
 
-    law_filter, history = await asyncio.gather(
+    law_filter, history, search_queries = await asyncio.gather(
         detect_law_name(query),
         _fetch_history(session_id),
+        generate_search_queries(query),
     )
-    logger.info("[RAG] 세목=%s | 히스토리=%d턴", law_filter, len(history) // 2)
+    logger.info("[RAG] 세목=%s | 히스토리=%d턴 | 검색쿼리=%d개", law_filter, len(history) // 2, len(search_queries))
 
-    context = await fetch_hybrid_context(query, law_filter, user_id=user_id)
+    context = await fetch_hybrid_context_multi(search_queries, law_filter, user_id=user_id, original_query=query)
     logger.info("[RAG] 하이브리드 검색 완료 (%.1fs)", time.perf_counter() - t0)
 
     t1 = time.perf_counter()
@@ -391,20 +474,15 @@ async def _fetch_rag_and_web_context(
             {"role": "user",   "content": f"[사용자 질문]\n{query}\n\n[1차 답변]\n{rag_answer}"},
         ]
         gap_raw = await _call_ollama(messages_gap, temperature=0.0, options=_OLLAMA_OPTIONS_GAP)
-        try:
-            clean = gap_raw.split("</think>")[-1].strip()
-            if not clean:
-                logger.warning("[RAG] Gap Analysis 응답 비어있음 — 웹 검색 생략")
-            else:
-                gap = json.loads(clean)
-                if gap.get("search_required") and gap.get("search_queries"):
-                    logger.info("[RAG] 웹 검색 실행: %s", gap["search_queries"])
-                    web_results = await _tavily_search(gap["search_queries"])
-                    logger.info("[RAG] 웹 검색 완료 (%.1fs)", time.perf_counter() - t2)
-                else:
-                    logger.info("[RAG] Gap 없음 — 웹 검색 생략")
-        except Exception as e:
-            logger.warning("[RAG] Gap Analysis 파싱 실패: %s", e)
+        gap = _extract_gap_json(gap_raw)
+        if gap is None:
+            logger.warning("[RAG] Gap Analysis 파싱 실패 — 원본(200자): %.200s", gap_raw)
+        elif gap["search_required"] and gap["search_queries"]:
+            logger.info("[RAG] 웹 검색 실행: %s", gap["search_queries"])
+            web_results = await _tavily_search(gap["search_queries"])
+            logger.info("[RAG] 웹 검색 완료 (%.1fs)", time.perf_counter() - t2)
+        else:
+            logger.info("[RAG] Gap 없음 — 웹 검색 생략")
     else:
         logger.info("[RAG] TAVILY_API_KEY 없음 — 웹 검색 생략")
 
