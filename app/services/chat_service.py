@@ -12,7 +12,7 @@ from typing import AsyncGenerator
 
 import httpx
 
-from config import CHAT_MODEL, MEMORY_TURNS, OLLAMA_BASE_URL, TOP_K, TAVILY_API_KEY
+from config import CHAT_MODEL, MEMORY_TURNS, OLLAMA_BASE_URL, TOP_K, TAVILY_API_KEY, THINK_ENABLED
 from app.services.search.web_search import tavily_search
 from app.database import get_pool
 from app.services.search.hybrid_search_service import (
@@ -217,9 +217,14 @@ _COMBINED_CLASSIFY_PROMPT = (
     "- <think> 태그 내용은 출력하지 말 것\n"
 )
 
-_OLLAMA_OPTIONS             = {"temperature": 0.3, "num_predict": 500,  "num_ctx": 4096, "think": False}
-_OLLAMA_OPTIONS_STREAM      = {"temperature": 0.3, "num_predict": -1,   "num_ctx": 8192, "think": False}
-_OLLAMA_OPTIONS_MULTI_QUERY = {"temperature": 0.0, "num_predict": 150,  "num_ctx": 2048, "think": False}
+_OLLAMA_OPTIONS             = {"temperature": 0.3, "num_predict": 500,  "num_ctx": 4096, "think": THINK_ENABLED}
+_OLLAMA_OPTIONS_STREAM      = {"temperature": 0.3, "num_predict": -1,   "num_ctx": 6144, "think": THINK_ENABLED}
+_OLLAMA_OPTIONS_MULTI_QUERY = {"temperature": 0.0, "num_predict": 150,  "num_ctx": 2048, "think": THINK_ENABLED}
+
+# Qwen3 계열 모델에서만 /no_think 접두사 사용 (다른 모델에는 노이즈)
+_QWEN3_NO_THINK_PREFIX = "/no_think\n\n" if (
+    not THINK_ENABLED and any(k in CHAT_MODEL.lower() for k in ("qwen3",))
+) else ""
 
 
 async def _call_ollama(
@@ -248,12 +253,13 @@ async def _stream_ollama_response(
     temperature: float = 0.3,
 ) -> AsyncGenerator[str, None]:
     """
-    Ollama 스트리밍 호출. 토큰 청크를 yield한다.
-    <think>...</think> 블록은 필터링하여 출력하지 않는다.
-    num_predict 제한으로 </think>가 미출력된 경우도 처리한다.
+    Ollama 스트리밍 호출. <think> 블록은 버퍼 누적 없이 실시간으로 건너뜀.
+
+    기존 방식은 </think>를 찾을 때까지 모든 토큰을 buf에 쌓아 TTFT가 매우 길었음.
+    개선: in_think 상태에서 최대 8자(</think> 경계 감지용)만 보관하고 나머지는 즉시 버림.
     """
-    buf = ""
-    past_think = False
+    in_think = False
+    buf = ""   # 태그 경계 감지에만 사용 — 최대 수십 자 이내로 유지
 
     async with httpx.AsyncClient(timeout=300.0) as client:
         async with client.stream(
@@ -276,36 +282,46 @@ async def _stream_ollama_response(
                     continue
 
                 chunk = data.get("message", {}).get("content", "")
-
-                if past_think:
-                    if chunk:
-                        yield chunk
-                else:
+                if chunk:
                     buf += chunk
-                    if "</think>" in buf:
-                        _, after = buf.split("</think>", 1)
-                        past_think = True
-                        buf = ""
-                        if after:
-                            yield after
-                    elif "<think>" not in buf and len(buf) > 30:
-                        past_think = True
-                        yield buf
-                        buf = ""
+
+                    if in_think:
+                        end = buf.find("</think>")
+                        if end != -1:
+                            in_think = False
+                            buf = buf[end + 8:]   # 8 = len("</think>")
+                        else:
+                            # think 블록 내부 — 경계 감지에 필요한 최소분만 보관
+                            buf = buf[-7:] if len(buf) > 7 else buf
+
+                    if not in_think and buf:
+                        start = buf.find("<think>")
+                        if start != -1:
+                            before = buf[:start]
+                            if before:
+                                yield before
+                            in_think = True
+                            logger.info("[STREAM] <think> 블록 감지 — think:False 미적용 상태")
+                            buf = buf[start + 7:]   # 7 = len("<think>")
+                            # 같은 청크에 </think>가 함께 있는 경우
+                            end = buf.find("</think>")
+                            if end != -1:
+                                in_think = False
+                                buf = buf[end + 8:]
+                            else:
+                                buf = buf[-7:] if len(buf) > 7 else buf
+                        else:
+                            # think 없음 — 마지막 6자는 '<think' 시작 가능성 보존
+                            safe = buf[:-6] if len(buf) > 6 else ""
+                            if safe:
+                                yield safe
+                                buf = buf[len(safe):]
 
                 if data.get("done"):
                     break
 
-    # </think> 없이 스트림 종료된 경우 (<think> 블록 강제 제거 후 출력)
-    if buf:
-        if "<think>" in buf:
-            # </think> 미출력 → <think> 이후 내용을 답변으로 사용
-            after_think = buf.split("<think>", 1)[-1]
-            if after_think.strip():
-                logger.warning("[STREAM] </think> 미출력 — 버퍼 내용을 답변으로 사용 (%d자)", len(after_think))
-                yield after_think
-        else:
-            yield buf
+    if buf and not in_think:
+        yield buf
 
 
 
@@ -421,7 +437,8 @@ def _build_final_messages(
     """최종 답변용 메시지 목록을 생성한다."""
     messages = [{"role": "system", "content": _COMBINED_PROMPT}]
     messages.extend(history)
-    user_content = f"[검색된 세무 법령 자료]\n{context}"
+    user_content = _QWEN3_NO_THINK_PREFIX
+    user_content += f"[검색된 세무 법령 자료]\n{context}"
     if web_results and web_results != "웹 검색 생략":
         user_content += f"\n\n[웹 검색 결과]\n{web_results}"
     user_content += f"\n\n[사용자 질문]\n{query}"

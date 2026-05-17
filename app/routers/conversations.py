@@ -6,6 +6,7 @@ GET    /api/conversations/{id}/messages 대화 메시지 조회
 PATCH  /api/conversations/{id}         대화 제목 변경
 DELETE /api/conversations/{id}         대화 삭제
 """
+import json
 import uuid as _uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -92,7 +93,13 @@ async def get_messages(conv_id: str, user: dict = Depends(verify_token)):
             "SELECT message FROM chat_logs WHERE conversation_id = $1 ORDER BY created_at ASC",
             cid,
         )
-    return [{"role": r["message"]["role"], "content": r["message"]["content"]} for r in rows]
+    result = []
+    for r in rows:
+        msg = r["message"]
+        if isinstance(msg, str):
+            msg = json.loads(msg)
+        result.append({"role": msg["role"], "content": msg["content"]})
+    return result
 
 
 @router.patch("/{conv_id}")
