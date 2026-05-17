@@ -4,6 +4,7 @@ import FileUpload from './FileUpload'
 const NAV_ITEMS = [
   { key: 'chat',       label: '채팅',     icon: '💬' },
   { key: 'calculator', label: '세금계산기', icon: '🧮' },
+  { key: 'profile',    label: '내 정보',   icon: '👤' },
 ]
 
 export default function Sidebar({ user, onLogout, view, onViewChange }) {
