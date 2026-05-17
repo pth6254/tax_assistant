@@ -13,17 +13,16 @@ from typing import AsyncGenerator
 import httpx
 
 from config import CHAT_MODEL, MEMORY_TURNS, OLLAMA_BASE_URL, TOP_K, TAVILY_API_KEY
+from app.services.search.web_search import tavily_search
 from app.database import get_pool
-from app.services.law.hybrid_search_service import (
+from app.services.search.hybrid_search_service import (
     format_hybrid_context,
-    hybrid_search_multi,
+    hybrid_search,
 )
 
 logger = logging.getLogger(__name__)
 
 _CHAT_URL = f"{OLLAMA_BASE_URL}/api/chat"
-
-_TAVILY_URL = "https://api.tavily.com/search"
 
 # DB 최고 유사도가 이 값 미만일 때만 웹 검색 실행
 _WEB_SEARCH_THRESHOLD = 0.65
@@ -297,35 +296,6 @@ async def _stream_ollama_response(
             yield buf
 
 
-async def _tavily_search(queries: list[str]) -> str:
-    """Tavily 웹 검색 — 최대 3개 쿼리를 병렬 실행."""
-    _DOMAINS = ["nts.go.kr", "law.go.kr", "moef.go.kr"]
-
-    async def _fetch_one(client: httpx.AsyncClient, query: str) -> list[str]:
-        try:
-            resp = await client.post(
-                _TAVILY_URL,
-                headers={"Authorization": f"Bearer {TAVILY_API_KEY}"},
-                json={
-                    "query":           query,
-                    "search_depth":    "advanced",
-                    "max_results":     3,
-                    "include_domains": _DOMAINS,
-                },
-            )
-            resp.raise_for_status()
-            return [
-                f"[출처: {r.get('url','?')}]\n{r.get('content','')[:500]}"
-                for r in resp.json().get("results", [])
-            ]
-        except Exception:
-            return []
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        nested = await asyncio.gather(*[_fetch_one(client, q) for q in queries[:3]])
-
-    results = [item for sub in nested for item in sub]
-    return "\n\n---\n\n".join(results) if results else "웹 검색 결과 없음"
 
 
 async def generate_search_queries(query: str) -> list[str]:
@@ -413,7 +383,7 @@ async def _fetch_rag_and_web_context(
     )
     logger.info("[RAG] 세목=%s | 히스토리=%d턴 | 검색쿼리=%d개", law_filter, len(history) // 2, len(search_queries))
 
-    results = await hybrid_search_multi(search_queries, law_filter, user_id=user_id, original_query=query)
+    results = await hybrid_search(search_queries, law_filter, user_id=user_id, original_query=query)
     context = format_hybrid_context(results)
     logger.info("[RAG] 하이브리드 검색 완료 (%.1fs)", time.perf_counter() - t0)
 
@@ -422,7 +392,7 @@ async def _fetch_rag_and_web_context(
         top_score = max((r.similarity_score for r in results), default=0.0)
         if top_score < _WEB_SEARCH_THRESHOLD:
             logger.info("[RAG] DB 유사도 낮음(%.2f) — 웹 검색 실행", top_score)
-            web_results = await _tavily_search([query])
+            web_results = await tavily_search([query])
         else:
             logger.info("[RAG] DB 유사도 충분(%.2f) — 웹 검색 생략", top_score)
 

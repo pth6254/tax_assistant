@@ -8,18 +8,13 @@ import json
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 
 from app.database import get_pool
+from app.schemas.chat import ChatRequest
 from app.services import chat_service
 from app.utils.jwt import verify_token
 
 router = APIRouter(prefix="/api", tags=["chat"])
-
-
-class ChatRequest(BaseModel):
-    query: str
-    name:  str = "사용자"
 
 
 @router.get("/health")

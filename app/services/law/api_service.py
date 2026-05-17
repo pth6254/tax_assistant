@@ -12,25 +12,15 @@ API 문서: https://www.law.go.kr/LSO/openApi/openApiInfoPage.do
 """
 import asyncio
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
 
 import httpx
 
 from config import LAW_API_KEY
+from app.schemas.law import LawSummary
 
 _SEARCH_URL = "https://www.law.go.kr/DRF/lawSearch.do"
 _DETAIL_URL = "https://www.law.go.kr/DRF/lawService.do"
 _TIMEOUT = 30.0
-
-
-@dataclass
-class LawSummary:
-    """법령 검색 결과 단건."""
-    mst: str               # 법령일련번호 (상세 조회 키)
-    law_name: str          # 법령명한글
-    law_type: str          # 법령종류명 (법률/대통령령/부령 등)
-    promulgation_date: str # 공포일자 (YYYYMMDD)
-    ministry: str          # 소관부처명
 
 
 def _require_api_key() -> str:

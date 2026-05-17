@@ -1,5 +1,5 @@
 """
-services/hybrid_search_service.py — 하이브리드 RAG 검색
+services/search/hybrid_search_service.py — 하이브리드 RAG 검색
 
 law_articles(공식 법령 조문)와 documents(PDF 업로드) 두 테이블을
 동시에 벡터 검색하고 우선순위에 따라 병합하여 LLM 컨텍스트를 생성한다.
@@ -22,9 +22,9 @@ import logging
 import math
 import time
 import uuid as _uuid
-from dataclasses import dataclass
 
 from app.database import get_pool
+from app.schemas.law import HybridSearchResult
 from app.utils.embeddings import embed_texts, get_http_client
 from config import OLLAMA_BASE_URL, RERANK_MODEL, SIMILARITY_THRESHOLD, TOP_K
 
@@ -68,12 +68,10 @@ _DOC_CATEGORY_DEFAULT_SOURCE_TYPE = "user_pdf"
 
 # ── 리랭킹 설정 ─────────────────────────────────────────────────
 _RERANK_URL           = f"{OLLAMA_BASE_URL}/api/rerank"
-_RERANK_CONTENT_LIMIT = 500  # 리랭커에 전달할 문서 내용 최대 길이 (자)
+_RERANK_CONTENT_LIMIT = 500
 
 # ── 검색 SQL ────────────────────────────────────────────────────
 
-# law_articles 검색 — is_current=TRUE, embedding 있는 것만
-# halfvec 캐스팅으로 HNSW 인덱스 활용 (pgvector 0.7+, 2560차원 지원)
 _LAW_ARTICLES_SQL = """
 SELECT
     law_name, law_type, tax_type,
@@ -88,7 +86,6 @@ ORDER BY embedding::halfvec(2560) <=> $1::vector::halfvec(2560)
 LIMIT $3
 """
 
-# documents 검색 — user_id 기준으로 격리
 _DOCUMENTS_SQL = """
 SELECT
     content,
@@ -101,20 +98,6 @@ WHERE embedding IS NOT NULL
 ORDER BY embedding::halfvec(2560) <=> $1::vector::halfvec(2560)
 LIMIT $4
 """
-
-
-# ── 결과 타입 ────────────────────────────────────────────────────
-
-@dataclass
-class HybridSearchResult:
-    """하이브리드 검색 결과 단건."""
-    content:          str    # LLM에 전달할 본문
-    source:           str    # 출처명 (파일명 또는 법령명)
-    law_name:         str
-    category:         str    # 법령 위계 레이블
-    source_type:      str    # law / regulation / rule / practice_pdf / user_pdf
-    similarity_score: float
-    priority:         int    # 정렬 기준 (낮을수록 우선)
 
 
 # ── 내부 검색 함수 ───────────────────────────────────────────────
@@ -238,10 +221,7 @@ async def _rerank(
     results: list[HybridSearchResult],
     top_k: int,
 ) -> list[HybridSearchResult]:
-    """
-    Ollama /api/rerank로 결과를 재정렬한다.
-    RERANK_MODEL 미설정 또는 실패 시 원본 리스트에서 top_k 슬라이싱.
-    """
+    """Ollama /api/rerank로 결과를 재정렬한다. 미설정 또는 실패 시 원본 top_k 슬라이싱."""
     if not RERANK_MODEL or not results:
         return results[:top_k]
 
@@ -269,54 +249,8 @@ async def _rerank(
 
 # ── 공개 함수 ────────────────────────────────────────────────────
 
-async def hybrid_search(
-    query: str,
-    law_filter: str = "ALL",
-    top_k: int = TOP_K,
-    user_id: str = "",        # 반드시 전달해야 함 — 빈 문자열이면 _search_documents에서 오류
-    original_query: str = "", # 리랭킹용 원본 질문 (미전달 시 query 사용)
-) -> list[HybridSearchResult]:
-    """
-    law_articles + documents를 동시에 검색하고 우선순위 순으로 병합한다.
-
-    Args:
-        query:      사용자 질문
-        law_filter: 세목 필터 (예: "소득세법"). "ALL"이면 전체 검색.
-        top_k:      최종 반환 결과 수
-        user_id:    로그인 사용자 UUID — documents 격리에 사용
-
-    Returns:
-        HybridSearchResult 리스트.
-        priority 오름차순 → similarity_score 내림차순 정렬.
-        두 테이블 모두 비어있으면 빈 리스트.
-    """
-    t0 = time.perf_counter()
-    q_emb = (await embed_texts([query]))[0]
-
-    fetch_k = top_k * 3 if RERANK_MODEL else top_k
-    merged = await _search_all(q_emb, law_filter, fetch_k, user_id)
-    final  = await _rerank(original_query or query, merged, top_k)
-
-    if not final:
-        logger.warning(
-            "[SEARCH] 검색 결과 없음 (필터=%s) — law_articles 또는 documents에 임베딩된 데이터가 없습니다. "
-            "scripts/ingest_laws.py --embed 실행 또는 PDF 업로드 필요",
-            law_filter,
-        )
-    else:
-        logger.info(
-            "[SEARCH] 필터=%s | 후보 %d건 → 최종 %d건 (%.2fs)",
-            law_filter, len(merged), len(final),
-            time.perf_counter() - t0,
-        )
-    return final
-
-
 def format_hybrid_context(results: list[HybridSearchResult]) -> str:
-    """
-    하이브리드 검색 결과를 LLM 컨텍스트 문자열로 포맷한다.
-    기존 _fetch_context() 출력 형식과 동일한 구조를 유지한다.
-    """
+    """하이브리드 검색 결과를 LLM 컨텍스트 문자열로 포맷한다."""
     if not results:
         return "관련 문서를 찾지 못했습니다."
 
@@ -334,27 +268,43 @@ async def fetch_hybrid_context(
     original_query: str = "",
 ) -> str:
     """단일 쿼리 하이브리드 검색 진입점."""
-    results = await hybrid_search(query, law_filter=law_filter, user_id=user_id, original_query=original_query)
+    results = await hybrid_search([query], law_filter=law_filter, user_id=user_id, original_query=original_query)
     return format_hybrid_context(results)
 
 
-async def hybrid_search_multi(
+async def hybrid_search(
     queries: list[str],
     law_filter: str = "ALL",
     user_id: str = "",
     original_query: str = "",
 ) -> list[HybridSearchResult]:
+    """law_articles + documents를 동시에 검색하고 우선순위 순으로 병합한다.
+
+    단일 쿼리는 직접 벡터 검색, 복수 쿼리는 RRF로 결합 후 리랭킹.
     """
-    멀티쿼리 하이브리드 검색 — 원본 결과 리스트 반환.
-    쿼리가 1개이면 hybrid_search와 동일하게 동작.
-    """
-    if len(queries) <= 1:
-        q = queries[0] if queries else (original_query or "")
-        return await hybrid_search(q, law_filter=law_filter, user_id=user_id, original_query=original_query)
+    if not queries:
+        return []
 
     t0 = time.perf_counter()
-    fetch_k = TOP_K * 2
 
+    if len(queries) == 1:
+        q_emb = (await embed_texts(queries))[0]
+        fetch_k = TOP_K * 3 if RERANK_MODEL else TOP_K
+        merged = await _search_all(q_emb, law_filter, fetch_k, user_id)
+        final  = await _rerank(original_query or queries[0], merged, TOP_K)
+        if not final:
+            logger.warning(
+                "[SEARCH] 검색 결과 없음 (필터=%s) — law_articles 또는 documents에 임베딩된 데이터가 없습니다.",
+                law_filter,
+            )
+        else:
+            logger.info(
+                "[SEARCH] 필터=%s | 후보 %d건 → 최종 %d건 (%.2fs)",
+                law_filter, len(merged), len(final), time.perf_counter() - t0,
+            )
+        return final
+
+    fetch_k = TOP_K * 2
     q_embs = await embed_texts(queries)
     results_per_query = await asyncio.gather(*[
         _search_all(q_emb, law_filter, fetch_k, user_id)
@@ -369,5 +319,3 @@ async def hybrid_search_multi(
         len(queries), len(merged), len(final), time.perf_counter() - t0,
     )
     return final
-
-

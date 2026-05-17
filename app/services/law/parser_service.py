@@ -33,21 +33,10 @@ import logging
 import re
 import unicodedata
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
+
+from app.schemas.law import LawArticle
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class LawArticle:
-    """조문 단위 파싱 결과."""
-    law_name: str       # 법령명 (기본정보에서 추출)
-    law_type: str       # 법령종류 (법률/대통령령/부령 등)
-    article_no: str     # 조문번호 — 예: "제1조", "제3조의2"
-    article_title: str  # 조문제목
-    article_text: str   # 조문내용 + 항 내용 합산 (정규화)
-    effective_date: str # 시행일자 (YYYYMMDD)
-    amendment_date: str # 공포일자 (YYYYMMDD)
 
 
 # ── 태그명 후보 정의 ─────────────────────────────────────────────

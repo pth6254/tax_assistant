@@ -17,8 +17,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 from app.database import get_pool
-from app.services.law.api_service import LawSummary, get_law_detail, search_law, search_law_all_pages
-from app.services.law.parser_service import LawArticle, parse_articles
+from app.schemas.law import LawArticle, LawSummary
+from app.services.law.api_service import get_law_detail, search_law, search_law_all_pages
+from app.services.law.parser_service import parse_articles
 from config import EMBED_DIM, EMBED_MODEL
 
 _SOURCE_URL_TEMPLATE = "https://www.law.go.kr/lsInfoP.do?lsiSeq={mst}"

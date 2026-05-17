@@ -15,7 +15,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import close_pool, get_pool
-from app.routers import auth, chat, upload
+from app.routers import auth, chat, upload, calculator
 from app.utils.embeddings import close_http_client
 
 logging.basicConfig(
@@ -60,6 +60,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(upload.router)
 app.include_router(chat.router)
+app.include_router(calculator.router)
 
 if __name__ == "__main__":
     import uvicorn
