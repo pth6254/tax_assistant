@@ -14,13 +14,19 @@ import httpx
 
 from config import CHAT_MODEL, MEMORY_TURNS, OLLAMA_BASE_URL, TOP_K, TAVILY_API_KEY
 from app.database import get_pool
-from app.services.law.hybrid_search_service import fetch_hybrid_context_multi
+from app.services.law.hybrid_search_service import (
+    format_hybrid_context,
+    hybrid_search_multi,
+)
 
 logger = logging.getLogger(__name__)
 
 _CHAT_URL = f"{OLLAMA_BASE_URL}/api/chat"
 
 _TAVILY_URL = "https://api.tavily.com/search"
+
+# DB 최고 유사도가 이 값 미만일 때만 웹 검색 실행
+_WEB_SEARCH_THRESHOLD = 0.65
 
 # 세목 키워드 매핑
 _LAW_KW: dict[str, list[str]] = {
@@ -74,6 +80,7 @@ async def detect_law_name(query: str) -> str:
                     "options": {
                         "temperature": 0.0,
                         "num_predict": 20,
+                        "think": False,
                     },
                 },
             )
@@ -185,9 +192,23 @@ _MULTI_QUERY_PROMPT = (
     "- <think> 태그 내용은 출력하지 말 것\n"
 )
 
-_OLLAMA_OPTIONS             = {"temperature": 0.3, "num_predict": 500,  "num_ctx": 4096}
-_OLLAMA_OPTIONS_STREAM      = {"temperature": 0.3, "num_predict": -1,   "num_ctx": 8192}
-_OLLAMA_OPTIONS_MULTI_QUERY = {"temperature": 0.0, "num_predict": 150,  "num_ctx": 2048}
+# ── 세목 분류 + 쿼리 생성 통합 프롬프트 ─────────────────
+_COMBINED_CLASSIFY_PROMPT = (
+    "한국 세무 법령 질문을 분석하여 JSON만 출력하라.\n\n"
+    "1. law: 관련 세법 하나\n"
+    "   후보: 소득세법, 부가가치세법, 법인세법, 상속세및증여세법,\n"
+    "         지방세법, 조세특례제한법, 국세기본법, ALL\n"
+    "2. queries: 서로 다른 관점의 검색어 3개 (각 50자 이내)\n"
+    "   - 법령/조문 관점, 요건/대상 관점, 계산/절차 관점\n"
+    "   - 구어체 → 법령 용어 변환\n\n"
+    '출력 형식 (JSON만, 다른 내용 없음):\n'
+    '{"law": "소득세법", "queries": ["검색어1", "검색어2", "검색어3"]}\n'
+    "- <think> 태그 내용은 출력하지 말 것\n"
+)
+
+_OLLAMA_OPTIONS             = {"temperature": 0.3, "num_predict": 500,  "num_ctx": 4096, "think": False}
+_OLLAMA_OPTIONS_STREAM      = {"temperature": 0.3, "num_predict": -1,   "num_ctx": 8192, "think": False}
+_OLLAMA_OPTIONS_MULTI_QUERY = {"temperature": 0.0, "num_predict": 150,  "num_ctx": 2048, "think": False}
 
 
 async def _call_ollama(
@@ -334,6 +355,47 @@ async def generate_search_queries(query: str) -> list[str]:
     return [query]
 
 
+async def _classify_and_generate_queries(query: str) -> tuple[str, list[str]]:
+    """세목 분류 + 검색 쿼리 생성을 1회 LLM 호출로 처리. 실패 시 키워드 분류 + 원본 쿼리 반환."""
+    q_lower = query.lower()
+    keyword_law = "ALL"
+    for law, kws in _LAW_KW.items():
+        if any(kw in q_lower for kw in kws):
+            keyword_law = law
+            break
+
+    try:
+        raw = await _call_ollama(
+            [
+                {"role": "system", "content": _COMBINED_CLASSIFY_PROMPT},
+                {"role": "user",   "content": query},
+            ],
+            temperature=0.0,
+            options=_OLLAMA_OPTIONS_MULTI_QUERY,
+        )
+        text = raw.split("</think>")[-1].strip()
+        fence = re.search(r"```(?:json)?\s*\n?([\s\S]*?)\n?```", text)
+        candidate = fence.group(1).strip() if fence else text
+        match = re.search(r"\{[\s\S]*?\}", candidate)
+        if match:
+            data = json.loads(match.group(0))
+            llm_law = data.get("law", "ALL")
+            # 키워드로 확정된 세목 우선, 없으면 LLM 판단 사용
+            final_law = keyword_law if keyword_law != "ALL" else (
+                llm_law if (llm_law in _LAW_KW or llm_law == "ALL") else "ALL"
+            )
+            queries = data.get("queries", [])
+            if isinstance(queries, list):
+                clean = [q for q in queries if isinstance(q, str) and q.strip()][:3]
+                if clean:
+                    logger.info("[CLASSIFY] 세목=%s | 쿼리=%d개: %s", final_law, len(clean), clean)
+                    return final_law, clean
+    except Exception as e:
+        logger.warning("[CLASSIFY] 통합 분류 실패 — 키워드+원본 사용: %s", e)
+
+    return keyword_law, [query]
+
+
 async def _fetch_rag_and_web_context(
     query: str,
     session_id: _uuid.UUID,
@@ -341,27 +403,28 @@ async def _fetch_rag_and_web_context(
 ) -> tuple[str, str, list[dict]]:
     """
     세목 분류·법령 검색·웹 검색을 수행하고 (context, web_results, history)를 반환한다.
-    하이브리드 검색과 Tavily 웹 검색을 병렬로 실행하여 지연을 최소화한다.
+    DB 유사도가 충분하면 웹 검색을 생략하여 불필요한 지연을 제거한다.
     """
     t0 = time.perf_counter()
 
-    law_filter, history, search_queries = await asyncio.gather(
-        detect_law_name(query),
+    (law_filter, search_queries), history = await asyncio.gather(
+        _classify_and_generate_queries(query),
         _fetch_history(session_id),
-        generate_search_queries(query),
     )
     logger.info("[RAG] 세목=%s | 히스토리=%d턴 | 검색쿼리=%d개", law_filter, len(history) // 2, len(search_queries))
 
+    results = await hybrid_search_multi(search_queries, law_filter, user_id=user_id, original_query=query)
+    context = format_hybrid_context(results)
+    logger.info("[RAG] 하이브리드 검색 완료 (%.1fs)", time.perf_counter() - t0)
+
+    web_results = "웹 검색 생략"
     if TAVILY_API_KEY:
-        context, web_results = await asyncio.gather(
-            fetch_hybrid_context_multi(search_queries, law_filter, user_id=user_id, original_query=query),
-            _tavily_search([query]),
-        )
-        logger.info("[RAG] 하이브리드 검색 + 웹 검색 병렬 완료 (%.1fs)", time.perf_counter() - t0)
-    else:
-        context = await fetch_hybrid_context_multi(search_queries, law_filter, user_id=user_id, original_query=query)
-        web_results = "웹 검색 생략"
-        logger.info("[RAG] 하이브리드 검색 완료 (%.1fs)", time.perf_counter() - t0)
+        top_score = max((r.similarity_score for r in results), default=0.0)
+        if top_score < _WEB_SEARCH_THRESHOLD:
+            logger.info("[RAG] DB 유사도 낮음(%.2f) — 웹 검색 실행", top_score)
+            web_results = await _tavily_search([query])
+        else:
+            logger.info("[RAG] DB 유사도 충분(%.2f) — 웹 검색 생략", top_score)
 
     logger.info("[RAG] 준비 단계 총 소요: %.1fs", time.perf_counter() - t0)
     return context, web_results, history

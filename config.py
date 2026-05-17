@@ -22,7 +22,7 @@ RERANK_MODEL: str    = os.getenv("RERANK_MODEL", "")                   # 비워�
 # ── RAG 파라미터 ────────────────────────────────────────────────
 CHUNK_SIZE: int         = 800
 CHUNK_OVERLAP: int      = 100
-TOP_K: int              = 10
+TOP_K: int              = 5
 MEMORY_TURNS: int       = 3     # 채팅 메모리 최근 N 턴
 SIMILARITY_THRESHOLD: float = float(os.getenv("SIMILARITY_THRESHOLD", "0.4"))
 

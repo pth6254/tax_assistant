@@ -338,20 +338,19 @@ async def fetch_hybrid_context(
     return format_hybrid_context(results)
 
 
-async def fetch_hybrid_context_multi(
+async def hybrid_search_multi(
     queries: list[str],
     law_filter: str = "ALL",
     user_id: str = "",
     original_query: str = "",
-) -> str:
+) -> list[HybridSearchResult]:
     """
-    멀티쿼리 하이브리드 검색 진입점.
-    queries 각각으로 병렬 검색 후 RRF 결합 → 리랭킹 → 컨텍스트 반환.
-    쿼리가 1개이면 fetch_hybrid_context와 동일하게 동작.
+    멀티쿼리 하이브리드 검색 — 원본 결과 리스트 반환.
+    쿼리가 1개이면 hybrid_search와 동일하게 동작.
     """
     if len(queries) <= 1:
         q = queries[0] if queries else (original_query or "")
-        return await fetch_hybrid_context(q, law_filter, user_id, original_query)
+        return await hybrid_search(q, law_filter=law_filter, user_id=user_id, original_query=original_query)
 
     t0 = time.perf_counter()
     fetch_k = TOP_K * 2
@@ -369,4 +368,6 @@ async def fetch_hybrid_context_multi(
         "[MULTI-QUERY] %d개 쿼리 → RRF %d건 → 최종 %d건 (%.2fs)",
         len(queries), len(merged), len(final), time.perf_counter() - t0,
     )
-    return format_hybrid_context(final)
+    return final
+
+
