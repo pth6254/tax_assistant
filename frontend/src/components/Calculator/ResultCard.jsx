@@ -1,0 +1,105 @@
+const fmt    = (n) => n?.toLocaleString('ko-KR') + '원'
+const fmtPct = (r) => (r * 100).toFixed(2) + '%'
+
+export default function ResultCard({ result }) {
+  if (!result) return null
+
+  return (
+    <div style={{
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius)',
+      overflow: 'hidden',
+      animation: 'slideUp .3s ease',
+    }}>
+      {/* 헤더 */}
+      <div style={{
+        padding: '16px 20px',
+        borderBottom: '1px solid var(--border)',
+        display: 'flex', alignItems: 'center', gap: 10,
+      }}>
+        <span style={{ fontSize: 16 }}>📊</span>
+        <span style={{ fontFamily: 'var(--font-serif)', fontSize: 15 }}>
+          {result.tax_type} 계산 결과
+        </span>
+      </div>
+
+      {/* 계산 단계 */}
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
+          계산 과정
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {result.steps.map((step, i) => (
+            <div key={i} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              fontSize: 13,
+            }}>
+              <span style={{ color: 'var(--text-muted)' }}>{step.label}</span>
+              <span style={{
+                fontVariantNumeric: 'tabular-nums',
+                color: step.amount < 0 ? 'var(--danger)' : 'var(--text)',
+              }}>
+                {step.amount < 0 ? '−' : ''}{Math.abs(step.amount).toLocaleString('ko-KR')}원
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 핵심 결과 */}
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <ResultRow label="과세표준"  value={fmt(result.taxable_income)} />
+        <ResultRow label="산출세액"  value={fmt(result.calculated_tax)} />
+        <ResultRow label="실효세율"  value={fmtPct(result.effective_rate)} accent />
+      </div>
+
+      {/* 최종 납부세액 */}
+      <div style={{
+        padding: '20px',
+        background: 'rgba(79,124,255,.07)',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        <span style={{ fontFamily: 'var(--font-serif)', fontSize: 15 }}>최종 납부세액</span>
+        <span style={{
+          fontSize: 22, fontWeight: 700,
+          color: 'var(--accent2)',
+          fontVariantNumeric: 'tabular-nums',
+        }}>
+          {fmt(result.final_tax)}
+        </span>
+      </div>
+
+      {/* 근거 법령 */}
+      {result.source_articles?.length > 0 && (
+        <div style={{
+          padding: '12px 20px',
+          borderTop: '1px solid var(--border)',
+          display: 'flex', flexWrap: 'wrap', gap: 6,
+        }}>
+          {result.source_articles.map((a, i) => (
+            <span key={i} style={{
+              fontSize: 11,
+              background: 'rgba(79,124,255,.12)',
+              color: 'var(--accent2)',
+              padding: '3px 8px', borderRadius: 99,
+            }}>
+              {a}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ResultRow({ label, value, accent }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+      <span style={{ color: 'var(--text-muted)' }}>{label}</span>
+      <span style={{ color: accent ? 'var(--accent2)' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+        {value}
+      </span>
+    </div>
+  )
+}

@@ -1,7 +1,12 @@
 import { useState } from 'react'
 import FileUpload from './FileUpload'
 
-export default function Sidebar({ user, onLogout }) {
+const NAV_ITEMS = [
+  { key: 'chat',       label: '채팅',     icon: '💬' },
+  { key: 'calculator', label: '세금계산기', icon: '🧮' },
+]
+
+export default function Sidebar({ user, onLogout, view, onViewChange }) {
   const [files, setFiles] = useState([])
 
   const handleUploaded = (file) => {
@@ -22,6 +27,31 @@ export default function Sidebar({ user, onLogout }) {
         borderBottom: '1px solid var(--border)',
       }}>
         세무 <span style={{ color: 'var(--accent2)' }}>AI</span>
+      </div>
+
+      {/* 네비게이션 */}
+      <div style={{ padding: '12px 16px', display: 'flex', gap: 6, borderBottom: '1px solid var(--border)' }}>
+        {NAV_ITEMS.map(({ key, label, icon }) => (
+          <button
+            key={key}
+            onClick={() => onViewChange(key)}
+            style={{
+              flex: 1,
+              background: view === key ? 'var(--accent)' : 'var(--surface2)',
+              border: '1px solid ' + (view === key ? 'var(--accent)' : 'var(--border)'),
+              borderRadius: 8,
+              padding: '8px 4px',
+              color: view === key ? '#fff' : 'var(--text-muted)',
+              fontSize: 11,
+              cursor: 'pointer',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+              transition: 'all .15s',
+            }}
+          >
+            <span style={{ fontSize: 15 }}>{icon}</span>
+            {label}
+          </button>
+        ))}
       </div>
 
       <div style={{ padding: '20px 24px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
