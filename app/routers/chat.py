@@ -32,6 +32,7 @@ async def chat(
 ):
     answer = await chat_service.process_chat(
         query=body.query,
+        conversation_id=body.conversation_id,
         user_id=user["id"],
     )
     return {"output": answer}
@@ -46,6 +47,7 @@ async def chat_stream(
     async def generate():
         async for chunk in chat_service.stream_chat_response(
             query=body.query,
+            conversation_id=body.conversation_id,
             user_id=user["id"],
         ):
             yield f"data: {json.dumps({'chunk': chunk}, ensure_ascii=False)}\n\n"

@@ -1,9 +1,19 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { streamChat } from '../api/chatApi'
+import { getMessages } from '../api/conversationsApi'
 
-export const useChat = (userId) => {
+export const useChat = (conversationId) => {
   const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(false)
+
+  // 대화 전환 시 해당 대화의 기존 메시지 로드
+  useEffect(() => {
+    setMessages([])
+    if (!conversationId) return
+    getMessages(conversationId)
+      .then(msgs => setMessages(msgs.map(m => ({ role: m.role, content: m.content }))))
+      .catch(() => {})
+  }, [conversationId])
 
   const appendChunkToLastMessage = (chunk) => {
     setMessages(prev => {
@@ -14,26 +24,25 @@ export const useChat = (userId) => {
     })
   }
 
-  const sendMessage = async (query) => {
+  const sendMessage = async (query, onDone) => {
+    if (!conversationId) return
     setMessages(prev => [...prev,
       { role: 'user',      content: query },
-      { role: 'assistant', content: '' },   // 스트리밍 채워질 자리
+      { role: 'assistant', content: '' },
     ])
     setLoading(true)
 
     try {
-      await streamChat(
-        query,
-        userId,
-        appendChunkToLastMessage,
-        () => setLoading(false),
-      )
+      await streamChat(query, conversationId, appendChunkToLastMessage, () => {
+        setLoading(false)
+        onDone?.()
+      })
     } catch (err) {
       setMessages(prev => {
         const updated = [...prev]
         updated[updated.length - 1] = {
           role: 'assistant',
-          content: `⚠️ ${err.detail || '오류가 발생했습니다.'}`,
+          content: `⚠️ ${err.message || '오류가 발생했습니다.'}`,
         }
         return updated
       })
@@ -41,7 +50,5 @@ export const useChat = (userId) => {
     }
   }
 
-  const clearMessages = () => setMessages([])
-
-  return { messages, loading, sendMessage, clearMessages }
+  return { messages, loading, sendMessage }
 }

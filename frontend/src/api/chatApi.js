@@ -1,21 +1,21 @@
-export const sendChat = async (query, userId) => {
+export const sendChat = async (query, conversationId) => {
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ query, userId }),
+    body: JSON.stringify({ query, conversation_id: conversationId }),
   })
   const data = await res.json()
   if (!res.ok) throw data
   return data
 }
 
-export const streamChat = async (query, userId, onChunk, onDone) => {
+export const streamChat = async (query, conversationId, onChunk, onDone) => {
   const res = await fetch('/api/chat/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ query, userId }),
+    body: JSON.stringify({ query, conversation_id: conversationId }),
   })
   if (!res.ok) throw await res.json()
 

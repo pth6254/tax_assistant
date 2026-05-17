@@ -32,13 +32,33 @@ function TypingIndicator() {
   )
 }
 
-export default function ChatArea({ user }) {
-  const { messages, loading, sendMessage } = useChat(user.id)
+export default function ChatArea({ user, conversationId, conversationTitle, onMessageSent }) {
+  const { messages, loading, sendMessage } = useChat(conversationId)
   const bottomRef = useRef()
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
+
+  const handleSend = (query) => {
+    sendMessage(query, onMessageSent)
+  }
+
+  if (!conversationId) {
+    return (
+      <main style={{
+        flex: 1, display: 'flex', flexDirection: 'column',
+        background: 'var(--bg)', alignItems: 'center', justifyContent: 'center',
+        gap: 16, color: 'var(--text-muted)', textAlign: 'center',
+      }}>
+        <div style={{ fontSize: 48, opacity: .25 }}>💬</div>
+        <div style={{ fontFamily: 'var(--font-serif)', fontSize: 20, color: 'var(--text)' }}>
+          대화를 선택하거나 새 대화를 시작하세요
+        </div>
+        <div style={{ fontSize: 13 }}>좌측 사이드바에서 + 새 대화 버튼을 누르세요.</div>
+      </main>
+    )
+  }
 
   return (
     <main style={{
@@ -57,7 +77,7 @@ export default function ChatArea({ user }) {
           boxShadow: '0 0 0 3px rgba(76,175,125,.2)',
         }} />
         <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: 18, fontWeight: 400, letterSpacing: '-0.3px' }}>
-          세무 법령 RAG 어시스턴트
+          {conversationTitle || '새 대화'}
         </h1>
       </header>
 
@@ -96,7 +116,7 @@ export default function ChatArea({ user }) {
         <div ref={bottomRef} />
       </div>
 
-      <ChatInput onSend={sendMessage} disabled={loading} />
+      <ChatInput onSend={handleSend} disabled={loading} />
     </main>
   )
 }

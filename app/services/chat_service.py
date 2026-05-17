@@ -91,15 +91,15 @@ async def detect_law_name(query: str) -> str:
 
 
 
-async def _fetch_history(session_id: _uuid.UUID) -> list[dict]:
+async def _fetch_history(conversation_id: _uuid.UUID) -> list[dict]:
     """Postgres에서 최근 대화 메모리 조회."""
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """SELECT message FROM chat_logs
-               WHERE session_id = $1
+               WHERE conversation_id = $1
                ORDER BY created_at DESC LIMIT $2""",
-            session_id, MEMORY_TURNS * 2,
+            conversation_id, MEMORY_TURNS * 2,
         )
     history = []
     for r in reversed(rows):
@@ -109,20 +109,32 @@ async def _fetch_history(session_id: _uuid.UUID) -> list[dict]:
 
 
 async def _save_history(
-    session_id: _uuid.UUID,
+    conversation_id: _uuid.UUID,
     query: str,
     answer: str,
+    is_first: bool = False,
 ) -> None:
-    """대화 턴을 chat_logs에 저장."""
+    """대화 턴을 chat_logs에 저장. 첫 메시지면 대화 제목도 자동 업데이트."""
+    title = query[:28].rstrip() + ("..." if len(query) > 28 else "")
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.executemany(
-            "INSERT INTO chat_logs (session_id, message) VALUES ($1, $2)",
+            "INSERT INTO chat_logs (conversation_id, message) VALUES ($1, $2)",
             [
-                (session_id, json.dumps({"role": "user",      "content": query},  ensure_ascii=False)),
-                (session_id, json.dumps({"role": "assistant", "content": answer}, ensure_ascii=False)),
+                (conversation_id, json.dumps({"role": "user",      "content": query},  ensure_ascii=False)),
+                (conversation_id, json.dumps({"role": "assistant", "content": answer}, ensure_ascii=False)),
             ],
         )
+        if is_first:
+            await conn.execute(
+                "UPDATE conversations SET title = $1, updated_at = now() WHERE id = $2",
+                title, conversation_id,
+            )
+        else:
+            await conn.execute(
+                "UPDATE conversations SET updated_at = now() WHERE id = $1",
+                conversation_id,
+            )
 
 # 채팅 답변 제시
 
@@ -368,7 +380,7 @@ async def _classify_and_generate_queries(query: str) -> tuple[str, list[str]]:
 
 async def _fetch_rag_and_web_context(
     query: str,
-    session_id: _uuid.UUID,
+    conversation_id: _uuid.UUID,
     user_id: str,
 ) -> tuple[str, str, list[dict]]:
     """
@@ -379,7 +391,7 @@ async def _fetch_rag_and_web_context(
 
     (law_filter, search_queries), history = await asyncio.gather(
         _classify_and_generate_queries(query),
-        _fetch_history(session_id),
+        _fetch_history(conversation_id),
     )
     logger.info("[RAG] 세목=%s | 히스토리=%d턴 | 검색쿼리=%d개", law_filter, len(history) // 2, len(search_queries))
 
@@ -417,35 +429,37 @@ def _build_final_messages(
     return messages
 
 
-async def process_chat(query: str, user_id: str) -> str:
+async def process_chat(query: str, conversation_id: str, user_id: str) -> str:
     """RAG 파이프라인 실행 후 최종 답변을 반환한다 (비스트리밍)."""
     logger.info("[CHAT] 요청 수신: %.40s...", query)
     t0 = time.perf_counter()
 
-    session_id = _uuid.UUID(user_id)
-    context, web_results, history = await _fetch_rag_and_web_context(query, session_id, user_id)
+    conv_id = _uuid.UUID(conversation_id)
+    context, web_results, history = await _fetch_rag_and_web_context(query, conv_id, user_id)
 
     messages = _build_final_messages(query, context, web_results, history)
     answer   = await _call_ollama(messages, temperature=0.3)
 
-    await _save_history(session_id, query, answer)
+    await _save_history(conv_id, query, answer, is_first=len(history) == 0)
     logger.info("[CHAT] 응답 완료 — 총 %.1fs | 답변 %d자", time.perf_counter() - t0, len(answer))
     return answer
 
 
 async def stream_chat_response(
     query: str,
+    conversation_id: str,
     user_id: str,
 ) -> AsyncGenerator[str, None]:
     """RAG 파이프라인 실행 후 최종 답변을 토큰 단위로 yield한다 (스트리밍)."""
     logger.info("[STREAM] 요청 수신: %.40s...", query)
     t0 = time.perf_counter()
 
-    session_id = _uuid.UUID(user_id)
-    context, web_results, history = await _fetch_rag_and_web_context(query, session_id, user_id)
+    conv_id = _uuid.UUID(conversation_id)
+    context, web_results, history = await _fetch_rag_and_web_context(query, conv_id, user_id)
 
     messages     = _build_final_messages(query, context, web_results, history)
     full_answer: list[str] = []
+    is_first = len(history) == 0
 
     logger.info("[STREAM] 최종 답변 스트리밍 시작")
     async for chunk in _stream_ollama_response(messages, temperature=0.3):
@@ -453,5 +467,5 @@ async def stream_chat_response(
         yield chunk
 
     answer = "".join(full_answer)
-    await _save_history(session_id, query, answer)
+    await _save_history(conv_id, query, answer, is_first=is_first)
     logger.info("[STREAM] 완료 — 총 %.1fs | 답변 %d자", time.perf_counter() - t0, len(answer))
