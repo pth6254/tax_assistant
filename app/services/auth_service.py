@@ -114,8 +114,13 @@ async def delete_account(user_id: str, password: str) -> dict:
     if not row or not pwd_context.verify(password, row["password"]):
         raise HTTPException(status_code=401, detail="비밀번호가 올바르지 않습니다.")
     async with pool.acquire() as conn:
-        await conn.execute("DELETE FROM documents  WHERE user_id   = $1", uid)
-        await conn.execute("DELETE FROM chat_logs  WHERE session_id = $1", uid)
-        await conn.execute("DELETE FROM users      WHERE id         = $1", uid)
+        await conn.execute("DELETE FROM documents    WHERE user_id = $1", uid)
+        await conn.execute(
+            "DELETE FROM chat_logs WHERE conversation_id IN "
+            "(SELECT id FROM conversations WHERE user_id = $1)",
+            uid,
+        )
+        await conn.execute("DELETE FROM conversations WHERE user_id = $1", uid)
+        await conn.execute("DELETE FROM users          WHERE id      = $1", uid)
     logger.info("[AUTH] 계정 삭제: %s", user_id)
     return {"message": "계정이 삭제되었습니다."}

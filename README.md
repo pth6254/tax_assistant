@@ -80,10 +80,11 @@ Agentic RAG 3단계 파이프라인
 
 ### Agentic RAG 채팅
 
-- **3단계 파이프라인**: 내부 DB 검색 → Gap Analysis → 웹검색 보완 → 최종 합성
-- **SSE 스트리밍**: 토큰 단위 실시간 응답 (긴 답변도 즉시 출력 시작)
-- **대화 메모리**: 최근 3턴 컨텍스트 유지
-- **Tavily 웹검색**: 국세청·법제처·기획재정부 도메인 중심 최신 자료 보완
+- **RAG 파이프라인**: 세목 분류 + 멀티쿼리 생성 → 하이브리드 벡터 검색(RRF 병합) → 리랭킹 → 조건부 웹검색 → 최종 합성
+- **비교 질문 처리**: "리스 vs 장기렌트"처럼 A vs B를 묻는 질문에 대해 각 항목별 법령 조문을 근거로 비교표 + 명확한 결론 제시
+- **SSE 스트리밍**: 토큰 단위 실시간 응답, httpx 싱글톤 클라이언트로 연결 재사용, DB 저장은 백그라운드 처리
+- **대화 메모리**: 최근 3턴 컨텍스트 유지, 대화별 독립 세션(conversations 테이블)
+- **Tavily 웹검색**: 국세청·법제처·기획재정부 도메인 중심 최신 자료 보완 (DB 유사도 0.65 미만인 경우에만 실행)
 
 ### 기타
 
@@ -170,34 +171,34 @@ PDF 업로드
   → documents 테이블 저장
 ```
 
-### 채팅 흐름 (3단계 Agentic RAG)
+### 채팅 흐름
 
 ```
 질문 입력
   │
-  ├─ [병렬] 세목 분류 (키워드 매핑 → 실패 시 LLM 판단)
-  └─ [병렬] 대화 메모리 조회 (최근 3턴)
+  ├─ [병렬] 세목 분류 + 멀티쿼리 생성 (LLM 1회 호출)
+  │    키워드 매핑으로 세목 확정 → 실패 시 LLM 판단
+  │    법령/조문 관점, 요건/대상 관점, 계산/절차 관점 3개 쿼리 생성
+  │    (비교 질문이면 각 옵션별 쿼리 별도 생성)
+  └─ [병렬] 대화 메모리 조회 (최근 3턴, conversation_id 기준)
   │
-  → 질문 임베딩 (qwen3-embedding:4b)
-  → 하이브리드 벡터 검색 (law_articles + documents, TOP 10)
+  → 멀티쿼리 임베딩 (qwen3-embedding:4b)
+  → 하이브리드 벡터 검색 (law_articles + documents 동시 검색)
+  → RRF(Reciprocal Rank Fusion) 병합 (복수 쿼리 결과 통합)
   → 법령 위계 정렬
      0순위: 법률    (law_articles, law_type=법률)
      1순위: 시행령  (law_articles, law_type=대통령령)
      2순위: 시행규칙 (law_articles, law_type=총리령/부령)
      3~7순위: PDF 문서 (category 기준)
+  → 리랭킹 (RERANK_MODEL 설정 시 Ollama /api/rerank 호출)
   │
-  ├─ [1단계] 내부 DB 1차 답변 생성
-  │    법령 위계 원칙 + 세법 일반 원칙 (특별법 우선, 신법 우선, 엄격 해석)
+  ├─ [조건부] 웹검색 (DB 최고 유사도 < 0.65인 경우만)
+  │    Tavily 검색 (nts.go.kr, law.go.kr, moef.go.kr)
   │
-  ├─ [2단계] Gap Analysis
-  │    1차 답변의 "근거 없음" / "전문가 확인 권장" 부분 식별
-  │    → 법령·실무·계산 관점 3가지 검색 쿼리 생성
-  │    → Tavily 병렬 검색 (nts.go.kr, law.go.kr, moef.go.kr)
-  │
-  └─ [3단계] 최종 답변 합성 (SSE 스트리밍)
-       내부 DB + 웹검색 결과 합성
-       → 대화 메모리 저장
+  └─ 최종 답변 합성 (SSE 스트리밍)
+       내부 DB 법령 + 웹검색 결과 통합
        → 토큰 단위 스트리밍 출력
+       → 대화 메모리 저장 (백그라운드 비동기 처리)
 ```
 
 ### 법령 위계 원칙
@@ -436,6 +437,8 @@ pytest --lf
 | `OLLAMA_BASE_URL` | — | `http://localhost:11434` | Ollama 서버 URL |
 | `CHAT_MODEL` | — | `qwen3.5:35b-a3b` | 답변 생성 LLM 모델명 |
 | `EMBED_MODEL` | — | `qwen3-embedding:4b` | 임베딩 모델명 |
+| `RERANK_MODEL` | — | — | 리랭킹 모델명 (예: `bge-reranker-v2-m3`, 비워두면 리랭킹 비활성화) |
+| `THINK_ENABLED` | — | `false` | Qwen3 계열 모델의 Think 모드 활성화 |
 | `EMBED_DIM` | — | `2560` | 임베딩 차원 수 (모델과 DB 일치 필수) |
 | `SIMILARITY_THRESHOLD` | — | `0.4` | 검색 결과 최소 유사도 (0~1, 낮출수록 더 많은 결과 반환) |
 | `MAX_UPLOAD_MB` | — | `50` | PDF 업로드 최대 크기 (MB) |
@@ -451,6 +454,15 @@ pytest --lf
 | POST | `/api/auth/signup` | 회원가입 | 불필요 |
 | POST | `/api/auth/login` | 로그인 (httpOnly 쿠키 발급) | 불필요 |
 | POST | `/api/auth/logout` | 로그아웃 (쿠키 삭제) | 불필요 |
+| GET | `/api/users/me` | 내 프로필 조회 | ✅ 필요 |
+| PATCH | `/api/users/me` | 프로필 수정 (이름·전화번호) | ✅ 필요 |
+| PATCH | `/api/users/me/password` | 비밀번호 변경 | ✅ 필요 |
+| DELETE | `/api/users/me` | 회원 탈퇴 | ✅ 필요 |
+| GET | `/api/conversations` | 대화 목록 조회 (최근 50개) | ✅ 필요 |
+| POST | `/api/conversations` | 새 대화 생성 | ✅ 필요 |
+| GET | `/api/conversations/{id}/messages` | 대화 메시지 전체 조회 | ✅ 필요 |
+| PATCH | `/api/conversations/{id}` | 대화 제목 변경 | ✅ 필요 |
+| DELETE | `/api/conversations/{id}` | 대화 삭제 | ✅ 필요 |
 | POST | `/api/upload` | PDF 업로드 및 벡터 저장 | ✅ 필요 |
 | GET | `/api/documents` | 내가 업로드한 파일 목록 | ✅ 필요 |
 | DELETE | `/api/documents/{filename}` | 파일 삭제 (전체 청크 제거) | ✅ 필요 |
@@ -516,8 +528,14 @@ pytest --lf
 
 ### 세목 자동 분류로 검색 범위 축소
 
-질문에서 소득세, 부가세 등을 먼저 분류하고 해당 세목 문서만 검색합니다.
-분류 실패 시에만 LLM을 호출하여 불필요한 연산을 줄입니다.
+질문에서 세목 키워드를 먼저 감지하고 해당 세목 문서만 검색합니다.
+소득세법(연말정산·퇴직소득 등), 부가가치세법(세금계산서·영세율 등), 법인세법(손금·결손금·업무용승용차 등), 조세특례제한법(투자세액공제·고용증대 등), 국세기본법(심판청구·기한후신고 등) 등 22개 세목에 걸쳐 실무 용어까지 포괄합니다.
+키워드 매칭 실패 시에만 LLM을 호출(세목 분류 + 멀티쿼리 생성 1회 통합 호출)하여 불필요한 연산을 최소화합니다.
+
+### 비교 질문(A vs B) 처리
+
+"리스와 장기렌트 중 어느 쪽이 유리한가"처럼 두 옵션을 비교하는 질문에서 각 옵션별 검색 쿼리를 별도 생성합니다.
+단일 비교 조문이 없어도 각 항목에 적용되는 법령 조문을 각각 근거로 삼아 비교표와 명확한 결론을 제시합니다.
 
 ### 파일명 패턴 기반 빠른 문서 분류
 
@@ -537,8 +555,10 @@ Tavily 다중 쿼리도 병렬로 처리하여 대기 시간을 줄입니다.
 
 ### SSE 스트리밍
 
-3단계 최종 답변은 Ollama `stream: true` 모드로 토큰 단위 실시간 전송합니다.
-`<think>` 태그는 스트리밍 중 필터링하여 사용자에게 노출되지 않습니다.
+최종 답변은 Ollama `stream: true` 모드로 토큰 단위 실시간 전송합니다.
+`<think>` 태그는 스트리밍 중 버퍼 최소화 방식으로 실시간 필터링합니다(TTFT 개선).
+httpx 싱글톤 클라이언트를 재사용하여 매 요청마다 TCP 연결을 새로 열지 않습니다.
+스트리밍 완료 후 DB 저장(`_save_history`)은 `asyncio.create_task`로 백그라운드 처리하여 클라이언트 연결을 즉시 종료합니다.
 
 ### 법령 개정 감지
 
@@ -556,7 +576,7 @@ Tavily 다중 쿼리도 병렬로 처리하여 대기 시간을 줄입니다.
 | 비밀번호 저장 | bcrypt 해싱 (평문 저장 없음) |
 | 쿠키 보안 | `COOKIE_SECURE=true` 설정 시 HTTPS 전용 쿠키 활성화 |
 | 세무 데이터 보호 | 로컬 Ollama 사용으로 세무 데이터 외부 LLM 전송 없음 |
-| 대화 데이터 | `session_id`(=user_id) 기준으로 사용자별 분리 저장 |
+| 대화 데이터 | `conversation_id` 기준으로 대화별 분리 저장, `user_id`로 소유자 격리 |
 | 문서 격리 | `documents` 테이블 조회 시 `user_id` 필터링 적용 (타인 문서 접근 불가) |
 
 ---
@@ -612,11 +632,9 @@ ValueError: 임베딩 차원 불일치: 예상 2560, 실제 768
 | 한계 | 개선 방향 |
 |------|-----------|
 | 스캔 PDF 미지원 | pytesseract, AWS Textract 연동 |
-| 단일 세션 구조 | `sessions` 테이블 분리로 멀티 대화 지원 |
 | 토큰 기준 청크 분할 | `RecursiveCharacterTextSplitter`로 문장 경계 보완 |
-| Cross-Encoder Re-ranker 미적용 | `bge-reranker` 추가로 검색 품질 향상 |
 | 법령 개정 수동 재수집 | 주기적 자동 동기화 스케줄러 추가 |
-| pgvector 인덱스 미적용 | 2560차원 이하 모델 전환 시 HNSW 인덱스 추가 가능 |
+| 세목 중복 키워드 히트 | 첫 번째 매칭 세목만 선택 → 복수 세목 교차 질문 시 정확도 저하 가능 |
 
 
 ---
