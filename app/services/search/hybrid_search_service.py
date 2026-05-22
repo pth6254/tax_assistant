@@ -189,7 +189,7 @@ def _rrf_merge(
     for results in results_per_query:
         for rank, r in enumerate(results):
             key = r.content
-            scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank + 1)
+            scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank + 1) + 0.3 * r.similarity_score
             if key not in result_map:
                 result_map[key] = r
 

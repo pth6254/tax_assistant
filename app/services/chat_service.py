@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 
 _CHAT_URL = f"{OLLAMA_BASE_URL}/api/chat"
 
-# DB 최고 유사도가 이 값 미만일 때만 웹 검색 실행
-_WEB_SEARCH_THRESHOLD = 0.65
+# 상위 3개 평균 유사도가 이 값 미만일 때만 웹 검색 실행
+_WEB_SEARCH_THRESHOLD = 0.7
 
 # 세목 키워드 매핑
 _LAW_KW: dict[str, list[str]] = {
@@ -242,7 +242,7 @@ _COMBINED_CLASSIFY_PROMPT = (
 
 _OLLAMA_OPTIONS             = {"temperature": 0.3, "num_predict": 500,  "num_ctx": 4096, "think": THINK_ENABLED}
 _OLLAMA_OPTIONS_STREAM      = {"temperature": 0.3, "num_predict": -1,   "num_ctx": 6144, "think": THINK_ENABLED, "keep_alive": -1}
-_OLLAMA_OPTIONS_MULTI_QUERY = {"temperature": 0.0, "num_predict": 150,  "num_ctx": 1024, "think": THINK_ENABLED}
+_OLLAMA_OPTIONS_MULTI_QUERY = {"temperature": 0.0, "num_predict": 150,  "num_ctx": 2048, "think": THINK_ENABLED}
 
 # Qwen3 계열 모델에서만 /no_think 접두사 사용 (다른 모델에는 노이즈)
 _QWEN3_NO_THINK_PREFIX = "/no_think\n\n" if (
@@ -396,20 +396,38 @@ async def generate_search_queries(query: str) -> list[str]:
     return [query]
 
 
-async def _classify_and_generate_queries(query: str) -> tuple[str, list[str]]:
-    """세목 분류 + 검색 쿼리 생성을 1회 LLM 호출로 처리. 실패 시 키워드 분류 + 원본 쿼리 반환."""
+async def _classify_and_generate_queries(
+    query: str,
+    history: list[dict] | None = None,
+) -> tuple[str, list[str]]:
+    """세목 분류 + 검색 쿼리 생성을 1회 LLM 호출로 처리. 실패 시 키워드 분류 + 원본 쿼리 반환.
+
+    여러 세목 키워드가 동시에 감지되면 ALL(전체 검색)을 사용한다.
+    history가 전달되면 직전 2턴 맥락을 쿼리 생성 프롬프트에 포함한다.
+    """
     q_lower = query.lower()
-    keyword_law = "ALL"
-    for law, kws in _LAW_KW.items():
-        if any(kw in q_lower for kw in kws):
-            keyword_law = law
-            break
+    matched_laws = [law for law, kws in _LAW_KW.items() if any(kw in q_lower for kw in kws)]
+    keyword_law = matched_laws[0] if len(matched_laws) == 1 else "ALL"
+    if len(matched_laws) > 1:
+        logger.info("[CLASSIFY] 다중 세목 감지(%s) — ALL 전체 검색", matched_laws)
+
+    # 직전 2턴(user+assistant 각 1회) 맥락 구성
+    user_content = query
+    if history:
+        recent = history[-4:]
+        parts = [
+            ("사용자" if m.get("role") == "user" else "AI")
+            + ": "
+            + str(m.get("content", ""))[:150].replace("\n", " ")
+            for m in recent
+        ]
+        user_content = "[이전 대화 맥락]\n" + "\n".join(parts) + f"\n\n[현재 질문]\n{query}"
 
     try:
         raw = await _call_ollama(
             [
                 {"role": "system", "content": _COMBINED_CLASSIFY_PROMPT},
-                {"role": "user",   "content": query},
+                {"role": "user",   "content": user_content},
             ],
             temperature=0.0,
             options=_OLLAMA_OPTIONS_MULTI_QUERY,
@@ -448,10 +466,9 @@ async def _fetch_rag_and_web_context(
     """
     t0 = time.perf_counter()
 
-    (law_filter, search_queries), history = await asyncio.gather(
-        _classify_and_generate_queries(query),
-        _fetch_history(conversation_id),
-    )
+    # 히스토리를 먼저 조회한 뒤 맥락을 쿼리 생성에 주입 (후속 질문 품질 향상)
+    history = await _fetch_history(conversation_id)
+    law_filter, search_queries = await _classify_and_generate_queries(query, history)
     logger.info("[RAG] 세목=%s | 히스토리=%d턴 | 검색쿼리=%d개", law_filter, len(history) // 2, len(search_queries))
 
     results = await hybrid_search(search_queries, law_filter, user_id=user_id, original_query=query)
@@ -460,12 +477,13 @@ async def _fetch_rag_and_web_context(
 
     web_results = "웹 검색 생략"
     if TAVILY_API_KEY:
-        top_score = max((r.similarity_score for r in results), default=0.0)
-        if top_score < _WEB_SEARCH_THRESHOLD:
-            logger.info("[RAG] DB 유사도 낮음(%.2f) — 웹 검색 실행", top_score)
+        top3 = results[:3]
+        top3_avg = sum(r.similarity_score for r in top3) / len(top3) if top3 else 0.0
+        if top3_avg < _WEB_SEARCH_THRESHOLD:
+            logger.info("[RAG] 상위 3개 평균 유사도 낮음(%.2f) — 웹 검색 실행", top3_avg)
             web_results = await tavily_search([query])
         else:
-            logger.info("[RAG] DB 유사도 충분(%.2f) — 웹 검색 생략", top_score)
+            logger.info("[RAG] 상위 3개 평균 유사도 충분(%.2f) — 웹 검색 생략", top3_avg)
 
     logger.info("[RAG] 준비 단계 총 소요: %.1fs", time.perf_counter() - t0)
     return context, web_results, history
