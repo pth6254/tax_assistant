@@ -29,7 +29,7 @@ async def get_pool() -> asyncpg.Pool:
     if _pool is None:
         _pool = await asyncpg.create_pool(
             DATABASE_URL,
-            min_size=2,
+            min_size=4,
             max_size=10,
             init=_init_connection,
         ) 

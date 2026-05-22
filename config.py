@@ -23,8 +23,8 @@ THINK_ENABLED: bool  = os.getenv("THINK_ENABLED", "false").lower() == "true"  # 
 # ── RAG 파라미터 ────────────────────────────────────────────────
 CHUNK_SIZE: int         = 800
 CHUNK_OVERLAP: int      = 100
-TOP_K: int              = 10
-MEMORY_TURNS: int       = 5     # 채팅 메모리 최근 N 턴
+TOP_K: int              = 5
+MEMORY_TURNS: int       = 3     # 채팅 메모리 최근 N 턴
 SIMILARITY_THRESHOLD: float = float(os.getenv("SIMILARITY_THRESHOLD", "0.4"))
 
 # ── 업로드 제한 ─────────────────────────────────────────────────
