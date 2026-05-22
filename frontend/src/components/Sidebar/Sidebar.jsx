@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import FileUpload from './FileUpload'
 
 const NAV_ITEMS = [
   { key: 'chat',       label: '채팅',      icon: '💬' },
@@ -85,8 +84,6 @@ export default function Sidebar({
   conversations, currentConversationId,
   onSelectConversation, onCreateConversation, onDeleteConversation,
 }) {
-  const [files, setFiles] = useState([])
-
   return (
     <aside style={{
       width: 280, flexShrink: 0,
@@ -205,32 +202,6 @@ export default function Sidebar({
               )}
             </div>
 
-            {/* 문서 업로드 */}
-            <div style={{
-              padding: '12px 14px',
-              borderTop: '1px solid var(--border)',
-              flexShrink: 0,
-            }}>
-              <div style={{
-                fontSize: 10, color: 'var(--text-muted)',
-                letterSpacing: '.8px', textTransform: 'uppercase',
-                marginBottom: 8, fontWeight: 600,
-              }}>
-                📎 문서 업로드
-              </div>
-              <FileUpload onUploaded={f => setFiles(prev => [...prev, f])} />
-              {files.slice(-2).map((f, i) => (
-                <div key={i} style={{
-                  marginTop: 5, fontSize: 11,
-                  color: 'var(--success)',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  display: 'flex', alignItems: 'center', gap: 4,
-                }}>
-                  <span>✓</span>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</span>
-                </div>
-              ))}
-            </div>
           </>
         ) : (
           <div style={{ flex: 1 }} />
