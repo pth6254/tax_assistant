@@ -32,23 +32,49 @@ body {
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
 
+/* ── 공통 입력 포커스 ─────────────────────────────────────── */
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: rgba(79,124,255,.5) !important;
+  box-shadow: 0 0 0 3px rgba(79,124,255,.1);
+}
+
+/* ── 애니메이션 ───────────────────────────────────────────── */
 @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
-@keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes blink   { 0%,80%,100% { opacity:.2; } 40% { opacity:1; } }
+@keyframes pulse   { 0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(76,175,125,.4); } 50% { box-shadow: 0 0 0 5px rgba(76,175,125,0); } }
+@keyframes spin    { to { transform: rotate(360deg); } }
 
-/* 마크다운 렌더링 스타일 */
+/* ── 마크다운 렌더링 스타일 ───────────────────────────────── */
+.markdown-bubble h1 {
+  font-family: var(--font-serif);
+  font-size: 17px; font-weight: 700;
+  color: var(--text);
+  margin: 20px 0 10px;
+}
 .markdown-bubble h2 {
   font-family: var(--font-serif);
   font-size: 15px; font-weight: 600;
   color: var(--accent2);
   margin: 16px 0 8px;
 }
-.markdown-bubble h2:first-child { margin-top: 0; }
-.markdown-bubble p   { margin-bottom: 10px; }
+.markdown-bubble h3 {
+  font-size: 14px; font-weight: 600;
+  color: var(--text);
+  margin: 12px 0 6px;
+}
+.markdown-bubble h1:first-child,
+.markdown-bubble h2:first-child,
+.markdown-bubble h3:first-child { margin-top: 0; }
+.markdown-bubble p   { margin-bottom: 10px; line-height: 1.75; }
 .markdown-bubble p:last-child { margin-bottom: 0; }
 .markdown-bubble ul, .markdown-bubble ol { padding-left: 20px; margin-bottom: 10px; }
-.markdown-bubble li  { margin-bottom: 4px; }
+.markdown-bubble li  { margin-bottom: 4px; line-height: 1.65; }
 .markdown-bubble code {
   background: rgba(79,124,255,.12);
   color: var(--accent2);
@@ -63,37 +89,49 @@ body {
   overflow-x: auto;
   margin: 10px 0;
 }
-.markdown-bubble pre code { background: none; padding: 0; }
-.markdown-bubble strong { color: var(--accent2); }
-/* index.css 하단에 추가 — 마크다운 말풍선 스타일 */
-
-.markdown-bubble h2 {
-  font-family: var(--font-serif);
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--accent2);
-  margin: 16px 0 8px;
-}
-.markdown-bubble h2:first-child { margin-top: 0; }
-.markdown-bubble p   { margin-bottom: 10px; }
-.markdown-bubble p:last-child { margin-bottom: 0; }
-.markdown-bubble ul,
-.markdown-bubble ol  { padding-left: 20px; margin-bottom: 10px; }
-.markdown-bubble li  { margin-bottom: 4px; }
-.markdown-bubble code {
-  background: rgba(79,124,255,.12);
-  color: var(--accent2);
-  padding: 1px 6px;
-  border-radius: 4px;
+.markdown-bubble pre code { background: none; padding: 0; color: var(--text); }
+.markdown-bubble strong { color: var(--accent2); font-weight: 600; }
+.markdown-bubble em { color: var(--text-muted); font-style: italic; }
+.markdown-bubble blockquote {
+  border-left: 3px solid var(--accent);
+  padding: 8px 14px;
+  margin: 10px 0;
+  background: rgba(79,124,255,.06);
+  border-radius: 0 6px 6px 0;
+  color: var(--text-muted);
   font-size: 13px;
 }
-.markdown-bubble pre {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 14px;
-  overflow-x: auto;
-  margin: 10px 0;
+.markdown-bubble table {
+  width: 100%; border-collapse: collapse;
+  font-size: 13px; margin: 10px 0;
 }
-.markdown-bubble pre code { background: none; padding: 0; }
-.markdown-bubble strong { color: var(--accent2); }
+.markdown-bubble th {
+  background: rgba(79,124,255,.1);
+  color: var(--accent2);
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.markdown-bubble td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+.markdown-bubble tr:last-child td { border-bottom: none; }
+
+/* ── 버튼 공통 hover ──────────────────────────────────────── */
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 20px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity .15s, transform .1s;
+}
+.btn-primary:hover:not(:disabled) { opacity: .88; }
+.btn-primary:active:not(:disabled) { transform: scale(.98); }
+.btn-primary:disabled { opacity: .4; cursor: not-allowed; }
