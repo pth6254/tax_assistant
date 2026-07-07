@@ -40,7 +40,7 @@ async def calculate(
 
     brackets = await get_brackets('소득세', 'default')
     if brackets:
-        calculated_tax, rate_desc = _apply_progressive_tax(taxable, brackets)
+        calculated_tax, rate_desc = __apply_progressive_tax(taxable, brackets)
     else:
         calculated_tax, rate_desc = 0, "0%"
         logger.warning("소득세 세율 구간 조회 실패 — 세액 0 처리")
