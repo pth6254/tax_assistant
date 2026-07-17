@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useChat } from '../../hooks/useChat'
 import MessageBubble from './MessageBubble'
 import ChatInput from './ChatInput'
+import ArticleViewer from './ArticleViewer'
 
 const QUICK_QUESTIONS = [
   '양도소득세 계산 방법을 알려주세요',
@@ -40,9 +41,14 @@ function TypingIndicator() {
   )
 }
 
-export default function ChatArea({ user, conversationId, conversationTitle, onMessageSent }) {
+export default function ChatArea({ user, conversationId, conversationTitle, onMessageSent, onOpenCalculator, pendingQuestion, onPendingQuestionConsumed }) {
   const { messages, loading, sendMessage } = useChat(conversationId)
   const bottomRef = useRef()
+  const [selectedArticle, setSelectedArticle] = useState(null)
+
+  const handleCitationClick = (lawName, articleNo) => {
+    setSelectedArticle({ lawName, articleNo })
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -51,6 +57,14 @@ export default function ChatArea({ user, conversationId, conversationTitle, onMe
   const handleSend = (query) => {
     sendMessage(query, onMessageSent)
   }
+
+  // 계산기 화면의 "이 결과에 대해 질문하기" → 채팅으로 넘어온 질문을 자동 전송
+  useEffect(() => {
+    if (!pendingQuestion || !conversationId) return
+    handleSend(pendingQuestion)
+    onPendingQuestionConsumed?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingQuestion, conversationId])
 
   if (!conversationId) {
     return (
@@ -69,6 +83,7 @@ export default function ChatArea({ user, conversationId, conversationTitle, onMe
   }
 
   return (
+    <div style={{ flex: 1, display: 'flex', minWidth: 0 }}>
     <main style={{
       flex: 1, display: 'flex', flexDirection: 'column',
       background: 'var(--bg)', minWidth: 0,
@@ -164,6 +179,8 @@ export default function ChatArea({ user, conversationId, conversationTitle, onMe
             key={i}
             message={msg}
             userInitial={(user.email[0] || 'U').toUpperCase()}
+            onCitationClick={handleCitationClick}
+            onOpenCalculator={onOpenCalculator}
           />
         ))}
 
@@ -173,5 +190,13 @@ export default function ChatArea({ user, conversationId, conversationTitle, onMe
 
       <ChatInput onSend={handleSend} disabled={loading} />
     </main>
+    {selectedArticle && (
+      <ArticleViewer
+        lawName={selectedArticle.lawName}
+        articleNo={selectedArticle.articleNo}
+        onClose={() => setSelectedArticle(null)}
+      />
+    )}
+    </div>
   )
 }

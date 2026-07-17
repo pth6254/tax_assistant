@@ -16,12 +16,14 @@ class UserResponse(BaseModel):
     email: str
     name: str
     phone: str
+    business_type: str
     created_at: str
 
 
 class ProfileUpdateRequest(BaseModel):
-    name:  str = Field(default='', max_length=50)
-    phone: str = Field(default='', max_length=20)
+    name:          str = Field(default='', max_length=50)
+    phone:         str = Field(default='', max_length=20)
+    business_type: str = Field(default='개인_일반과세')
 
 
 class PasswordChangeRequest(BaseModel):

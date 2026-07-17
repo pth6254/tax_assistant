@@ -8,7 +8,7 @@ law_articles(공식 법령 조문)와 documents(PDF 업로드) 두 테이블을
   0 — 법률         (law_articles, law_type=법률)
   1 — 시행령        (law_articles, law_type=대통령령)
   2 — 시행규칙      (law_articles, law_type=총리령/부령)
-  3 — 법령 PDF      (documents, category=법령)
+  3 — 유권해석      (law_articles, law_type=법령해석례) / 법령 PDF (documents, category=법령)
   4 — 시행령 PDF    (documents, category=시행령)
   5 — 시행규칙 PDF  (documents, category=시행규칙)
   6 — 집행기준      (documents, category=집행기준)
@@ -24,7 +24,7 @@ import time
 import uuid as _uuid
 
 from app.database import get_pool
-from app.schemas.law import HybridSearchResult
+from app.schemas.law import HybridSearchResult, LawArticleDetail
 from app.utils.embeddings import embed_texts, get_http_client
 from config import OLLAMA_BASE_URL, RERANK_MODEL, SIMILARITY_THRESHOLD, TOP_K
 
@@ -33,20 +33,35 @@ logger = logging.getLogger(__name__)
 # ── 우선순위 테이블 ──────────────────────────────────────────────
 
 _LAW_ARTICLE_PRIORITY: dict[str, int] = {
-    "법률":    0,
-    "대통령령": 1,
-    "총리령":  2,
-    "부령":    2,
+    "법률":     0,
+    "대통령령":  1,
+    "총리령":   2,
+    "부령":     2,
+    "법령해석례": 3,
 }
 _LAW_ARTICLE_DEFAULT_PRIORITY = 2
 
 _LAW_ARTICLE_SOURCE_TYPE: dict[str, str] = {
-    "법률":    "law",
-    "대통령령": "regulation",
-    "총리령":  "rule",
-    "부령":    "rule",
+    "법률":     "law",
+    "대통령령":  "regulation",
+    "총리령":   "rule",
+    "부령":     "rule",
+    "법령해석례": "interpretation",
 }
 _LAW_ARTICLE_DEFAULT_SOURCE_TYPE = "law"
+
+
+def _classify_law_type(law_type: str) -> tuple[int, str]:
+    """law_type 문자열로 (priority, source_type)을 결정한다.
+
+    "행정안전부령"·"재정경제부령"처럼 소관부처명이 붙은 부령은 _LAW_ARTICLE_PRIORITY의
+    "부령"과 정확히 일치하지 않으므로, '부령'으로 끝나는 값을 별도로 처리한다.
+    """
+    if law_type in _LAW_ARTICLE_PRIORITY:
+        return _LAW_ARTICLE_PRIORITY[law_type], _LAW_ARTICLE_SOURCE_TYPE[law_type]
+    if law_type.endswith("부령"):
+        return _LAW_ARTICLE_PRIORITY["부령"], _LAW_ARTICLE_SOURCE_TYPE["부령"]
+    return _LAW_ARTICLE_DEFAULT_PRIORITY, _LAW_ARTICLE_DEFAULT_SOURCE_TYPE
 
 _DOC_CATEGORY_PRIORITY: dict[str, int] = {
     "법령":    3,
@@ -117,8 +132,7 @@ async def _search_law_articles(
     results = []
     for r in rows:
         law_type = r["law_type"] or ""
-        priority    = _LAW_ARTICLE_PRIORITY.get(law_type, _LAW_ARTICLE_DEFAULT_PRIORITY)
-        source_type = _LAW_ARTICLE_SOURCE_TYPE.get(law_type, _LAW_ARTICLE_DEFAULT_SOURCE_TYPE)
+        priority, source_type = _classify_law_type(law_type)
 
         article_header = r["article_no"]
         if r["article_title"]:
@@ -245,6 +259,46 @@ async def _rerank(
     except Exception as e:
         logger.warning("[RERANK] 실패 — 기존 정렬 사용: %s", e)
         return results[:top_k]
+
+
+# ── 조문 원문 조회 ───────────────────────────────────────────────
+
+_ARTICLE_LOOKUP_SQL = """
+SELECT law_name, law_type, tax_type, article_no, article_title, article_text,
+       effective_date, amendment_date, source_url
+FROM law_articles
+WHERE is_current = TRUE
+  AND regexp_replace(law_name, '\\s+', '', 'g') = regexp_replace($1, '\\s+', '', 'g')
+  AND article_no = $2
+-- 국가법령정보 API는 절/관 구조 표제(예: "제4절 세액의 계산")를 다음 조문과
+-- 같은 조문번호를 가진 별도 행으로 내려주는 경우가 있어(파서 한계),
+-- 실제 조문 본문("제55조(세율)..."로 시작)을 우선 채택한다.
+ORDER BY (article_text LIKE $2 || '%') DESC, length(article_text) DESC, updated_at DESC
+LIMIT 1
+"""
+
+
+async def get_law_article(law_name: str, article_no: str) -> LawArticleDetail | None:
+    """법령명 + 조문번호로 조문 원문을 조회한다 (공백 표기 차이 무시).
+
+    조문 원문 뷰어(채팅 답변의 인용을 클릭했을 때) 및 인용 검증에 사용.
+    """
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(_ARTICLE_LOOKUP_SQL, law_name, article_no)
+    if not row:
+        return None
+    return LawArticleDetail(
+        law_name=row["law_name"],
+        law_type=row["law_type"],
+        tax_type=row["tax_type"],
+        article_no=row["article_no"],
+        article_title=row["article_title"],
+        article_text=row["article_text"],
+        effective_date=row["effective_date"],
+        amendment_date=row["amendment_date"],
+        source_url=row["source_url"] or "",
+    )
 
 
 # ── 공개 함수 ────────────────────────────────────────────────────

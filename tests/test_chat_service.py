@@ -30,7 +30,7 @@ async def test_detect_law_name_corporate_tax():
 
 @pytest.mark.asyncio
 async def test_detect_law_name_inheritance():
-    assert await detect_law_name("상속세 신고 기한이 얼마나 되나요") == "상속세및증여세법"
+    assert await detect_law_name("상속세 신고 기한이 얼마나 되나요") == "상속세 및 증여세법"
 
 
 @pytest.mark.asyncio

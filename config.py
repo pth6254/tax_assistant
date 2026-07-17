@@ -20,6 +20,12 @@ EMBED_MODEL: str     = os.getenv("EMBED_MODEL", "qwen3-embedding:4b")  # 임베�
 RERANK_MODEL: str    = os.getenv("RERANK_MODEL", "")                   # 비워두면 리랭킹 비활성화
 THINK_ENABLED: bool  = os.getenv("THINK_ENABLED", "false").lower() == "true"  # 기본 비활성화
 
+# 모든 chat 모델 호출에서 동일한 num_ctx를 사용해야 함 — 값이 다르면
+# Ollama가 요청마다 모델을 리로드하여 호출당 4~10초가 추가됨
+OLLAMA_NUM_CTX: int = int(os.getenv("OLLAMA_NUM_CTX", "6144"))
+# 유휴 시 모델 언로드 금지 (-1) — 5분 유휴 후 콜드 스타트(27~48초) 방지
+OLLAMA_KEEP_ALIVE: int = int(os.getenv("OLLAMA_KEEP_ALIVE_SEC", "-1"))
+
 # ── RAG 파라미터 ────────────────────────────────────────────────
 CHUNK_SIZE: int         = 800
 CHUNK_OVERLAP: int      = 100

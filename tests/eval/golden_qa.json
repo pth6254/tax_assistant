@@ -1,0 +1,279 @@
+{
+  "_readme": [
+    "RAG 검색 품질 골든 평가셋.",
+    "expected_article_no가 null인 항목은 아직 정답이 확정되지 않은 항목입니다.",
+    "python scripts/eval_rag.py --build 실행 후 candidates에 채워진 실제 DB 검색 후보를 검토하여",
+    "정답 조문번호를 expected_article_no에 직접 입력하세요 (조문번호를 추측해서 넣지 마세요).",
+    "grounded=true 항목은 세금 계산기 시드 데이터(db/migrations/001_tax_calculator.sql)의",
+    "source_article 값을 그대로 가져온 것이라 이미 확정된 정답입니다."
+  ],
+  "items": [
+    {
+      "id": "inc-01",
+      "query": "종합소득세 최고세율 구간의 세율과 누진공제액은 얼마인가요?",
+      "expected_law_name": "소득세법",
+      "expected_article_no": "제55조",
+      "grounded": true,
+      "candidates": []
+    },
+    {
+      "id": "inc-02",
+      "query": "종합소득세 기본공제(인적공제) 금액은 얼마인가요?",
+      "expected_law_name": "소득세법",
+      "expected_article_no": "제50조",
+      "grounded": true,
+      "candidates": []
+    },
+    {
+      "id": "inc-03",
+      "query": "사업소득자에게 적용되는 표준세액공제 금액은 얼마인가요?",
+      "expected_law_name": "소득세법",
+      "expected_article_no": "제59조의4",
+      "grounded": true,
+      "candidates": []
+    },
+    {
+      "id": "cg-01",
+      "query": "양도소득세 기본공제 금액은 얼마인가요?",
+      "expected_law_name": "소득세법",
+      "expected_article_no": "제103조",
+      "grounded": true,
+      "candidates": []
+    },
+    {
+      "id": "cg-02",
+      "query": "양도소득세 기본세율 구간은 어떻게 되나요?",
+      "expected_law_name": "소득세법",
+      "expected_article_no": "제104조",
+      "grounded": true,
+      "candidates": []
+    },
+    {
+      "id": "cg-03",
+      "query": "부동산 장기보유특별공제에서 15년 이상 보유한 1주택자의 공제율은 얼마인가요?",
+      "expected_law_name": "소득세법",
+      "expected_article_no": "제95조",
+      "grounded": true,
+      "candidates": []
+    },
+    {
+      "id": "inh-01",
+      "query": "상속세율 구간과 누진공제액은 어떻게 되나요?",
+      "expected_law_name": "상속세 및 증여세법",
+      "expected_article_no": "제26조",
+      "grounded": true,
+      "candidates": []
+    },
+    {
+      "id": "inh-02",
+      "query": "상속세 기초공제 금액은 얼마인가요?",
+      "expected_law_name": "상속세 및 증여세법",
+      "expected_article_no": "제18조",
+      "grounded": true,
+      "candidates": []
+    },
+    {
+      "id": "inh-03",
+      "query": "상속세 일괄공제 금액은 얼마인가요?",
+      "expected_law_name": "상속세 및 증여세법",
+      "expected_article_no": "제21조",
+      "grounded": true,
+      "candidates": []
+    },
+    {
+      "id": "inh-04",
+      "query": "배우자상속공제의 최소 보장 금액은 얼마인가요?",
+      "expected_law_name": "상속세 및 증여세법",
+      "expected_article_no": "제19조",
+      "grounded": true,
+      "candidates": []
+    },
+    {
+      "id": "gift-01",
+      "query": "배우자에게 증여할 때 증여재산공제 한도는 얼마인가요?",
+      "expected_law_name": "상속세 및 증여세법",
+      "expected_article_no": "제53조",
+      "grounded": true,
+      "candidates": []
+    },
+    {
+      "id": "vat-01",
+      "query": "간이과세자의 부가가치세 신고 기준은 어떻게 되나요?",
+      "expected_law_name": "부가가치세법",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": []
+    },
+    {
+      "id": "vat-02",
+      "query": "매입세액 불공제 대상을 알려주세요.",
+      "expected_law_name": "부가가치세법",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": []
+    },
+    {
+      "id": "vat-03",
+      "query": "세금계산서 발급 의무가 없는 경우는 어떤 경우인가요?",
+      "expected_law_name": "부가가치세법",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": []
+    },
+    {
+      "id": "vat-04",
+      "query": "의제매입세액공제는 어떤 사업자가 적용받을 수 있나요?",
+      "expected_law_name": "부가가치세법",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": []
+    },
+    {
+      "id": "vat-05",
+      "query": "수출품에 영세율이 적용되는 요건은 무엇인가요?",
+      "expected_law_name": "부가가치세법",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": []
+    },
+    {
+      "id": "corp-01",
+      "query": "법인의 접대비 한도는 어떻게 계산하나요?",
+      "expected_law_name": "법인세법",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": []
+    },
+    {
+      "id": "corp-02",
+      "query": "법인 업무용승용차 관련 비용의 손금산입 한도는 얼마인가요?",
+      "expected_law_name": "법인세법",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": []
+    },
+    {
+      "id": "corp-03",
+      "query": "결손금 소급공제 신청 방법을 알려주세요.",
+      "expected_law_name": "법인세법",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": []
+    },
+    {
+      "id": "corp-04",
+      "query": "법인세법상 익금불산입 항목에는 어떤 것들이 있나요?",
+      "expected_law_name": "법인세법",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": []
+    },
+    {
+      "id": "basic-01",
+      "query": "경정청구 기한은 얼마나 되나요?",
+      "expected_law_name": "국세기본법",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": []
+    },
+    {
+      "id": "basic-02",
+      "query": "가산세를 감면받을 수 있는 경우는 어떤 경우인가요?",
+      "expected_law_name": "국세기본법",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": []
+    },
+    {
+      "id": "basic-03",
+      "query": "조세심판청구 기한은 언제까지인가요?",
+      "expected_law_name": "국세기본법",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": []
+    },
+    {
+      "id": "basic-04",
+      "query": "기한후신고를 하면 가산세는 어떻게 되나요?",
+      "expected_law_name": "국세기본법",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": []
+    },
+    {
+      "id": "trc-01",
+      "query": "중소기업 특별세액감면 요건은 무엇인가요?",
+      "expected_law_name": "조세특례제한법",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": []
+    },
+    {
+      "id": "trc-02",
+      "query": "고용증대세액공제는 어떤 조건에서 적용되나요?",
+      "expected_law_name": "조세특례제한법",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": []
+    },
+    {
+      "id": "trc-03",
+      "query": "청년 창업 중소기업 세액감면 대상은 누구인가요?",
+      "expected_law_name": "조세특례제한법",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": []
+    },
+    {
+      "id": "local-01",
+      "query": "부동산 취득세 세율은 어떻게 되나요?",
+      "expected_law_name": "지방세법",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": []
+    },
+    {
+      "id": "local-02",
+      "query": "재산세 과세기준일은 언제인가요?",
+      "expected_law_name": "지방세법",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": []
+    },
+    {
+      "id": "cust-01",
+      "query": "관세 환급을 받을 수 있는 요건은 무엇인가요?",
+      "expected_law_name": "관세법",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": []
+    },
+    {
+      "id": "cmp-01",
+      "query": "법인 업무용승용차를 리스로 이용하는 것과 장기렌트로 이용하는 것 중 손금산입 측면에서 어느 쪽이 유리한가요?",
+      "expected_law_name": "법인세법",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": [],
+      "comparison": true
+    },
+    {
+      "id": "cmp-02",
+      "query": "간이과세자와 일반과세자 중 연매출 7천만원인 개인사업자에게 유리한 쪽은 어디인가요?",
+      "expected_law_name": "부가가치세법",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": [],
+      "comparison": true
+    },
+    {
+      "id": "cmp-03",
+      "query": "개인사업자로 유지하는 것과 법인전환하는 것 중 세부담 측면에서 무엇이 유리한가요?",
+      "expected_law_name": "ALL",
+      "expected_article_no": null,
+      "grounded": false,
+      "candidates": [],
+      "comparison": true
+    }
+  ]
+}

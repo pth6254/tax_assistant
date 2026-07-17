@@ -1,6 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { calcIncomeTax, calcCapitalGains, calcInheritance, calcGiftTax } from '../../api/calculatorApi'
 import ResultCard from './ResultCard'
+
+// 챗봇 계산기 엔진(app/services/calculator/engine.py _TOOLS)의 도구명 → 화면 탭 키
+const TOOL_TO_TAB = {
+  income_tax:    'income',
+  capital_gains: 'capital',
+  inheritance:   'inheritance',
+  gift:          'gift',
+}
 
 const TABS = [
   { key: 'income',      label: '소득세',    icon: '💼' },
@@ -66,7 +74,7 @@ const FORMS = {
     apiFn: calcGiftTax,
     fields: [
       { key: 'gift_amount',     label: '증여재산가액',       unit: '만원', required: true },
-      { key: 'relation',        label: '증여자와의 관계',     type: 'select', options: ['직계존속', '직계비속', '배우자', '기타'] },
+      { key: 'relation',        label: '증여자와의 관계',     type: 'select', options: ['직계존비속', '배우자', '기타친족', '기타'] },
       { key: 'is_minor',        label: '수증자 미성년자',     type: 'checkbox' },
       { key: 'prior_gifts_10y', label: '10년 내 사전증여액', unit: '만원', required: false, hint: '동일인으로부터' },
     ],
@@ -80,15 +88,62 @@ const FORMS = {
   },
 }
 
-const toWon  = (v) => (parseInt(v) || 0) * 10_000
-const toInt  = (v, def = 0) => parseInt(v) || def
+const toWon   = (v) => (parseInt(v) || 0) * 10_000
+const toInt   = (v, def = 0) => parseInt(v) || def
+const fromWon = (v) => String(Math.round((v || 0) / 10_000))
+const fmtWon  = (v) => (v || 0).toLocaleString('ko-KR') + '원'
 
-export default function CalculatorScreen() {
+// 챗봇 계산기 엔진이 전달한 원(₩) 단위 params → 화면 폼(만원 단위) 값으로 역변환
+const buildFormFromParams = (tabKey, params) => {
+  const { fields, defaults } = FORMS[tabKey]
+  const form = { ...defaults }
+  for (const field of fields) {
+    if (!(field.key in params)) continue
+    const raw = params[field.key]
+    if (field.type === 'checkbox') form[field.key] = !!raw
+    else if (field.type === 'select') form[field.key] = raw
+    else if (field.unit === '만원') form[field.key] = fromWon(raw)
+    else form[field.key] = String(raw)
+  }
+  return form
+}
+
+// 계산 결과를 챗봇에 질문하기 위한 자연어 문장 구성
+const QUESTION_BUILDERS = {
+  income: (f, r) =>
+    `총수입 ${f.income || 0}만원, 필요경비 ${f.expense || 0}만원, 부양가족 ${f.personal_deduction_count || 1}명 기준으로 ` +
+    `계산한 종합소득세 결정세액이 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인하고, 추가로 절세 방법이 있으면 알려주세요.`,
+  capital: (f, r) =>
+    `양도가액 ${f.transfer_price || 0}만원, 취득가액 ${f.acquisition_price || 0}만원, 보유기간 ${f.holding_years || 0}년 기준으로 ` +
+    `계산한 양도소득세가 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인하고, 추가로 절세 방법이 있으면 알려주세요.`,
+  inheritance: (f, r) =>
+    `상속재산 ${f.estate_value || 0}만원, 배우자 상속액 ${f.spouse_inheritance || 0}만원, 자녀 ${f.children_count || 0}명 기준으로 ` +
+    `계산한 상속세가 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인하고, 추가로 공제받을 수 있는 항목이 있으면 알려주세요.`,
+  gift: (f, r) =>
+    `증여재산 ${f.gift_amount || 0}만원을 ${f.relation || '기타'} 관계에서 증여받는 경우로 ` +
+    `계산한 증여세가 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인하고, 추가로 절세 방법이 있으면 알려주세요.`,
+}
+
+export default function CalculatorScreen({ initial, onInitialConsumed, onAskAboutResult }) {
   const [tab, setTab] = useState('income')
   const [form, setForm] = useState({ ...FORMS.income.defaults })
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // 챗봇에서 "계산기에서 조건 바꿔보기"로 넘어온 경우 해당 탭 + 입력값 프리필
+  useEffect(() => {
+    if (!initial) return
+    const tabKey = TOOL_TO_TAB[initial.tool]
+    if (tabKey) {
+      setTab(tabKey)
+      setForm(buildFormFromParams(tabKey, initial.params || {}))
+      setResult(null)
+      setError('')
+    }
+    onInitialConsumed?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial])
 
   const handleTabChange = (key) => {
     setTab(key)
@@ -266,7 +321,16 @@ export default function CalculatorScreen() {
                 금액을 입력하고 계산하기를 누르세요.
               </div>
             )}
-            {result && <ResultCard result={result} />}
+            {result && (
+              <ResultCard
+                result={result}
+                onAskAboutResult={
+                  onAskAboutResult
+                    ? () => onAskAboutResult(QUESTION_BUILDERS[tab](form, result))
+                    : undefined
+                }
+              />
+            )}
           </div>
         </div>
 

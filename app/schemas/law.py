@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from pydantic import BaseModel
+
 
 @dataclass
 class LawSummary:
@@ -33,3 +35,16 @@ class HybridSearchResult:
     source_type: str
     similarity_score: float
     priority: int
+
+
+class LawArticleDetail(BaseModel):
+    """조문 원문 뷰어 응답."""
+    law_name: str
+    law_type: str
+    tax_type: str
+    article_no: str
+    article_title: str
+    article_text: str
+    effective_date: str
+    amendment_date: str
+    source_url: str

@@ -1,7 +1,7 @@
 const fmt    = (n) => n?.toLocaleString('ko-KR') + '원'
 const fmtPct = (r) => (r * 100).toFixed(2) + '%'
 
-export default function ResultCard({ result }) {
+export default function ResultCard({ result, onAskAboutResult }) {
   if (!result) return null
 
   return (
@@ -102,6 +102,28 @@ export default function ResultCard({ result }) {
               {a}
             </span>
           ))}
+        </div>
+      )}
+
+      {/* 챗봇으로 질문 이어가기 */}
+      {onAskAboutResult && (
+        <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)' }}>
+          <button
+            onClick={onAskAboutResult}
+            style={{
+              width: '100%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+              background: 'rgba(79,124,255,.08)',
+              border: '1px solid rgba(79,124,255,.25)',
+              borderRadius: 9, padding: '9px 14px',
+              color: 'var(--accent2)', fontSize: 13, cursor: 'pointer',
+              transition: 'background .15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(79,124,255,.16)' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(79,124,255,.08)' }}
+          >
+            💬 이 결과에 대해 챗봇에게 질문하기
+          </button>
         </div>
       )}
     </div>

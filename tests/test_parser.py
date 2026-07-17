@@ -109,6 +109,34 @@ def test_parse_articles_law_type():
     assert result[0].law_type == "법률"
 
 
+# 실제 국가법령정보 API(target=law) 응답은 "법령종류명"이 아니라 "법종구분" 태그를 사용한다
+# (예: <법종구분 법령구분코드="A0002">법률</법종구분>). 이 태그명 불일치로 인해
+# law_type이 항상 빈 문자열로 저장되던 실제 버그가 있었다 — 회귀 방지용 테스트.
+_REAL_TAG_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<법령 법령키="0015652025122321221">
+  <기본정보>
+    <법령명_한글><![CDATA[소득세법]]></법령명_한글>
+    <법종구분 법종구분코드="A0002">법률</법종구분>
+    <시행일자>20260101</시행일자>
+    <공포일자>20251231</공포일자>
+  </기본정보>
+  <조문>
+    <조문단위>
+      <조문번호>1</조문번호>
+      <조문가지번호/>
+      <조문여부>조문</조문여부>
+      <조문제목>목적</조문제목>
+      <조문내용>이 법은 소득세에 관한 사항을 규정함을 목적으로 한다.</조문내용>
+    </조문단위>
+  </조문>
+</법령>"""
+
+
+def test_parse_articles_law_type_real_api_tag():
+    result = parse_articles(_REAL_TAG_XML)
+    assert result[0].law_type == "법률"
+
+
 def test_parse_articles_article_no_format():
     result = parse_articles(_SAMPLE_XML)
     assert result[0].article_no == "제1조"

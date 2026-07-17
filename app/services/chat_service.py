@@ -12,7 +12,18 @@ from typing import AsyncGenerator
 
 import httpx
 
-from config import CHAT_MODEL, MEMORY_TURNS, OLLAMA_BASE_URL, TOP_K, TAVILY_API_KEY, THINK_ENABLED
+from config import (
+    CHAT_MODEL,
+    MEMORY_TURNS,
+    OLLAMA_BASE_URL,
+    OLLAMA_KEEP_ALIVE,
+    OLLAMA_NUM_CTX,
+    TOP_K,
+    TAVILY_API_KEY,
+    THINK_ENABLED,
+)
+from app.services.calculator.engine import CalcRun, run_calculation_for_query
+from app.services.citation_guard import apply_citation_guard, build_citation_footer
 from app.services.search.web_search import tavily_search
 from app.database import get_pool
 from app.services.search.hybrid_search_service import (
@@ -25,7 +36,9 @@ logger = logging.getLogger(__name__)
 _CHAT_URL = f"{OLLAMA_BASE_URL}/api/chat"
 
 # 상위 3개 평균 유사도가 이 값 미만일 때만 웹 검색 실행
-_WEB_SEARCH_THRESHOLD = 0.7
+# 임베딩 점수 분포상 정답을 top-1으로 찾은 질문도 0.47~0.58 수준이라
+# 0.7이면 사실상 매번 웹 검색이 실행됨 (질문당 +2~5초) → 0.55로 조정
+_WEB_SEARCH_THRESHOLD = 0.55
 
 # 세목 키워드 매핑
 _LAW_KW: dict[str, list[str]] = {
@@ -37,11 +50,13 @@ _LAW_KW: dict[str, list[str]] = {
                               "부가세 신고", "예정신고", "확정신고"],
     "법인세법":              ["법인세", "법인소득", "법인 세금", "업무용승용차", "법인차량", "법인 리스",
                               "손금", "익금", "결손금", "접대비 한도", "기부금 한도", "법인 감가상각"],
-    "상속세및증여세법":      ["상속세", "증여세", "상속", "증여", "유산",
+    "상속세 및 증여세법":    ["상속세", "증여세", "상속", "증여", "유산",
                               "가업승계", "상속공제", "증여공제", "연부연납", "물납"],
     "지방세법":              ["지방세", "취득세", "재산세", "주민세", "자동차세", "등록면허세",
                               "지방소득세", "지방소비세", "레저세", "담배소비세", "지방교육세"],
-    "조세특례제한법":        ["조세특례", "감면", "공제", "세액공제", "조특법", "세제혜택",
+    # "공제"/"감면"/"세액공제"는 모든 세목에 공통으로 등장하는 일반 용어라 제외.
+    # 인적공제·표준세액공제 등 다른 세목 질문까지 조세특례제한법으로 오분류시키는 원인이었음.
+    "조세특례제한법":        ["조세특례", "조특법", "세제혜택",
                               "투자세액공제", "연구개발비 세액공제", "고용증대세액공제",
                               "중소기업 특별세액", "창업 세액감면", "청년 창업"],
     "국세기본법":            ["국세기본", "가산세", "경정청구", "불복", "과세전적부심사",
@@ -68,6 +83,31 @@ _LAW_KW: dict[str, list[str]] = {
 }
 
 
+def _match_laws_by_keyword(query: str) -> list[str]:
+    """키워드 매칭으로 후보 세목을 찾는다.
+
+    같은 위치에서 여러 세목의 키워드가 겹치면(예: '체납' vs '지방세 체납',
+    '소득세' vs '지방소득세') 더 긴(구체적인) 키워드만 채택하여 불필요한
+    다중 매칭 → ALL 폴백을 줄인다.
+    """
+    q = query.lower()
+    spans: list[tuple[int, int, str]] = []
+    for law, kws in _LAW_KW.items():
+        for kw in kws:
+            start = 0
+            while (idx := q.find(kw, start)) != -1:
+                spans.append((idx, idx + len(kw), law))
+                start = idx + 1
+
+    spans.sort(key=lambda s: s[0] - s[1])  # 길이 내림차순(긴 구간 우선)
+    kept: list[tuple[int, int, str]] = []
+    for start, end, law in spans:
+        if any(start < k_end and end > k_start for k_start, k_end, _ in kept):
+            continue
+        kept.append((start, end, law))
+
+    return sorted({law for _, _, law in kept})
+
 
 async def detect_law_name(query: str) -> str:
     """질문에서 세목명 추출. 불명확하면 'ALL' 반환."""
@@ -85,15 +125,17 @@ async def detect_law_name(query: str) -> str:
                     "model": CHAT_MODEL,
                     "messages": [{"role": "user", "content": (
                         "다음 질문이 어떤 세법과 관련 있는지 하나만 답하세요.\n"
-                        "후보: 소득세법, 부가가치세법, 법인세법, 상속세및증여세법, "
+                        "후보: 소득세법, 부가가치세법, 법인세법, 상속세 및 증여세법, "
                         "지방세법, 조세특례제한법, 국세기본법, ALL\n"
                         f"질문: {query}\n오직 세법 이름 하나만 출력하세요."
                     )}],
                     "stream": False,
+                    "think": False,
+                    "keep_alive": _KEEP_ALIVE,
                     "options": {
                         "temperature": 0.0,
                         "num_predict": 20,
-                        "think": False,
+                        "num_ctx": _NUM_CTX,
                     },
                 },
             )
@@ -163,22 +205,24 @@ _COMBINED_PROMPT = (
     "| 1        | law             | 공식 법률 조문 (법령)         | 최우선 근거, 반드시 인용  |\n"
     "| 2        | regulation      | 대통령령 (시행령)             | 법률 요건의 세부 기준     |\n"
     "| 3        | rule            | 총리령·부령 (시행규칙)        | 절차·서식 세부 사항       |\n"
-    "| 4        | practice_pdf    | 집행기준·실무자료 PDF         | 해설·사례 보완, 구속력 없음 |\n"
-    "| 5        | user_pdf        | 사용자 업로드 PDF             | 참고용, 법적 효력 없음    |\n"
-    "| 6        | 웹 검색 결과    | 최신 인터넷 자료              | DB 미수록 최신 해석·예규만 |\n\n"
+    "| 4        | interpretation  | 기획재정부·국세청 등 유권해석 | 행정 해석 근거, 법령과 충돌 시 법령 우선 |\n"
+    "| 5        | practice_pdf    | 집행기준·실무자료 PDF         | 해설·사례 보완, 구속력 없음 |\n"
+    "| 6        | user_pdf        | 사용자 업로드 PDF             | 참고용, 법적 효력 없음    |\n"
+    "| 7        | 웹 검색 결과    | 최신 인터넷 자료              | DB 미수록 최신 해석·예규만 |\n\n"
 
     "## 근거 사용 규칙\n"
     "1. 공식 법령 조문(law)을 최우선 근거로 사용한다.\n"
     "2. 시행령(regulation)·시행규칙(rule)은 법률의 세부 요건 보완 자료로 사용한다.\n"
-    "3. PDF 실무자료(practice_pdf, user_pdf)는 해설 또는 사례 보완으로만 사용한다.\n"
-    "4. 웹 검색 결과는 DB가 다루지 못한 최신 해석·예규 보완에만 사용한다.\n"
-    "5. 법령(law)과 다른 자료가 충돌하면 법령을 우선한다.\n"
-    "6. A와 B를 직접 비교하는 단일 조문이 없어도, 각 항목에 적용되는 법령 조문을 "
+    "3. 유권해석(interpretation)은 실무 적용례로 사용하되, 법령과 내용이 다르면 법령을 따른다.\n"
+    "4. PDF 실무자료(practice_pdf, user_pdf)는 해설 또는 사례 보완으로만 사용한다.\n"
+    "5. 웹 검색 결과는 DB가 다루지 못한 최신 해석·예규 보완에만 사용한다.\n"
+    "6. 법령(law)과 다른 자료가 충돌하면 법령을 우선한다.\n"
+    "7. A와 B를 직접 비교하는 단일 조문이 없어도, 각 항목에 적용되는 법령 조문을 "
     "각각 근거로 삼아 비교 분석하고 결론을 제시한다. "
     "단, 법령 근거 없는 내용은 절대 추정·일반론으로 서술하지 않는다.\n"
-    "7. 어떤 항목에 대한 법령 근거가 전혀 없는 경우에만 "
+    "8. 어떤 항목에 대한 법령 근거가 전혀 없는 경우에만 "
     "'해당 내용에 대한 명확한 법령 근거를 찾지 못했습니다'라고 항목별로 명시한다.\n"
-    "8. 세무 리스크가 있는 판단은 반드시 '전문가 확인 권장'을 표시한다.\n\n"
+    "9. 세무 리스크가 있는 판단은 반드시 '전문가 확인 권장'을 표시한다.\n\n"
 
     "## 세법 일반 원칙\n"
     "- 특별법 우선: 조세특례제한법이 일반 세법보다 우선 적용\n"
@@ -199,6 +243,7 @@ _COMBINED_PROMPT = (
     "[법률] 법령명 제X조 - 조문제목\n"
     "[시행령] 법령명 시행령 제X조\n"
     "[시행규칙] 법령명 시행규칙 제X조\n"
+    "[유권해석] 안건번호 - 안건명 요약\n"
     "[웹출처] URL 또는 자료명\n"
     "[실무자료] 출처명 (구속력 없음)\n\n"
 
@@ -230,7 +275,7 @@ _MULTI_QUERY_PROMPT = (
 _COMBINED_CLASSIFY_PROMPT = (
     "한국 세무 법령 질문을 분석하여 JSON만 출력하라.\n\n"
     "1. law: 관련 세법 하나\n"
-    "   후보: 소득세법, 부가가치세법, 법인세법, 상속세및증여세법,\n"
+    "   후보: 소득세법, 부가가치세법, 법인세법, 상속세 및 증여세법,\n"
     "         지방세법, 조세특례제한법, 국세기본법, ALL\n"
     "2. queries: 서로 다른 관점의 검색어 3개 (각 50자 이내)\n"
     "   - 법령/조문 관점, 요건/대상 관점, 계산/절차 관점\n"
@@ -240,9 +285,13 @@ _COMBINED_CLASSIFY_PROMPT = (
     "- <think> 태그 내용은 출력하지 말 것\n"
 )
 
-_OLLAMA_OPTIONS             = {"temperature": 0.3, "num_predict": 500,  "num_ctx": 4096, "think": THINK_ENABLED}
-_OLLAMA_OPTIONS_STREAM      = {"temperature": 0.3, "num_predict": -1,   "num_ctx": 6144, "think": THINK_ENABLED, "keep_alive": -1}
-_OLLAMA_OPTIONS_MULTI_QUERY = {"temperature": 0.0, "num_predict": 150,  "num_ctx": 2048, "think": THINK_ENABLED}
+# 주의: think·keep_alive는 options가 아닌 요청 최상위 필드 — options에 넣으면 Ollama가 무시함
+_NUM_CTX = OLLAMA_NUM_CTX
+_KEEP_ALIVE = OLLAMA_KEEP_ALIVE
+
+_OLLAMA_OPTIONS             = {"temperature": 0.3, "num_predict": 500,  "num_ctx": _NUM_CTX}
+_OLLAMA_OPTIONS_STREAM      = {"temperature": 0.3, "num_predict": -1,   "num_ctx": _NUM_CTX}
+_OLLAMA_OPTIONS_MULTI_QUERY = {"temperature": 0.0, "num_predict": 150,  "num_ctx": _NUM_CTX}
 
 # Qwen3 계열 모델에서만 /no_think 접두사 사용 (다른 모델에는 노이즈)
 _QWEN3_NO_THINK_PREFIX = "/no_think\n\n" if (
@@ -281,10 +330,12 @@ async def _call_ollama(
     resp = await client.post(
         _CHAT_URL,
         json={
-            "model":    CHAT_MODEL,
-            "messages": messages,
-            "stream":   False,
-            "options":  merged_options,
+            "model":      CHAT_MODEL,
+            "messages":   messages,
+            "stream":     False,
+            "think":      THINK_ENABLED,
+            "keep_alive": _KEEP_ALIVE,
+            "options":    merged_options,
         },
     )
     resp.raise_for_status()
@@ -309,10 +360,12 @@ async def _stream_ollama_response(
         "POST",
         _CHAT_URL,
         json={
-            "model":    CHAT_MODEL,
-            "messages": messages,
-            "stream":   True,
-            "options":  {**_OLLAMA_OPTIONS_STREAM, "temperature": temperature},
+            "model":      CHAT_MODEL,
+            "messages":   messages,
+            "stream":     True,
+            "think":      THINK_ENABLED,
+            "keep_alive": _KEEP_ALIVE,
+            "options":    {**_OLLAMA_OPTIONS_STREAM, "temperature": temperature},
         },
     ) as resp:
         resp.raise_for_status()
@@ -405,11 +458,16 @@ async def _classify_and_generate_queries(
     여러 세목 키워드가 동시에 감지되면 ALL(전체 검색)을 사용한다.
     history가 전달되면 직전 2턴 맥락을 쿼리 생성 프롬프트에 포함한다.
     """
-    q_lower = query.lower()
-    matched_laws = [law for law, kws in _LAW_KW.items() if any(kw in q_lower for kw in kws)]
+    matched_laws = _match_laws_by_keyword(query)
     keyword_law = matched_laws[0] if len(matched_laws) == 1 else "ALL"
     if len(matched_laws) > 1:
         logger.info("[CLASSIFY] 다중 세목 감지(%s) — ALL 전체 검색", matched_laws)
+
+    # 키워드만으로 세목이 명확히 하나로 확정되면 분류 LLM 호출 자체를 생략한다
+    # (멀티쿼리 다양성은 포기하되 TTFT를 약 3초 단축 — 회귀 여부는 scripts/eval_rag.py로 검증)
+    if len(matched_laws) == 1:
+        logger.info("[CLASSIFY] 키워드로 세목 확정(%s) — 분류 LLM 생략, 원본 쿼리로 검색", keyword_law)
+        return keyword_law, [query]
 
     # 직전 2턴(user+assistant 각 1회) 맥락 구성
     user_content = query
@@ -459,12 +517,17 @@ async def _fetch_rag_and_web_context(
     query: str,
     conversation_id: _uuid.UUID,
     user_id: str,
-) -> tuple[str, str, list[dict]]:
+) -> tuple[str, str, list[dict], CalcRun | None]:
     """
-    세목 분류·법령 검색·웹 검색을 수행하고 (context, web_results, history)를 반환한다.
+    세목 분류·법령 검색·웹 검색·세금 계산기를 수행하고
+    (context, web_results, history, calc_run)를 반환한다.
     DB 유사도가 충분하면 웹 검색을 생략하여 불필요한 지연을 제거한다.
+    계산기는 RAG 검색과 병렬로 실행되며 계산 질문이 아니면 None.
     """
     t0 = time.perf_counter()
+
+    # 계산 질문이면 계산기를 RAG와 병렬로 실행 (아니면 즉시 None 반환되는 no-op)
+    calc_task = asyncio.create_task(run_calculation_for_query(query))
 
     # 히스토리를 먼저 조회한 뒤 맥락을 쿼리 생성에 주입 (후속 질문 품질 향상)
     history = await _fetch_history(conversation_id)
@@ -485,8 +548,14 @@ async def _fetch_rag_and_web_context(
         else:
             logger.info("[RAG] 상위 3개 평균 유사도 충분(%.2f) — 웹 검색 생략", top3_avg)
 
-    logger.info("[RAG] 준비 단계 총 소요: %.1fs", time.perf_counter() - t0)
-    return context, web_results, history
+    try:
+        calc_run = await calc_task
+    except Exception as e:
+        logger.warning("[RAG] 계산기 실행 오류 — 계산 없이 진행: %s", e)
+        calc_run = None
+
+    logger.info("[RAG] 준비 단계 총 소요: %.1fs | 계산기=%s", time.perf_counter() - t0, "실행" if calc_run else "미실행")
+    return context, web_results, history, calc_run
 
 
 def _build_final_messages(
@@ -494,6 +563,7 @@ def _build_final_messages(
     context: str,
     web_results: str,
     history: list[dict],
+    calc_run: CalcRun | None = None,
 ) -> list[dict]:
     """최종 답변용 메시지 목록을 생성한다."""
     messages = [{"role": "system", "content": _COMBINED_PROMPT}]
@@ -502,49 +572,75 @@ def _build_final_messages(
     user_content += f"[검색된 세무 법령 자료]\n{context}"
     if web_results and web_results != "웹 검색 생략":
         user_content += f"\n\n[웹 검색 결과]\n{web_results}"
+    if calc_run:
+        user_content += (
+            f"\n\n[세금 계산기 결과 — DB 세율표 기반 정확한 계산]\n{calc_run.context}\n"
+            "위 계산 결과를 결론에 반영하고, 상세 설명에 계산 단계를 표(| 항목 | 금액 |)로 제시하라. "
+            "계산 수치를 임의로 바꾸지 말 것. 근거 조문은 법적 근거 섹션에 포함하라."
+        )
     user_content += f"\n\n[사용자 질문]\n{query}"
     messages.append({"role": "user", "content": user_content})
     return messages
 
 
-async def process_chat(query: str, conversation_id: str, user_id: str) -> str:
-    """RAG 파이프라인 실행 후 최종 답변을 반환한다 (비스트리밍)."""
+def _calc_meta(calc_run: CalcRun | None) -> dict | None:
+    """프론트엔드 계산기 화면 프리필용 메타데이터(도구명 + 파라미터)."""
+    return {"tool": calc_run.tool, "params": calc_run.params} if calc_run else None
+
+
+async def process_chat(query: str, conversation_id: str, user_id: str) -> tuple[str, dict | None]:
+    """RAG 파이프라인 실행 후 (최종 답변, 계산기 메타데이터)를 반환한다 (비스트리밍)."""
     logger.info("[CHAT] 요청 수신: %.40s...", query)
     t0 = time.perf_counter()
 
     conv_id = _uuid.UUID(conversation_id)
-    context, web_results, history = await _fetch_rag_and_web_context(query, conv_id, user_id)
+    context, web_results, history, calc_run = await _fetch_rag_and_web_context(query, conv_id, user_id)
 
-    messages = _build_final_messages(query, context, web_results, history)
+    messages = _build_final_messages(query, context, web_results, history, calc_run)
     answer   = await _call_ollama(messages, temperature=0.3)
+    answer   = apply_citation_guard(answer, context, calc_run.context if calc_run else None)
 
     await _save_history(conv_id, query, answer, is_first=len(history) == 0)
     logger.info("[CHAT] 응답 완료 — 총 %.1fs | 답변 %d자", time.perf_counter() - t0, len(answer))
-    return answer
+    return answer, _calc_meta(calc_run)
 
 
 async def stream_chat_response(
     query: str,
     conversation_id: str,
     user_id: str,
-) -> AsyncGenerator[str, None]:
-    """RAG 파이프라인 실행 후 최종 답변을 토큰 단위로 yield한다 (스트리밍)."""
+) -> AsyncGenerator[dict, None]:
+    """RAG 파이프라인 실행 후 이벤트를 yield한다 (스트리밍).
+
+    {"type": "chunk", "text": ...} — 답변 토큰/각주
+    {"type": "calc", "tool": ..., "params": ...} — 계산기가 실행된 경우, 스트림 종료 직전 1회
+    """
     logger.info("[STREAM] 요청 수신: %.40s...", query)
     t0 = time.perf_counter()
 
     conv_id = _uuid.UUID(conversation_id)
-    context, web_results, history = await _fetch_rag_and_web_context(query, conv_id, user_id)
+    context, web_results, history, calc_run = await _fetch_rag_and_web_context(query, conv_id, user_id)
 
-    messages     = _build_final_messages(query, context, web_results, history)
+    messages     = _build_final_messages(query, context, web_results, history, calc_run)
     full_answer: list[str] = []
     is_first = len(history) == 0
 
     logger.info("[STREAM] 최종 답변 스트리밍 시작")
     async for chunk in _stream_ollama_response(messages, temperature=0.3):
         full_answer.append(chunk)
-        yield chunk
+        yield {"type": "chunk", "text": chunk}
 
     answer = "".join(full_answer)
+    calc_context = calc_run.context if calc_run else None
+    footer = build_citation_footer(answer, context, calc_context)
+    if footer:
+        yield {"type": "chunk", "text": footer}
+        answer += footer
+
+    calc_meta = _calc_meta(calc_run)
+    if calc_meta:
+        yield {"type": "calc", **calc_meta}
+
     logger.info("[STREAM] 완료 — 총 %.1fs | 답변 %d자", time.perf_counter() - t0, len(answer))
     task = asyncio.create_task(_save_history(conv_id, query, answer, is_first=is_first))
     _bg_tasks.add(task)

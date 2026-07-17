@@ -4,7 +4,7 @@ from app.schemas.calculator import CalculationResult, TaxStep
 from app.services.calculator.repository import get_brackets, get_deduction, get_source_articles
 
 
-def __apply_progressive_tax(taxable: int, brackets: list[dict]) -> tuple[int, str]:
+def _apply_progressive_tax(taxable: int, brackets: list[dict]) -> tuple[int, str]:
     """양도소득세 누진세율 적용. 단기 보유는 단일세율 구간(bracket_from=0)으로 처리. (세액, 적용세율) 반환."""
     for b in sorted(brackets, key=lambda x: x['bracket_from'], reverse=True):
         if taxable > b['bracket_from']:

@@ -21,7 +21,7 @@ async def get_me(user: dict = Depends(verify_token)):
 
 @router.patch("/me")
 async def update_profile(body: ProfileUpdateRequest, user: dict = Depends(verify_token)):
-    return await auth_service.update_profile(user["id"], body.name, body.phone)
+    return await auth_service.update_profile(user["id"], body.name, body.phone, body.business_type)
 
 
 @router.patch("/me/password")

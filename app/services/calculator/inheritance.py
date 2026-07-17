@@ -4,7 +4,7 @@ from app.schemas.calculator import CalculationResult, TaxStep
 from app.services.calculator.repository import get_brackets, get_deduction, get_source_articles
 
 
-def __apply_progressive_tax(taxable: int, brackets: list[dict]) -> tuple[int, str]:
+def _apply_progressive_tax(taxable: int, brackets: list[dict]) -> tuple[int, str]:
     """상속세 누진세율 적용 (과세표준 × 세율 - 누진공제). (세액, 적용세율) 반환."""
     for b in sorted(brackets, key=lambda x: x['bracket_from'], reverse=True):
         if taxable > b['bracket_from']:

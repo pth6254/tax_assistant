@@ -32,7 +32,7 @@ LAW_TARGETS: list[dict] = [
     {"law_name": "소득세법",         "tax_type": "소득세법"},
     {"law_name": "법인세법",         "tax_type": "법인세법"},
     {"law_name": "부가가치세법",     "tax_type": "부가가치세법"},
-    {"law_name": "상속세및증여세법", "tax_type": "상속세및증여세법"},
+    {"law_name": "상속세 및 증여세법", "tax_type": "상속세 및 증여세법"},
     {"law_name": "조세특례제한법",   "tax_type": "조세특례제한법"},
     {"law_name": "지방세법",         "tax_type": "지방세법"},
 ]
@@ -64,8 +64,8 @@ _LAW_NAME_TO_TAX_TYPE: list[tuple[str, str]] = [
       ("소득세",         "소득세법"),                                                                                                                                                    
       ("법인세",         "법인세법"),                                                                                                                                                 
       ("부가가치세",     "부가가치세법"),                                                                                                                                               
-      ("상속세",         "상속세및증여세법"),                                                                                                                                           
-      ("증여세",         "상속세및증여세법"),                                                                                                                                            
+      ("상속세",         "상속세 및 증여세법"),
+      ("증여세",         "상속세 및 증여세법"),
       ("조세특례",       "조세특례제한법"),                                                                                                                                              
       ("지방세기본",     "지방세기본법"),                                                                                                                                                
       ("지방세특례",     "지방세특례제한법"),                                                                                                                                            
@@ -116,6 +116,36 @@ async def _find_exact_law(law_name: str) -> LawSummary | None:
     """법령명 완전일치 검색. 결과 없으면 None."""
     laws = await search_law(law_name, display=20, exact=True)
     return laws[0] if laws else None
+
+
+async def _supersede_stale_versions(
+    conn, law_name: str, article_no: str, current_hashes: list[str],
+) -> int:
+    """
+    (law_name, article_no)에서 이번 수집분에 없는 content_hash를 가진 기존 행을
+    개정(폐기)으로 판단하여 is_current=FALSE로 내린다.
+
+    같은 article_no 아래 여러 콘텐츠가 동시에 존재할 수 있다 — 국가법령정보 API가
+    절/관 표제(예: "제4절 세액의 계산")를 조문번호 없이 별도 단위로 내려주면서
+    다음 실제 조문과 같은 조문번호를 공유하는 경우가 있다(parser_service 참고, 별도 이슈).
+    따라서 "이번에 새로 수집된 해시 전체 집합에 없는 것만" 개정으로 판단해야 하며,
+    단순히 한 건씩 비교하면 같은 article_no의 다른 정상 콘텐츠끼리 서로를
+    잘못 폐기시키는 문제가 있다 (실제로 이 방식으로 인해 인시던트가 발생해 롤백한 적 있음).
+
+    Returns:
+        폐기 처리된 행 수 (0이면 변경 없음)
+    """
+    result = await conn.execute(
+        """
+        UPDATE law_articles
+        SET is_current = FALSE
+        WHERE law_name = $1 AND article_no = $2
+          AND is_current = TRUE AND NOT (content_hash = ANY($3::text[]))
+        """,
+        law_name, article_no, current_hashes,
+    )
+    # asyncpg execute()는 "UPDATE N" 형식의 문자열을 반환한다
+    return int(result.split()[-1])
 
 
 async def _insert_article_returning_id(
@@ -291,6 +321,7 @@ async def ingest_law(
             "mst":                mst,
             "total_articles":     0,
             "inserted_count":     0,
+            "amended_count":      0,
             "skipped_count":      0,
             "failed_count":       0,
             "embedded_count":     0,
@@ -301,12 +332,29 @@ async def ingest_law(
     inserted_count = 0
     skipped_count  = 0
     failed_count   = 0
+    amended_count  = 0
     new_items: list[tuple[LawArticle, int]] = []  # 신규 삽입된 (article, db_id)
+
+    # (law_name, article_no)를 미리 계산한 content_hash로 그룹핑 —
+    # 같은 article_no 아래 여러 콘텐츠가 공존할 수 있어(절/관 표제 중복 이슈),
+    # 그룹 단위로 "이번 수집분에 없는 해시만" 폐기해야 서로를 잘못 폐기시키지 않는다.
+    hashes: list[str] = [_make_hash(a.article_text) for a in articles]
+    hashes_by_key: dict[tuple[str, str], list[str]] = {}
+    for article, content_hash in zip(articles, hashes):
+        hashes_by_key.setdefault((article.law_name, article.article_no), []).append(content_hash)
 
     pool = await get_pool()
     async with pool.acquire() as conn:
-        for article in articles:
-            content_hash = _make_hash(article.article_text)
+        for (key_law_name, key_article_no), key_hashes in hashes_by_key.items():
+            try:
+                superseded = await _supersede_stale_versions(conn, key_law_name, key_article_no, key_hashes)
+                if superseded:
+                    amended_count += superseded
+                    logger.info("[amend] 개정 감지 — %s %s (%d건 폐기)", key_law_name, key_article_no, superseded)
+            except Exception as e:
+                logger.error("[amend] 개정 감지 처리 실패: %s %s — %s", key_law_name, key_article_no, e)
+
+        for article, content_hash in zip(articles, hashes):
             try:
                 new_id = await _insert_article_returning_id(
                     conn, article, tax_type, source_url, content_hash
@@ -321,8 +369,8 @@ async def ingest_law(
                 logger.error("[db] 저장 실패: %s — %s", article.article_no, e)
 
     logger.info(
-        "[db] 저장 완료 — 신규 %d건 | 스킵 %d건 | 실패 %d건",
-        inserted_count, skipped_count, failed_count,
+        "[db] 저장 완료 — 신규 %d건 | 개정(폐기) %d건 | 스킵 %d건 | 실패 %d건",
+        inserted_count, amended_count, skipped_count, failed_count,
     )
 
     # ── 5. 임베딩 생성 (신규 삽입 조문만) ─────────────────────────
@@ -341,6 +389,7 @@ async def ingest_law(
         "mst":                mst,
         "total_articles":     len(articles),
         "inserted_count":     inserted_count,
+        "amended_count":      amended_count,
         "skipped_count":      skipped_count,
         "failed_count":       failed_count,
         "embedded_count":     embedded_count,

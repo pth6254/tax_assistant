@@ -61,26 +61,27 @@ async def get_me(user_id: str) -> dict:
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, email, name, phone, created_at FROM users WHERE id = $1",
+            "SELECT id, email, name, phone, business_type, created_at FROM users WHERE id = $1",
             _uuid.UUID(user_id),
         )
     if not row:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
     return {
-        "id":         str(row["id"]),
-        "email":      row["email"],
-        "name":       row["name"],
-        "phone":      row["phone"],
-        "created_at": row["created_at"].isoformat(),
+        "id":            str(row["id"]),
+        "email":         row["email"],
+        "name":          row["name"],
+        "phone":         row["phone"],
+        "business_type": row["business_type"],
+        "created_at":    row["created_at"].isoformat(),
     }
 
 
-async def update_profile(user_id: str, name: str, phone: str) -> dict:
+async def update_profile(user_id: str, name: str, phone: str, business_type: str) -> dict:
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute(
-            "UPDATE users SET name = $1, phone = $2 WHERE id = $3",
-            name, phone, _uuid.UUID(user_id),
+            "UPDATE users SET name = $1, phone = $2, business_type = $3 WHERE id = $4",
+            name, phone, business_type, _uuid.UUID(user_id),
         )
     logger.info("[AUTH] 프로필 업데이트: %s", user_id)
     return {"message": "프로필이 업데이트되었습니다."}

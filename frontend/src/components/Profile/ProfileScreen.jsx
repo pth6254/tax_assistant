@@ -1,5 +1,12 @@
 import { useState, useEffect } from 'react'
 import { getMe, updateProfile, changePassword, deleteAccount } from '../../api/userApi'
+import { getTaxSchedule } from '../../api/taxScheduleApi'
+
+const BUSINESS_TYPE_LABELS = {
+  '법인':          '법인사업자',
+  '개인_일반과세': '개인 일반과세자',
+  '개인_간이과세': '개인 간이과세자',
+}
 
 export default function ProfileScreen({ onLogout }) {
   const [profile, setProfile] = useState(null)
@@ -44,6 +51,7 @@ export default function ProfileScreen({ onLogout }) {
       </header>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px', display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 540 }}>
+        <TaxScheduleSection businessType={profile?.business_type} />
         <ProfileSection profile={profile} onUpdated={setProfile} />
         <PasswordSection />
         <DeleteSection onLogout={onLogout} />
@@ -52,9 +60,61 @@ export default function ProfileScreen({ onLogout }) {
   )
 }
 
+function TaxScheduleSection({ businessType }) {
+  const [items, setItems] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    getTaxSchedule()
+      .then(data => setItems(data.items))
+      .catch(err => setError(err.message))
+  }, [businessType])
+
+  return (
+    <Card title="다가오는 세무 일정" icon="📅">
+      {error && <StatusMsg text={error} error />}
+      {!error && !items && (
+        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>불러오는 중…</div>
+      )}
+      {items && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {items.map((item, i) => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '10px 14px',
+              background: item.d_day <= 7 ? 'rgba(255,92,92,.06)' : 'var(--surface2)',
+              border: `1px solid ${item.d_day <= 7 ? 'rgba(255,92,92,.2)' : 'var(--border)'}`,
+              borderRadius: 9,
+            }}>
+              <div>
+                <div style={{ fontSize: 13, color: 'var(--text)' }}>
+                  <span style={{ color: 'var(--accent2)', marginRight: 6 }}>{item.tax_type}</span>
+                  {item.label}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{item.due_date}</div>
+              </div>
+              <div style={{
+                fontSize: 13, fontWeight: 600,
+                color: item.d_day <= 7 ? 'var(--danger)' : 'var(--accent2)',
+                fontVariantNumeric: 'tabular-nums',
+              }}>
+                {item.d_day === 0 ? '오늘' : `D-${item.d_day}`}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6, marginTop: 14 }}>
+        * 일반적인 신고 기한 안내이며 법적 효력이 없습니다. 성실신고확인대상자 등 예외는 세무사와 상담하세요.
+      </p>
+    </Card>
+  )
+}
+
 function ProfileSection({ profile, onUpdated }) {
   const [name,  setName]  = useState(profile?.name  ?? '')
   const [phone, setPhone] = useState(profile?.phone ?? '')
+  const [businessType, setBusinessType] = useState(profile?.business_type ?? '개인_일반과세')
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
 
@@ -62,8 +122,8 @@ function ProfileSection({ profile, onUpdated }) {
     e.preventDefault()
     setSaving(true); setMsg('')
     try {
-      await updateProfile({ name, phone })
-      onUpdated(prev => ({ ...prev, name, phone }))
+      await updateProfile({ name, phone, business_type: businessType })
+      onUpdated(prev => ({ ...prev, name, phone, business_type: businessType }))
       setMsg('저장되었습니다.')
     } catch (err) {
       setMsg(err.message)
@@ -103,6 +163,13 @@ function ProfileSection({ profile, onUpdated }) {
         <Field label="전화번호">
           <input value={phone} onChange={e => setPhone(e.target.value)}
             placeholder="010-0000-0000" maxLength={20} style={inputStyle} />
+        </Field>
+        <Field label="사업자 유형" hint="세무 일정 계산에 사용됩니다">
+          <select value={businessType} onChange={e => setBusinessType(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+            {Object.entries(BUSINESS_TYPE_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
         </Field>
         {msg && <StatusMsg text={msg} error={!msg.includes('저장')} />}
         <button type="submit" disabled={saving} style={primaryBtn}>

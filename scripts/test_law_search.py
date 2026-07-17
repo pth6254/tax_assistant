@@ -5,7 +5,7 @@ test_law_search.py — law_articles 벡터 검색 수동 테스트
     python test_law_search.py                                   # 기본 질문
     python test_law_search.py "프리랜서 노트북 비용처리 돼?"
     python test_law_search.py "간이과세자 부가세 신고 기준" 부가가치세법
-    python test_law_search.py "상속세 신고 기한" 상속세및증여세법 10
+    python test_law_search.py "상속세 신고 기한" "상속세 및 증여세법" 10
     인수:  [질문]  [tax_type 필터]  [top_k]
 """
 import asyncio

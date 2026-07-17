@@ -42,20 +42,23 @@
 ### 해결 방법
 
 ```
-공식 법령 조문 DB (국가법령정보 API)
+공식 법령 조문 DB (국가법령정보 API, 법령 + 유권해석)
         +
 사용자 업로드 PDF (시행령·집행기준 등)
         +
-Tavily 웹검색 (최신 예규·판례·유권해석)
+Tavily 웹검색 (최신 예규·판례)
+        +
+DB 세율표 기반 세금 계산기
         ↓
-Agentic RAG 3단계 파이프라인
+Agentic RAG 파이프라인 (검색 → 계산 → 합성 → 인용 검증)
         ↓
-법령 조문 번호까지 명시한 근거 기반 답변
+법령 조문 번호까지 명시하고 자동 검증까지 거친 근거 기반 답변
 ```
 
 - **RAG**: 법령 벡터 DB를 먼저 검색하여 근거 없는 생성 차단
-- **법령 위계 반영**: 법률 → 시행령 → 시행규칙 → 집행기준 우선순위 적용
-- **Agentic**: Gap Analysis로 부족한 부분을 스스로 판단하여 웹검색 보완
+- **법령 위계 반영**: 법률 → 시행령 → 시행규칙 → 유권해석 → 집행기준 우선순위 적용
+- **Agentic**: 세목 분류·검색 범위 축소를 스스로 판단하고, 계산 의도가 있으면 계산기를 직접 실행하며, 검색 유사도가 부족하면 웹검색으로 보완
+- **인용 검증**: 답변 생성 후 조문 인용과 계산 수치를 실제 근거와 자동 대조하는 후처리 단계
 - **로컬 LLM**: 세무 데이터를 외부 API에 전송하지 않고 온프레미스에서 처리
 
 ---
@@ -71,26 +74,51 @@ Agentic RAG 3단계 파이프라인
 - **PDF 업로드**: 집행기준, 세무 실무자료 등 직접 업로드
   - 파일명 패턴으로 법령 위계 자동 분류 (AI 호출 없이)
   - 800 토큰 청크 분할 + 100 토큰 오버랩
+- **법령해석례(유권해석) 수집**: 국가법령정보 Open API(`target=expc`)로 기획재정부·국세청 등의 유권해석을 수집해 `law_articles`에 `law_type='법령해석례'`로 저장 (법령과 동일한 검색 경로 재사용)
+- **법령 개정 자동 동기화**: 이미 수집된 법령을 재수집해 조문 내용 변경(SHA-256 해시 비교)을 감지하고 구버전을 `is_current=FALSE`로 폐기, 최신 버전만 검색에 노출
 
 ### 하이브리드 검색
 
-- `law_articles`(공식 법령 조문)와 `documents`(업로드 PDF)를 동시 검색
-- 법령 위계 기반 우선순위 정렬로 법률 조문을 최상위에 배치
+- `law_articles`(공식 법령 조문 + 유권해석)와 `documents`(업로드 PDF)를 동시 검색
+- 법령 위계 기반 우선순위 정렬: 법률 → 시행령 → 시행규칙 → 유권해석 → PDF 문서
 - 세목 필터링으로 관련 법령만 검색하여 정확도 향상
+- 키워드로 세목이 명확히 확정되면 분류 LLM 호출 자체를 생략 (지연시간 단축)
 
 ### Agentic RAG 채팅
 
-- **RAG 파이프라인**: 세목 분류 + 멀티쿼리 생성 → 하이브리드 벡터 검색(RRF 병합) → 리랭킹 → 조건부 웹검색 → 최종 합성
+- **RAG 파이프라인**: 세목 분류 + 멀티쿼리 생성 → 하이브리드 벡터 검색(RRF 병합) → 리랭킹 → 조건부 웹검색 → 세금 계산기(조건부) → 최종 합성 → 인용 검증
 - **비교 질문 처리**: "리스 vs 장기렌트"처럼 A vs B를 묻는 질문에 대해 각 항목별 법령 조문을 근거로 비교표 + 명확한 결론 제시
+- **세금 계산기 tool calling**: 질문에서 계산 의도를 감지하면 LLM이 계산기 종류·입력값을 추출해 DB 세율표 기반 계산기를 실행, 계산 과정과 근거 조문을 답변에 반영
+- **인용 검증(citation guard)**: 답변 생성 후 인용된 조문이 실제 검색 근거에 존재하는지, 계산기 결과 금액과 서술이 일치하는지 자동 대조해 근거 없는 인용에는 경고 각주 추가
 - **SSE 스트리밍**: 토큰 단위 실시간 응답, httpx 싱글톤 클라이언트로 연결 재사용, DB 저장은 백그라운드 처리
 - **대화 메모리**: 최근 3턴 컨텍스트 유지, 대화별 독립 세션(conversations 테이블)
-- **Tavily 웹검색**: 국세청·법제처·기획재정부 도메인 중심 최신 자료 보완 (DB 유사도 0.65 미만인 경우에만 실행)
+- **Tavily 웹검색**: 국세청·법제처·기획재정부 도메인 중심 최신 자료 보완 (DB 상위 3개 평균 유사도 0.55 미만인 경우에만 실행)
+
+### 세금 계산기
+
+- 종합소득세·양도소득세·상속세·증여세 4종, DB 세율표(`tax_brackets`/`tax_deductions`) 기반 계산
+- 계산 단계·근거 조문을 함께 반환, 프론트 계산기 화면과 챗봇 tool calling 양쪽에서 재사용
+- **계산기 ↔ 챗봇 왕복 연결**: 챗봇이 계산기를 실행하면 답변에 "계산기에서 조건 바꿔보기" 버튼(입력값 프리필), 계산기 결과에서 "이 결과에 대해 챗봇에게 질문하기" 버튼으로 상호 이동
+
+### 세무 일정 관리
+
+- 사업자 유형(법인/개인 일반과세/개인 간이과세)에 따른 부가가치세·종합소득세·원천세 신고 기한을 규칙 기반으로 계산 (LLM 미사용)
+- 프로필 화면에서 사업자 유형 설정 시 다가오는 신고 기한이 D-day와 함께 표시
+
+### 조문 원문 뷰어
+
+- 답변에 인용된 "[법률] 소득세법 제55조" 등의 조문을 클릭하면 사이드패널에 DB의 조문 원문이 열림
+- 검증된 인용을 눈으로 직접 확인할 수 있는 UX로 "근거 기반 답변"을 체감 가능하게 함
+
+### RAG 품질 평가 도구
+
+- `scripts/eval_rag.py`: 골든 평가셋 기반으로 검색 hit-rate·MRR·세목 분류 정확도·인용 정확도를 측정하고 이전 실행과 자동 비교(회귀 감지)
+- 파라미터(임계값, 프롬프트 등) 변경 시 효과를 수치로 검증 가능
 
 ### 기타
 
 - JWT httpOnly 쿠키 기반 인증
 - React 채팅 UI (마크다운 렌더링)
-- 법령 개정 감지 (content_hash 기반)
 
 ---
 
@@ -117,14 +145,16 @@ graph TD
     D --> E[utils/]
     D --> F[(PostgreSQL<br/>+ pgvector)]
 
-    D -->|Ollama REST API| G[Ollama<br/>qwen3.5:35b-a3b<br/>qwen3-embedding:4b]
+    D -->|Ollama REST API| G[Ollama<br/>qwen3.5:9b<br/>qwen3-embedding:4b]
     D -->|Tavily API| H[Tavily Search]
-    D -->|국가법령정보 API| I[법령정보 Open API]
+    D -->|국가법령정보 API| I[법령정보 Open API<br/>law + expc]
 
     F --> F1[documents<br/>PDF 청크 벡터]
-    F --> F2[law_articles<br/>법령 조문 벡터]
+    F --> F2[law_articles<br/>법령 조문 + 유권해석 벡터]
     F --> F3[chat_logs<br/>대화 메모리]
-    F --> F4[users<br/>인증]
+    F --> F4[users<br/>인증 + 사업자 유형]
+    F --> F5[tax_brackets / tax_deductions<br/>세율표·공제 시드]
+    F --> F6[conversations<br/>대화 세션]
 ```
 
 ### 계층 구조
@@ -157,6 +187,43 @@ HTTP 요청
   → 벡터 저장 완료
 ```
 
+### 법령 개정 자동 동기화 흐름 (`scripts/sync_laws.py`)
+
+```
+law_articles에 이미 수집된 법령 목록 조회 (법령해석례 제외)
+  → 각 법령 재수집 (법령 수집 흐름과 동일한 API 재호출)
+  → 조문번호(article_no) 단위로 이번 수집분의 content_hash 집합 계산
+  → 기존 is_current=TRUE 행 중 이번 수집분 해시 집합에 없는 것만 개정으로 판단해 폐기
+     (같은 조문번호 아래 여러 콘텐츠가 공존할 수 있어 조문 단위가 아닌 그룹 단위로 비교)
+  → 신규/변경분만 임베딩 (--embed 옵션)
+```
+cron·Windows 작업 스케줄러에 등록해 주기 실행하는 것을 전제로 하며, 실패 시 non-zero exit code를 반환합니다.
+
+### 법령해석례(유권해석) 수집 흐름 (`scripts/ingest_interpretations.py`)
+
+```
+국가법령정보 API 키워드 검색 (target=expc)
+  → 법령해석례 일련번호(case_id) 목록 확보
+  → 건별 본문 조회 (질의요지·회답·이유)
+  → 안건명의 「법령명」에서 관련 법령 추출 → 세목 추론
+  → law_articles 테이블 저장 (law_type='법령해석례')
+  → qwen3-embedding:4b 임베딩 생성
+```
+
+### 세금 계산기 tool calling 흐름
+
+```
+질문 입력
+  → 계산 의도 키워드 게이트 (금액 표현 + "얼마"/"계산"/"세액" 등, LLM 호출 없음)
+  → [계산 의도 있음] LLM 1회 호출로 {tool, params} 추출
+     tool: income_tax | capital_gains | inheritance | gift
+  → pydantic 스키마 검증
+  → 계산기 실행 (DB 세율표 조회 → 단계별 계산 → 근거 조문)
+  → 계산 결과를 RAG 컨텍스트에 병합해 최종 답변에 반영
+  → (프론트) 답변에 "계산기에서 조건 바꿔보기" 버튼 노출 → 계산기 화면 프리필
+```
+RAG 검색과 병렬로 실행되어 지연시간을 추가하지 않으며, 실패 시 조용히 RAG-only로 진행합니다.
+
 ### PDF 업로드 흐름
 
 ```
@@ -176,11 +243,12 @@ PDF 업로드
 ```
 질문 입력
   │
-  ├─ [병렬] 세목 분류 + 멀티쿼리 생성 (LLM 1회 호출)
-  │    키워드 매핑으로 세목 확정 → 실패 시 LLM 판단
-  │    법령/조문 관점, 요건/대상 관점, 계산/절차 관점 3개 쿼리 생성
+  ├─ [병렬] 세목 분류 + 멀티쿼리 생성
+  │    키워드로 세목이 하나로 확정 → LLM 호출 없이 원본 쿼리로 바로 검색
+  │    키워드 미확정(0개 또는 다중 매칭) → LLM 1회 호출로 세목 분류 + 멀티쿼리 3개 생성
   │    (비교 질문이면 각 옵션별 쿼리 별도 생성)
-  └─ [병렬] 대화 메모리 조회 (최근 3턴, conversation_id 기준)
+  ├─ [병렬] 대화 메모리 조회 (최근 3턴, conversation_id 기준)
+  └─ [병렬] 세금 계산기 실행 (계산 의도 감지 시에만 — 아래 "세금 계산기 tool calling" 참고)
   │
   → 멀티쿼리 임베딩 (qwen3-embedding:4b)
   → 하이브리드 벡터 검색 (law_articles + documents 동시 검색)
@@ -189,16 +257,23 @@ PDF 업로드
      0순위: 법률    (law_articles, law_type=법률)
      1순위: 시행령  (law_articles, law_type=대통령령)
      2순위: 시행규칙 (law_articles, law_type=총리령/부령)
-     3~7순위: PDF 문서 (category 기준)
+     3순위: 유권해석 (law_articles, law_type=법령해석례) / 법령 PDF
+     4~7순위: 시행령·시행규칙 PDF, 집행기준, 기타 PDF (category 기준)
   → 리랭킹 (RERANK_MODEL 설정 시 Ollama /api/rerank 호출)
   │
-  ├─ [조건부] 웹검색 (DB 최고 유사도 < 0.65인 경우만)
+  ├─ [조건부] 웹검색 (DB 상위 3개 평균 유사도 < 0.55인 경우만)
   │    Tavily 검색 (nts.go.kr, law.go.kr, moef.go.kr)
   │
-  └─ 최종 답변 합성 (SSE 스트리밍)
-       내부 DB 법령 + 웹검색 결과 통합
-       → 토큰 단위 스트리밍 출력
-       → 대화 메모리 저장 (백그라운드 비동기 처리)
+  ├─ 최종 답변 합성 (SSE 스트리밍)
+  │    내부 DB 법령 + 웹검색 결과 + 계산기 결과 통합
+  │    → 토큰 단위 스트리밍 출력
+  │
+  ├─ 인용 검증(citation guard)
+  │    답변 속 [법률]/[시행령]/[시행규칙] 인용이 검색 근거에 실존하는지 대조
+  │    계산기 실행 시 답변 속 금액이 계산 결과와 일치하는지 대조
+  │    불일치 시 답변 하단에 경고 각주 추가
+  │
+  └─ 대화 메모리 저장 (백그라운드 비동기 처리)
 ```
 
 ### 법령 위계 원칙
@@ -208,7 +283,8 @@ PDF 업로드
 | 1 | 법률 | 최상위 근거, 반드시 인용 |
 | 2 | 시행령 (대통령령) | 법령의 위임 사항, 구체적 기준 |
 | 3 | 시행규칙 (총리령·부령) | 시행령의 위임 사항, 세부 절차 |
-| 4 | 집행기준·실무자료 | 행정 해석, 참고용 (법적 구속력 없음) |
+| 4 | 유권해석 (법령해석례) | 기획재정부·국세청 등 행정 해석, 법령과 충돌 시 법령 우선 |
+| 5 | 집행기준·실무자료 | 참고용 (법적 구속력 없음) |
 
 세법 일반 원칙도 프롬프트에 반영합니다.
 - **특별법 우선**: 조세특례제한법이 일반 세법보다 우선 적용
@@ -225,7 +301,7 @@ PDF 업로드
 | 프론트엔드 | React 18, Vite |
 | 데이터베이스 | PostgreSQL 17 + pgvector |
 | 인증 | JWT, httpOnly 쿠키, bcrypt |
-| LLM | Ollama qwen3.5:35b-a3b (로컬) |
+| LLM | Ollama qwen3.5:9b (로컬) |
 | 임베딩 | Ollama qwen3-embedding:4b (2560차원, 로컬) |
 | 웹검색 | Tavily Search API |
 | 법령 API | 국가법령정보 Open API |
@@ -244,41 +320,71 @@ tax-assistant/
 ├── config.py                    # 환경변수 중앙 관리 (dotenv)
 │
 ├── scripts/
-│   └── ingest_laws.py           # 법령 수집 CLI (수집/임베딩/재수집)
+│   ├── ingest_laws.py            # 법령 수집 CLI (수집/임베딩/재수집)
+│   ├── ingest_interpretations.py # 법령해석례(유권해석) 수집 CLI
+│   ├── sync_laws.py              # 법령 개정 자동 동기화 CLI (cron 등록 대상)
+│   ├── backfill_law_type.py      # law_type 일괄 보정 (일회성 데이터 보정)
+│   └── eval_rag.py               # RAG 품질 평가 CLI (골든셋 기반 hit-rate/MRR 측정)
 │
 ├── db/
-│   └── init.sql                 # DB 초기화 (users, documents, chat_logs, law_articles 전체 스키마)
+│   ├── init.sql                  # DB 초기화 (users, documents, chat_logs, law_articles, conversations)
+│   └── migrations/                # 001~005: 계산기 세율표, 프로필 필드, 대화 세션, 법령명 수정, 사업자 유형
+│
+├── tests/
+│   ├── test_*.py                 # 단위·API 테스트 (pytest)
+│   └── eval/
+│       ├── golden_qa.json        # RAG 품질 평가용 골든 질문셋
+│       └── results/              # eval_rag.py 실행 결과 이력 (회귀 비교용)
 │
 ├── frontend/                    # React 프론트엔드 (Vite)
 │   └── src/
-│       ├── api/                 # FastAPI 호출 함수 (chatApi, uploadApi, authApi)
-│       ├── hooks/               # 상태 관리 커스텀 훅 (useChat, useAuth)
+│       ├── api/                  # FastAPI 호출 함수 (chatApi, calculatorApi, lawApi, taxScheduleApi 등)
+│       ├── hooks/                # 상태 관리 커스텀 훅 (useChat, useAuth, useConversations)
 │       └── components/
-│           ├── Chat/            # 채팅 UI (ChatArea, ChatInput, MessageBubble)
-│           └── Sidebar/         # PDF 업로드, 파일 목록
+│           ├── Chat/             # 채팅 UI (ChatArea, ChatInput, MessageBubble, ArticleViewer)
+│           ├── Calculator/       # 세금 계산기 화면 (CalculatorScreen, ResultCard)
+│           ├── Profile/          # 프로필 + 세무 일정 위젯 (ProfileScreen)
+│           ├── Sidebar/          # 화면 전환, PDF 업로드, 파일 목록
+│           └── Auth/             # 로그인/회원가입
 │
 └── app/
-    ├── routers/                 # HTTP 수신, 입력 검증, 인증 확인
-    │   ├── auth.py              # POST /api/auth/signup, /login, /logout
-    │   ├── chat.py              # POST /api/chat, /api/chat/stream
-    │   └── upload.py            # POST /api/upload
+    ├── routers/                  # HTTP 수신, 입력 검증, 인증 확인
+    │   ├── auth.py               # POST /api/auth/signup, /login, /logout
+    │   ├── users.py              # GET·PATCH·DELETE /api/users/me
+    │   ├── conversations.py      # 대화 세션 CRUD
+    │   ├── chat.py               # POST /api/chat, /api/chat/stream
+    │   ├── upload.py             # POST /api/upload, 문서 목록/삭제
+    │   ├── calculator.py         # POST /api/calculator/{income-tax,capital-gains,inheritance,gift}
+    │   ├── law.py                # GET /api/law-articles/lookup (조문 원문 뷰어)
+    │   └── tax_schedule.py       # GET /api/tax-schedule
     │
-    ├── services/                # 비즈니스 로직
-    │   ├── auth_service.py      # 이메일 중복, bcrypt 해싱, JWT 발급
-    │   ├── chat_service.py      # 3단계 Agentic RAG 파이프라인, 스트리밍
-    │   ├── upload_service.py    # PDF 파싱 → 분류 → 청크 → 임베딩 → 저장
+    ├── services/                 # 비즈니스 로직
+    │   ├── auth_service.py       # 이메일 중복, bcrypt 해싱, JWT 발급, 프로필 조회/수정
+    │   ├── chat_service.py       # Agentic RAG 파이프라인, 스트리밍, 세목 키워드 매칭
+    │   ├── citation_guard.py     # 답변 인용·계산 수치 검증 후처리
+    │   ├── tax_schedule_service.py  # 사업자 유형별 신고 기한 규칙 기반 계산
+    │   ├── upload_service.py     # PDF 파싱 → 분류 → 청크 → 임베딩 → 저장
+    │   ├── calculator/
+    │   │   ├── income_tax.py / capital_gains.py / inheritance.py / gift_tax.py  # 세목별 계산 로직
+    │   │   ├── engine.py         # 챗봇 tool calling — 계산 의도 감지·파라미터 추출·실행
+    │   │   ├── repository.py    # tax_brackets/tax_deductions 조회
+    │   │   └── updater.py       # 법령 개정 감지 시 세율표 자동 갱신 (LLM 추출)
+    │   ├── search/
+    │   │   ├── hybrid_search_service.py  # law_articles + documents 하이브리드 검색, 조문 원문 조회
+    │   │   └── web_search.py     # Tavily 웹검색 클라이언트
     │   └── law/
-    │       ├── api_service.py       # 국가법령정보 API 클라이언트
-    │       ├── parser_service.py    # 법령 XML 조문 파싱
-    │       ├── ingestion_service.py # 법령 수집·저장·임베딩 파이프라인
-    │       └── hybrid_search_service.py  # law_articles + documents 하이브리드 검색
+    │       ├── api_service.py         # 국가법령정보 API 클라이언트 (법령 + 법령해석례)
+    │       ├── parser_service.py      # 법령 XML 조문 파싱
+    │       ├── ingestion_service.py   # 법령 수집·저장·임베딩·개정 감지 파이프라인
+    │       └── interpretation_service.py  # 법령해석례(유권해석) 수집·저장 파이프라인
     │
-    ├── utils/                   # 공통 유틸
-    │   ├── jwt.py               # JWT 생성·검증, httpOnly 쿠키 설정
-    │   ├── embeddings.py        # Ollama 임베딩 API 호출 (싱글턴 클라이언트)
-    │   └── pdf.py               # PDF 텍스트 추출, tiktoken 청크 분할
+    ├── schemas/                  # pydantic 요청/응답 모델
+    ├── utils/                    # 공통 유틸
+    │   ├── jwt.py                # JWT 생성·검증, httpOnly 쿠키 설정
+    │   ├── embeddings.py         # Ollama 임베딩 API 호출 (싱글턴 클라이언트)
+    │   └── pdf.py                # PDF 텍스트 추출, tiktoken 청크 분할
     │
-    └── database.py              # asyncpg 커넥션 풀 싱글턴
+    └── database.py               # asyncpg 커넥션 풀 싱글턴
 ```
 
 ---
@@ -308,8 +414,12 @@ JWT_EXPIRE_MIN=1440
 
 # Ollama
 OLLAMA_BASE_URL=http://localhost:11434
-CHAT_MODEL=qwen3.5:35b-a3b
+CHAT_MODEL=qwen3.5:9b
 EMBED_MODEL=qwen3-embedding:4b
+# 모든 chat 호출에서 동일해야 함 — 값이 다르면 Ollama가 호출마다 모델을 리로드함
+OLLAMA_NUM_CTX=6144
+# 유휴 시 모델 언로드 방지 (-1 = 무제한 유지, 콜드 스타트 방지)
+OLLAMA_KEEP_ALIVE_SEC=-1
 
 # 외부 API (선택)
 TAVILY_API_KEY=tvly-xxxxxxxxxxxxxxxx
@@ -321,7 +431,7 @@ LAW_API_KEY=your-law-api-key-here
 ### 2단계: Ollama 모델 설치
 
 ```bash
-ollama pull qwen3.5:35b-a3b
+ollama pull qwen3.5:9b
 ollama pull qwen3-embedding:4b
 ```
 
@@ -332,7 +442,15 @@ ollama pull qwen3-embedding:4b
 docker compose up -d
 ```
 
-> 컨테이너 최초 생성 시 `db/init.sql`이 자동으로 실행되어 전체 스키마가 구성됩니다.
+> 컨테이너 최초 생성 시 `db/init.sql`이 자동으로 실행되어 기본 스키마(users, documents, chat_logs, law_articles)가 구성됩니다.
+> `db/migrations/*.sql`은 자동 적용되지 않으므로 번호 순서대로 수동 실행해야 합니다 (계산기 세율표, 대화 세션, 사업자 유형 필드 등).
+
+```bash
+# 001~005를 순서대로 적용
+for f in db/migrations/0*.sql; do
+  docker exec -i tax_pgvector psql -U postgres -d tax_db < "$f"
+done
+```
 
 ### 4단계: 법령 데이터 수집 (선택)
 
@@ -345,6 +463,13 @@ python scripts/ingest_laws.py --embed
 
 # 특정 법령 1개만 테스트
 python scripts/ingest_laws.py --law 소득세법 --embed
+
+# 법령해석례(유권해석) 수집 — 세무 관련 키워드 지정
+python scripts/ingest_interpretations.py --query 소득세 --embed
+python scripts/ingest_interpretations.py --all-tax-keywords --embed
+
+# 법령 개정 자동 동기화 (cron·작업 스케줄러 등록 권장)
+python scripts/sync_laws.py --embed
 ```
 
 ### 5단계: 백엔드 실행
@@ -397,12 +522,21 @@ tests/test_api_auth.py::test_signup_duplicate_email_returns_409 PASSED
 ### 특정 파일만 실행
 
 ```bash
-pytest tests/test_parser.py -v       # XML 파싱 로직
-pytest tests/test_ingestion.py -v    # 수집 유틸
-pytest tests/test_jwt.py -v          # JWT 토큰
-pytest tests/test_api_auth.py -v     # 인증 API
-pytest tests/test_api_upload.py -v   # 업로드 API
-pytest tests/test_api_chat.py -v     # 채팅 API
+pytest tests/test_parser.py -v              # XML 파싱 로직
+pytest tests/test_ingestion.py -v           # 수집·개정 감지 유틸
+pytest tests/test_api_service.py -v         # 국가법령정보 API XML 파싱 (법령 + 법령해석례)
+pytest tests/test_interpretation_service.py -v  # 유권해석 수집 파이프라인
+pytest tests/test_hybrid_search_priority.py -v  # 법령 위계 우선순위 분류
+pytest tests/test_calculator.py -v          # 세금 계산기 4종 (소득세·양도세·상속세·증여세)
+pytest tests/test_calculator_engine.py -v   # 계산기 tool calling 엔진
+pytest tests/test_citation_guard.py -v      # 답변 인용·수치 검증 후처리
+pytest tests/test_tax_schedule.py -v        # 세무 일정 계산
+pytest tests/test_jwt.py -v                 # JWT 토큰
+pytest tests/test_api_auth.py -v            # 인증 API
+pytest tests/test_api_upload.py -v          # 업로드 API
+pytest tests/test_api_chat.py -v            # 채팅 API
+pytest tests/test_api_law.py -v             # 조문 원문 뷰어 API
+pytest tests/test_api_tax_schedule.py -v    # 세무 일정 API
 ```
 
 ### 실패한 테스트만 재실행
@@ -415,14 +549,38 @@ pytest --lf
 
 | 파일 | 테스트 대상 | 비고 |
 |------|-------------|------|
-| `test_parser.py` | XML 파싱, 조문번호 포맷, 텍스트 정규화 | DB·외부 의존 없음 |
-| `test_ingestion.py` | SHA-256 해시, 세목 추론, 임베딩 텍스트 빌드 | DB·외부 의존 없음 |
+| `test_parser.py` | XML 파싱, 조문번호 포맷, law_type 태그(법종구분) 파싱 | DB·외부 의존 없음 |
+| `test_ingestion.py` | SHA-256 해시, 세목 추론, 개정 감지(`_supersede_stale_versions`) | DB·외부 의존 없음 |
+| `test_api_service.py` | 법령/법령해석례 검색·본문조회 XML 파싱 | DB·외부 의존 없음 |
+| `test_interpretation_service.py` | 유권해석 수집·세목 추론·본문 조합 | DB·외부 의존 없음 (API/DB mock) |
+| `test_hybrid_search_priority.py` | law_type → (우선순위, source_type) 분류 | DB·외부 의존 없음 |
+| `test_calculator.py` | 세금 계산기 4종 세율 구간·공제 로직 | 시드 데이터 mock |
+| `test_calculator_engine.py` | 계산 의도 게이트, LLM 추출 파싱, 도구 디스패치 | LLM mock |
+| `test_citation_guard.py` | 조문 인용 실존 검증, 계산 금액 일치 검증 | DB·외부 의존 없음 |
+| `test_tax_schedule.py` | 사업자 유형별 신고 기한 계산 | DB·외부 의존 없음 |
 | `test_jwt.py` | JWT 토큰 생성 및 클레임 검증 | DB·외부 의존 없음 |
 | `test_api_auth.py` | 회원가입·로그인 유효성 검사 및 응답 코드 | 서비스 레이어 mock |
 | `test_api_upload.py` | 인증 확인(401), 파일 형식 검사(400), 정상 업로드 | 서비스 레이어 mock |
-| `test_api_chat.py` | 인증 확인(401), 유효성 검사(422), 정상 응답 | 서비스 레이어 mock |
+| `test_api_chat.py` | 인증 확인(401), 유효성 검사(422), 계산기 메타데이터·스트리밍 이벤트 | 서비스 레이어 mock |
+| `test_api_law.py` | 조문 원문 뷰어 조회(200)·404 | 서비스 레이어 mock |
+| `test_api_tax_schedule.py` | 인증 확인(401), 사업자 유형별 일정 응답 | 서비스 레이어 mock |
 
 > API 테스트는 실제 DB·Ollama 없이 실행됩니다. 서비스 레이어를 mock으로 대체하여 HTTP 계층의 동작을 검증합니다.
+> `test_chat_service.py`, `test_hybrid_search.py`는 리팩터링 이전 경로/시그니처를 참조하는 파일이라 현재 실행에서 제외되어 있습니다(향후 정리 대상).
+
+### RAG 품질 평가 (골든셋 기반)
+
+```bash
+# 골든셋 각 질문의 실제 검색 후보 채우기 (정답 확정 전 단계)
+python scripts/eval_rag.py --build
+
+# 검색 hit-rate·MRR·세목 분류 정확도 측정 (이전 실행과 자동 비교)
+python scripts/eval_rag.py --eval
+
+# + 실제 답변 생성 후 인용 정확도까지 확인 (느림)
+python scripts/eval_rag.py --eval --with-answer
+```
+결과는 `tests/eval/results/`에 타임스탬프 파일로 누적되어 파라미터 변경(임계값, 프롬프트 등) 전후 효과를 수치로 비교할 수 있습니다.
 
 ---
 
@@ -435,10 +593,12 @@ pytest --lf
 | `JWT_EXPIRE_MIN` | — | `1440` | JWT 만료 시간 (분, 기본 24시간) |
 | `COOKIE_SECURE` | — | `false` | `true` 설정 시 HTTPS 전용 쿠키 (운영 환경에서 활성화) |
 | `OLLAMA_BASE_URL` | — | `http://localhost:11434` | Ollama 서버 URL |
-| `CHAT_MODEL` | — | `qwen3.5:35b-a3b` | 답변 생성 LLM 모델명 |
+| `CHAT_MODEL` | — | `qwen3.5:9b` | 답변 생성 LLM 모델명 |
 | `EMBED_MODEL` | — | `qwen3-embedding:4b` | 임베딩 모델명 |
 | `RERANK_MODEL` | — | — | 리랭킹 모델명 (예: `bge-reranker-v2-m3`, 비워두면 리랭킹 비활성화) |
 | `THINK_ENABLED` | — | `false` | Qwen3 계열 모델의 Think 모드 활성화 |
+| `OLLAMA_NUM_CTX` | — | `6144` | 모든 chat 호출의 컨텍스트 길이 — 호출마다 값이 다르면 Ollama가 매번 모델을 리로드함 |
+| `OLLAMA_KEEP_ALIVE_SEC` | — | `-1` | 유휴 시 모델 언로드까지 대기시간(초). `-1`은 무제한 유지(콜드 스타트 방지) |
 | `EMBED_DIM` | — | `2560` | 임베딩 차원 수 (모델과 DB 일치 필수) |
 | `SIMILARITY_THRESHOLD` | — | `0.4` | 검색 결과 최소 유사도 (0~1, 낮출수록 더 많은 결과 반환) |
 | `MAX_UPLOAD_MB` | — | `50` | PDF 업로드 최대 크기 (MB) |
@@ -454,8 +614,8 @@ pytest --lf
 | POST | `/api/auth/signup` | 회원가입 | 불필요 |
 | POST | `/api/auth/login` | 로그인 (httpOnly 쿠키 발급) | 불필요 |
 | POST | `/api/auth/logout` | 로그아웃 (쿠키 삭제) | 불필요 |
-| GET | `/api/users/me` | 내 프로필 조회 | ✅ 필요 |
-| PATCH | `/api/users/me` | 프로필 수정 (이름·전화번호) | ✅ 필요 |
+| GET | `/api/users/me` | 내 프로필 조회 (사업자 유형 포함) | ✅ 필요 |
+| PATCH | `/api/users/me` | 프로필 수정 (이름·전화번호·사업자 유형) | ✅ 필요 |
 | PATCH | `/api/users/me/password` | 비밀번호 변경 | ✅ 필요 |
 | DELETE | `/api/users/me` | 회원 탈퇴 | ✅ 필요 |
 | GET | `/api/conversations` | 대화 목록 조회 (최근 50개) | ✅ 필요 |
@@ -466,8 +626,14 @@ pytest --lf
 | POST | `/api/upload` | PDF 업로드 및 벡터 저장 | ✅ 필요 |
 | GET | `/api/documents` | 내가 업로드한 파일 목록 | ✅ 필요 |
 | DELETE | `/api/documents/{filename}` | 파일 삭제 (전체 청크 제거) | ✅ 필요 |
-| POST | `/api/chat` | 채팅 질문 (일반 응답) | ✅ 필요 |
-| POST | `/api/chat/stream` | 채팅 질문 (SSE 스트리밍) | ✅ 필요 |
+| POST | `/api/chat` | 채팅 질문 (일반 응답, 계산기 메타데이터 포함) | ✅ 필요 |
+| POST | `/api/chat/stream` | 채팅 질문 (SSE 스트리밍, `chunk`/`calc` 이벤트) | ✅ 필요 |
+| POST | `/api/calculator/income-tax` | 종합소득세 계산 | ✅ 필요 |
+| POST | `/api/calculator/capital-gains` | 양도소득세 계산 | ✅ 필요 |
+| POST | `/api/calculator/inheritance` | 상속세 계산 | ✅ 필요 |
+| POST | `/api/calculator/gift` | 증여세 계산 | ✅ 필요 |
+| GET | `/api/law-articles/lookup` | 법령명·조문번호로 조문 원문 조회 (조문 뷰어) | ✅ 필요 |
+| GET | `/api/tax-schedule` | 사업자 유형 기준 다가오는 신고·납부 기한 | ✅ 필요 |
 | GET | `/api/health` | 서버·DB 상태 확인 | 불필요 |
 
 > 자동 생성 API 문서: `http://localhost:8000/docs`
@@ -495,26 +661,36 @@ pytest --lf
 # 세무 절차
 "경정청구 기한은 얼마나 되나요?"
 "세금계산서 발급 의무가 없는 경우는 어떤 경우인가요?"
+
+# 계산 질문 (세금 계산기 tool calling 자동 실행)
+"연소득 5천만원 프리랜서인데 종합소득세 얼마나 내야 해?"
+"아버지한테 3억 증여받으면 증여세 얼마야?"
+"10년 보유한 아파트를 12억에 팔고 취득가는 7억이면 양도세 계산해줘"
 ```
 
 ### 답변 구조
 
 ```markdown
 ## 1. 💡 결론
-핵심 답변 요약
+핵심 답변 요약 (계산 질문이면 결정세액 포함)
 
 ## 2. 📖 상세 설명
-법령 조문에 근거한 상세 설명
+법령 조문에 근거한 상세 설명 (계산 질문이면 계산 단계 표 포함)
 
 ## 3. ⚖️ 법적 근거
 [법률] 소득세법 제20조 - 근로소득
 [시행령] 소득세법 시행령 제47조
+[유권해석] 10-0075 - 부당해고기간 임금 상당액의 근로소득 해당 여부
 
 ## 4. ⚡ 실무 주의사항
 실무에서 주의할 점
 
 ## 📋 근거 출처 목록
 내부 DB와 웹검색 결과 출처 목록
+
+---
+⚠️ 자동 검증 결과 (인용 검증 실패 시에만 표시)
+검색 자료에서 확인되지 않은 인용이 있으면 여기에 경고가 추가됩니다.
 ```
 
 ---
@@ -530,7 +706,8 @@ pytest --lf
 
 질문에서 세목 키워드를 먼저 감지하고 해당 세목 문서만 검색합니다.
 소득세법(연말정산·퇴직소득 등), 부가가치세법(세금계산서·영세율 등), 법인세법(손금·결손금·업무용승용차 등), 조세특례제한법(투자세액공제·고용증대 등), 국세기본법(심판청구·기한후신고 등) 등 22개 세목에 걸쳐 실무 용어까지 포괄합니다.
-키워드 매칭 실패 시에만 LLM을 호출(세목 분류 + 멀티쿼리 생성 1회 통합 호출)하여 불필요한 연산을 최소화합니다.
+같은 위치에서 여러 세목 키워드가 겹치면(예: "체납" vs "지방세 체납") 더 긴(구체적인) 키워드만 채택해 불필요한 다중 매칭을 줄입니다.
+키워드로 세목이 하나로 확정되면 분류 LLM 호출 자체를 생략하고, 매칭 실패(0개 또는 다중 매칭) 시에만 LLM을 호출(세목 분류 + 멀티쿼리 생성 1회 통합 호출)합니다.
 
 ### 비교 질문(A vs B) 처리
 
@@ -542,14 +719,14 @@ pytest --lf
 법제처 표준 파일명 패턴(`(법률)`, `(대통령령)`, `(부령)`)을 감지하면 AI 없이 즉시 분류합니다.
 AI 호출은 파일명으로 분류가 불가능한 경우에만 실행됩니다.
 
-### Gap Analysis 기반 조건부 웹검색
+### 유사도 기반 조건부 웹검색
 
-1차 답변에서 "근거 없음", "전문가 확인 권장" 구간을 탐지해 웹검색 필요 여부를 판단합니다.
-검색이 필요한 경우에만 Tavily API를 호출하여 불필요한 외부 요청을 방지합니다.
+하이브리드 검색 결과의 상위 3개 평균 유사도가 임계값(`_WEB_SEARCH_THRESHOLD`, 기본 0.55) 미만인 경우에만 Tavily 웹검색을 실행합니다.
+DB 검색만으로 충분한 질문에서는 불필요한 외부 요청과 지연을 방지합니다.
 
 ### 비동기 병렬 처리
 
-세목 분류와 대화 메모리 조회는 `asyncio.gather`로 병렬 실행합니다.
+세목 분류/멀티쿼리 생성, 대화 메모리 조회, 세금 계산기 실행은 `asyncio.gather`/`asyncio.create_task`로 병렬 실행합니다.
 하이브리드 검색에서 `law_articles`와 `documents` 두 테이블도 동시에 쿼리합니다.
 Tavily 다중 쿼리도 병렬로 처리하여 대기 시간을 줄입니다.
 
@@ -558,12 +735,37 @@ Tavily 다중 쿼리도 병렬로 처리하여 대기 시간을 줄입니다.
 최종 답변은 Ollama `stream: true` 모드로 토큰 단위 실시간 전송합니다.
 `<think>` 태그는 스트리밍 중 버퍼 최소화 방식으로 실시간 필터링합니다(TTFT 개선).
 httpx 싱글톤 클라이언트를 재사용하여 매 요청마다 TCP 연결을 새로 열지 않습니다.
+스트리밍 이벤트는 `{"type": "chunk", "text": ...}` / `{"type": "calc", "tool": ..., "params": ...}` 형태로 구분되어, 텍스트와 계산기 메타데이터(프론트 프리필용)를 함께 전달합니다.
 스트리밍 완료 후 DB 저장(`_save_history`)은 `asyncio.create_task`로 백그라운드 처리하여 클라이언트 연결을 즉시 종료합니다.
 
-### 법령 개정 감지
+### 세금 계산기 tool calling
+
+질문에서 계산 의도를 감지(금액 표현 + "얼마"/"계산" 등 키워드 게이트, LLM 호출 없음)하면 LLM 1회 호출로 계산기 종류와 입력값을 JSON으로 추출합니다.
+pydantic 스키마로 검증 후 DB 세율표 기반 계산기를 실행하며, RAG 검색과 병렬로 처리되어 지연시간을 추가하지 않습니다.
+계산 결과(단계별 금액, 근거 조문)는 최종 답변 프롬프트에 병합되고, 프론트에는 계산기 화면 프리필용 메타데이터가 별도로 전달됩니다.
+
+### 인용 검증(citation guard) 후처리
+
+LLM은 법조문 번호나 계산 수치를 프롬프트 지시만으로 완벽히 지키지 않습니다.
+답변 생성 후 `[법률]`/`[시행령]`/`[시행규칙]` 인용을 정규식으로 추출해 실제 검색 컨텍스트(+계산기 결과)에 존재하는지 대조하고, 계산기 실행 시 답변 속 금액이 계산 결과의 최종 금액과 일치하는지도 확인합니다.
+불일치가 있으면 답변을 임의로 고치지 않고 하단에 경고 각주만 추가해 사용자가 직접 판단하게 합니다.
+
+### 법령 개정 자동 동기화
 
 조문 텍스트의 SHA-256 해시를 `content_hash`로 저장합니다.
-같은 법령·조문번호라도 해시가 다르면 개정으로 판단하여 `is_current=FALSE` 처리 후 신규 삽입합니다.
+`scripts/sync_laws.py`가 이미 수집된 법령을 재수집해 (법령명, 조문번호) 그룹 단위로 이번 수집분의 해시 집합을 계산하고, 그 집합에 없는 기존 `is_current=TRUE` 행만 개정으로 판단해 폐기합니다.
+그룹 단위로 비교하는 이유는, 국가법령정보 API가 절/관 표제를 조문번호 없이 다음 조문과 같은 번호로 내려주는 경우가 있어 한 건씩 비교하면 정상 콘텐츠끼리 서로를 잘못 폐기시키기 때문입니다.
+
+### 법령해석례(유권해석) 수집
+
+국가법령정보 Open API의 `target=expc`(법령해석례 검색/본문조회) 엔드포인트로 기획재정부·국세청 등의 유권해석을 수집합니다.
+안건명에 포함된 「법령명」에서 관련 법령을 추출해 세목을 추론하고, `law_articles`에 `law_type='법령해석례'`로 저장해 기존 하이브리드 검색·우선순위 로직을 그대로 재사용합니다.
+
+### RAG 성능 최적화
+
+Ollama는 `num_ctx`가 요청마다 다르면 모델을 리로드하고(호출당 수 초), 유휴 상태가 지속되면 모델을 언로드합니다(콜드 스타트 시 수십 초).
+모든 chat 호출에서 `num_ctx`를 동일한 값으로 고정하고 `keep_alive=-1`을 요청 최상위 필드로 전달해 모델이 항상 상주하도록 합니다.
+키워드로 세목이 하나로 확정되는 질문은 분류 LLM 호출 자체를 생략하고 원본 쿼리로 바로 검색합니다.
 
 ---
 
@@ -624,6 +826,16 @@ ValueError: 임베딩 차원 불일치: 예상 2560, 실제 768
 # 모델 변경 시 DB를 재초기화하거나 EMBED_DIM을 맞춰야 함
 ```
 
+### 답변이 비거나 응답이 비정상적으로 느림
+```
+매 요청마다 모델이 다시 로드되는 것처럼 느림 / 가끔 빈 답변
+```
+```bash
+# 1. .env의 OLLAMA_NUM_CTX가 모든 호출에서 동일한지 확인 (다르면 매번 리로드)
+# 2. OLLAMA_KEEP_ALIVE_SEC=-1로 설정해 유휴 언로드 방지
+# 3. ollama ps로 모델이 실제로 상주하고 있는지 확인
+ollama ps
+```
 
 ---
 
@@ -633,8 +845,10 @@ ValueError: 임베딩 차원 불일치: 예상 2560, 실제 768
 |------|-----------|
 | 스캔 PDF 미지원 | pytesseract, AWS Textract 연동 |
 | 토큰 기준 청크 분할 | `RecursiveCharacterTextSplitter`로 문장 경계 보완 |
-| 법령 개정 수동 재수집 | 주기적 자동 동기화 스케줄러 추가 |
-| 세목 중복 키워드 히트 | 첫 번째 매칭 세목만 선택 → 복수 세목 교차 질문 시 정확도 저하 가능 |
+| 법령 XML의 절/관 표제가 조문번호 없이 다음 조문과 같은 번호를 공유 | 파서에서 구조적 표제와 실제 조문을 구분하는 로직 필요 (현재는 검색·개정감지 단계에서 증상만 우회 처리) |
+| 유권해석 안건명에서 관련 법령을 첫 번째 「」만 추출 | 본문 전체를 분석해 가장 관련도 높은 법령을 선택하도록 개선 여지 |
+| 업로드 문서 자동 파싱(원천징수영수증 등 → 계산기 자동 입력) 미지원 | OCR + 정형 문서 필드 추출 파이프라인 추가 |
+| `test_chat_service.py`, `test_hybrid_search.py`가 리팩터링 이전 경로를 참조 | 임포트 경로·시그니처 갱신 필요 (현재 pytest 실행에서 제외) |
 
 
 ---

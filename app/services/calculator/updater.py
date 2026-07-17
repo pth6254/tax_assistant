@@ -5,7 +5,7 @@ from datetime import date
 
 import httpx
 
-from config import CHAT_MODEL, OLLAMA_BASE_URL
+from config import CHAT_MODEL, OLLAMA_BASE_URL, OLLAMA_KEEP_ALIVE, OLLAMA_NUM_CTX
 from app.database import get_pool
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ _CHAT_URL = f"{OLLAMA_BASE_URL}/api/chat"
 
 _TARGET_ARTICLES = {
     "소득세법": {"제55조": "소득세"},
-    "상속세및증여세법": {"제26조": "상속세"},
+    "상속세 및 증여세법": {"제26조": "상속세"},
 }
 
 _EXTRACT_PROMPT = (
@@ -36,7 +36,9 @@ async def _call_ollama_extract(article_text: str) -> list[dict] | None:
                         {"role": "user", "content": article_text},
                     ],
                     "stream": False,
-                    "options": {"temperature": 0.0, "num_predict": 500, "think": False},
+                    "think": False,
+                    "keep_alive": OLLAMA_KEEP_ALIVE,
+                    "options": {"temperature": 0.0, "num_predict": 500, "num_ctx": OLLAMA_NUM_CTX},
                 },
             )
             resp.raise_for_status()

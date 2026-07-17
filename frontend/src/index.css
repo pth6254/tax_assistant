@@ -117,6 +117,16 @@ select:focus {
   border-bottom: 1px solid var(--border);
   color: var(--text);
 }
+.citation-link {
+  cursor: pointer;
+  border-bottom: 1px dashed var(--accent2);
+  color: var(--accent2);
+  transition: background .15s;
+  border-radius: 3px;
+}
+.citation-link:hover {
+  background: rgba(79,124,255,.12);
+}
 .markdown-bubble tr:last-child td { border-bottom: none; }
 
 /* ── 버튼 공통 hover ──────────────────────────────────────── */

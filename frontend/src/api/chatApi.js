@@ -10,7 +10,7 @@ export const sendChat = async (query, conversationId) => {
   return data
 }
 
-export const streamChat = async (query, conversationId, onChunk, onDone) => {
+export const streamChat = async (query, conversationId, onChunk, onDone, onCalc) => {
   const res = await fetch('/api/chat/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -36,8 +36,9 @@ export const streamChat = async (query, conversationId, onChunk, onDone) => {
       const payload = line.slice(6)
       if (payload === '[DONE]') { onDone?.(); return }
       try {
-        const { chunk } = JSON.parse(payload)
-        onChunk(chunk)
+        const event = JSON.parse(payload)
+        if (event.type === 'calc') onCalc?.({ tool: event.tool, params: event.params })
+        else if (event.type === 'chunk') onChunk(event.text)
       } catch { /* 파싱 실패 무시 */ }
     }
   }

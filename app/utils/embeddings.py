@@ -5,7 +5,7 @@ OpenAI 클라이언트 대신 Ollama REST API를 직접 호출합니다.
 """
 import httpx
 
-from config import EMBED_MODEL, OLLAMA_BASE_URL
+from config import EMBED_MODEL, OLLAMA_BASE_URL, OLLAMA_KEEP_ALIVE
 
 # Ollama 임베딩 엔드포인트
 _EMBED_URL = f"{OLLAMA_BASE_URL}/api/embed"
@@ -33,6 +33,7 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
         json={
             "model": EMBED_MODEL,
             "input": texts,   # 배치 입력 지원
+            "keep_alive": OLLAMA_KEEP_ALIVE,  # 유휴 언로드 방지 — 재로드 시 chat 모델 스왑 유발
         },
     )
     response.raise_for_status()

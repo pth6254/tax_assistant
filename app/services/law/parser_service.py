@@ -44,7 +44,9 @@ logger = logging.getLogger(__name__)
 
 _BASIC_TAG_CANDIDATES: dict[str, list[str]] = {
     "law_name":       ["법령명_한글", "법령명한글", "법령명"],
-    "law_type":       ["법령종류명",  "법령종류",   "법종류"],
+    # 법령 상세조회(target=law) 응답의 실제 태그는 "법종구분"(예: <법종구분 법종구분코드="A0002">법률</법종구분>).
+    # "법령종류명" 등은 이 태그가 존재하지 않아 매칭되지 않고 항상 빈 문자열을 반환하던 버그.
+    "law_type":       ["법종구분", "법령종류명", "법령종류", "법종류"],
     "effective_date": ["시행일자"],
     "amendment_date": ["공포일자"],
 }

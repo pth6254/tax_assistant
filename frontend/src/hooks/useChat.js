@@ -24,6 +24,15 @@ export const useChat = (conversationId) => {
     })
   }
 
+  const attachCalcToLastMessage = (calc) => {
+    setMessages(prev => {
+      const updated = [...prev]
+      const last    = updated[updated.length - 1]
+      updated[updated.length - 1] = { ...last, calc }
+      return updated
+    })
+  }
+
   const sendMessage = async (query, onDone) => {
     if (!conversationId) return
     setMessages(prev => [...prev,
@@ -36,7 +45,7 @@ export const useChat = (conversationId) => {
       await streamChat(query, conversationId, appendChunkToLastMessage, () => {
         setLoading(false)
         onDone?.()
-      })
+      }, attachCalcToLastMessage)
     } catch (err) {
       setMessages(prev => {
         const updated = [...prev]

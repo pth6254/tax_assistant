@@ -4,7 +4,7 @@ from app.schemas.calculator import CalculationResult, TaxStep
 from app.services.calculator.repository import get_brackets, get_deduction, get_source_articles
 
 
-def __apply_progressive_tax(taxable: int, brackets: list[dict]) -> tuple[int, str]:
+def _apply_progressive_tax(taxable: int, brackets: list[dict]) -> tuple[int, str]:
     """종합소득세 누진세율 적용 (과세표준 × 세율 - 누진공제). (세액, 적용세율) 반환."""
     for b in sorted(brackets, key=lambda x: x['bracket_from'], reverse=True):
         if taxable > b['bracket_from']:
@@ -40,7 +40,7 @@ async def calculate(
 
     brackets = await get_brackets('소득세', 'default')
     if brackets:
-        calculated_tax, rate_desc = __apply_progressive_tax(taxable, brackets)
+        calculated_tax, rate_desc = _apply_progressive_tax(taxable, brackets)
     else:
         calculated_tax, rate_desc = 0, "0%"
         logger.warning("소득세 세율 구간 조회 실패 — 세액 0 처리")
