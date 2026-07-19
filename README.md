@@ -322,6 +322,9 @@ tax-assistant/
 ├── main.py                      # 앱 진입점, 라우터 등록, DB 풀 생명주기
 ├── config.py                    # 환경변수 중앙 관리 (dotenv)
 │
+├── dev/
+│   └── docker-up-wsl.sh          # Windows Ollama 주소 자동 탐지·검증 후 Compose 실행
+│
 ├── scripts/
 │   ├── ingest_laws.py            # 법령 수집 CLI (수집/임베딩/재수집)
 │   ├── ingest_interpretations.py # 법령해석례(유권해석) 수집 CLI
@@ -421,7 +424,7 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5433/tax_db
 JWT_SECRET=your-long-random-secret-here
 JWT_EXPIRE_MIN=1440
 
-# Ollama
+# Ollama — 실행 환경에 따라 아래 "Ollama 연결 설정" 참고
 OLLAMA_BASE_URL=http://localhost:11434
 CHAT_MODEL=qwen3.5:9b
 EMBED_MODEL=qwen3-embedding:4b
@@ -444,10 +447,54 @@ ollama pull qwen3.5:9b
 ollama pull qwen3-embedding:4b
 ```
 
+#### 실행 환경별 Ollama 연결 설정
+
+`OLLAMA_BASE_URL`은 FastAPI가 **어디서 실행되는지**를 기준으로 설정합니다.
+
+| 실행 환경 | 설정 예시 | 설명 |
+|----------|----------|------|
+| Windows에서 FastAPI 직접 실행 | `http://localhost:11434` | FastAPI와 Ollama가 같은 호스트에서 실행 |
+| Windows Ollama + WSL2 Docker | `http://ollama.windows.host:11434` | 실행 스크립트가 현재 Windows IP를 별칭에 자동 연결 |
+| Linux 운영 서버의 Compose Ollama | `http://ollama:11434` | Docker 내부 DNS의 서비스명 사용 권장 |
+| 별도 GPU 추론 서버 | `http://inference.internal:11434` | 사설 DNS 또는 내부 로드밸런서 사용 |
+
+현재 개발 환경은 **Windows에서 Ollama를 실행하고 WSL2에서 Docker를 실행**합니다. WSL2의
+`localhost`는 Windows 호스트가 아니며 NAT 게이트웨이 IP도 재시작 후 달라질 수 있습니다.
+이를 해결하기 위해 전용 실행 스크립트가 매번 현재 주소를 탐지합니다.
+
+```bash
+# venv-wsl 활성화, Windows IP 탐지, Ollama·필수 모델 검사, Compose 실행
+bash dev/docker-up-wsl.sh
+```
+
+스크립트는 탐지한 IP를 `OLLAMA_WINDOWS_IP`로 Compose에 전달하고, 컨테이너에는 고정된
+`ollama.windows.host` 별칭을 등록합니다. 애플리케이션은 변동 가능한 실제 IP를 알 필요가 없습니다.
+
+```text
+WSL 기본 게이트웨이 자동 탐지 (예: 172.x.x.1)
+        ↓
+ollama.windows.host 별칭으로 Compose에 주입
+        ↓
+FastAPI → http://ollama.windows.host:11434
+```
+
+`.env`의 `OLLAMA_BASE_URL=http://localhost:11434`는 Docker 없이 FastAPI를 직접 실행할 때
+사용합니다. Docker 환경에서는 Compose가 위 별칭 주소로 덮어씁니다. 운영 환경에서는 동일한
+설정 인터페이스를 유지하되 Compose 서비스명(`http://ollama:11434`) 또는 사설 DNS를 사용합니다.
+
 ### 3단계: DB 실행 및 자동 마이그레이션
 
 ```bash
-# 전체 서비스 빌드 및 실행
+# 권장: WSL/Ollama 사전검사를 포함한 전체 실행
+bash dev/docker-up-wsl.sh
+```
+
+`docker compose up -d --build`를 직접 실행하면 현재 Windows 주소를 알 수 없으므로 의도적으로
+설정 오류를 반환합니다. 자동 탐지 없이 직접 실행해야 한다면 먼저 `OLLAMA_WINDOWS_IP`를
+명시적으로 export해야 합니다.
+
+```bash
+export OLLAMA_WINDOWS_IP="$(ip -4 route show default | awk 'NR == 1 { print $3 }')"
 docker compose up -d --build
 ```
 
@@ -455,16 +502,26 @@ docker compose up -d --build
 세율 시드가 생성되고, 기존 DB에는 적용되지 않은 revision만 반영됩니다. 마이그레이션이
 실패하면 API 서버는 시작하지 않으므로 불완전한 스키마로 서비스되는 것을 방지합니다.
 
+이 프로젝트는 기존 `asyncpg` 기반 데이터 접근 계층을 유지하면서, 마이그레이션에만
+Alembic + SQLAlchemy + psycopg를 사용합니다. 최초 baseline revision은 기존 SQL 기반 DB를
+데이터 손실 없이 Alembic 관리 체계로 편입하고, 빈 DB에서는 전체 스키마를 생성합니다.
+
 ```bash
 # 현재 적용된 revision 확인
 docker exec tax_backend alembic current
+
+# 코드의 최신 revision 확인
+docker exec tax_backend alembic heads
+
+# 전체 revision 이력 확인
+docker exec tax_backend alembic history
 
 # 새 DB 변경 revision 생성
 docker exec tax_backend alembic revision -m "add new field"
 ```
 
 > 앞으로의 DB 변경은 `db/migrations/*.sql`을 직접 실행하지 않고 새 Alembic revision의
-> `upgrade()`에 작성합니다.
+> `upgrade()`와 `downgrade()`에 작성합니다. 이미 배포된 revision 파일은 수정하지 않습니다.
 
 ### 4단계: 법령 데이터 수집 (선택)
 
@@ -613,7 +670,7 @@ python scripts/eval_rag.py --eval --with-answer --repeat 3
 | `JWT_SECRET` | ✅ | — | JWT 서명 비밀키 (32바이트 이상 권장) |
 | `JWT_EXPIRE_MIN` | — | `1440` | JWT 만료 시간 (분, 기본 24시간) |
 | `COOKIE_SECURE` | — | `false` | `true` 설정 시 HTTPS 전용 쿠키 (운영 환경에서 활성화) |
-| `OLLAMA_BASE_URL` | — | `http://localhost:11434` | Ollama 서버 URL |
+| `OLLAMA_BASE_URL` | — | `http://localhost:11434` | FastAPI 기준 Ollama 주소. WSL2 Docker 개발환경은 Windows 게이트웨이, 운영 Compose는 `http://ollama:11434` 권장 |
 | `CHAT_MODEL` | — | `qwen3.5:9b` | 답변 생성 LLM 모델명 |
 | `EMBED_MODEL` | — | `qwen3-embedding:4b` | 임베딩 모델명 |
 | `RERANK_MODEL` | — | — | 리랭킹 모델명 (예: `bge-reranker-v2-m3`, 비워두면 리랭킹 비활성화) |
@@ -718,6 +775,22 @@ python scripts/eval_rag.py --eval --with-answer --repeat 3
 
 ## 13. 핵심 구현 포인트
 
+### 안전한 DB 버전 관리를 위한 Alembic baseline
+
+기존에는 `db/init.sql`과 번호가 붙은 SQL 파일을 개발자가 수동 적용해, 기존 볼륨에서는
+동작하지만 빈 환경에서 일부 테이블이 누락될 수 있었습니다. Alembic 최초 baseline은 테이블·컬럼
+존재 여부를 검사해 기존 사용자 데이터를 보존하면서 DB를 채택하고, 신규 DB에는 전체 스키마와
+세율 시드를 생성합니다. Docker는 `alembic upgrade head` 성공 후에만 API를 시작하며 CI에서
+revision head가 하나인지 검사합니다. 이를 통해 **신규 설치 재현성, 점진적 스키마 변경,
+배포 실패 조기 차단**을 하나의 흐름으로 통합했습니다.
+
+### 개발·운영 환경을 분리한 Ollama endpoint 설계
+
+애플리케이션은 Ollama 주소를 `OLLAMA_BASE_URL`로 추상화합니다. Windows/WSL2 개발환경에서는
+WSL 기본 게이트웨이로 Windows Ollama에 접근하고, 운영 환경에서는 IP 하드코딩 대신 Docker
+서비스명 또는 사설 DNS를 사용하도록 설계했습니다. 따라서 RAG·계산기 코드를 수정하지 않고도
+로컬 Ollama, Compose GPU 서비스, 별도 추론 서버 사이를 환경설정만으로 전환할 수 있습니다.
+
 ### 하이브리드 검색 (법령 조문 + PDF)
 
 `law_articles`와 `documents` 두 테이블을 동시에 벡터 검색한 뒤 법령 위계 기반 우선순위로 병합합니다.
@@ -813,17 +886,111 @@ Ollama는 `num_ctx`가 요청마다 다르면 모델을 리로드하고(호출�
 
 ## 15. 트러블슈팅
 
-### Ollama 연결 실패
-```
-httpx.ConnectError: [Errno 111] Connection refused
-```
-```bash
-# Ollama 서버 실행 확인
-ollama serve
+### Windows Ollama에 WSL2/Docker 백엔드가 연결되지 않음
 
-# 모델 목록 확인
-ollama list
+```text
+httpx.ConnectError: [Errno 111] Connection refused
+urllib.error.URLError: <urlopen error [Errno 111] Connection refused>
 ```
+
+**원인**: Windows, WSL2, Docker 컨테이너는 각각 네트워크 경계가 다릅니다. 특히 WSL2 NAT
+환경에서 `localhost`는 호출 주체 자신을 가리키므로, Windows에서 실행 중인 Ollama에 도달하지
+못합니다. `host.docker.internal`도 Docker 실행 방식에 따라 Windows가 아니라 WSL/Docker
+호스트 게이트웨이를 가리킬 수 있습니다.
+
+다음 순서로 어느 네트워크 구간에서 실패하는지 확인합니다.
+
+```powershell
+# 1. Windows: Ollama 프로세스와 API 확인
+Get-Process ollama
+Invoke-RestMethod http://localhost:11434/api/tags
+```
+
+```bash
+# 2. WSL2: Windows 게이트웨이 탐지 및 API 확인
+WINDOWS_HOST_IP="$(ip -4 route show default | awk 'NR == 1 { print $3 }')"
+curl --connect-timeout 3 "http://${WINDOWS_HOST_IP}:11434/api/tags"
+
+# 3. 정상 실행 스크립트로 주소 재탐지 및 컨테이너 재생성
+bash dev/docker-up-wsl.sh
+
+# 4. 컨테이너: 별칭, 실제 환경변수와 연결 확인
+docker exec tax_backend getent hosts ollama.windows.host
+docker exec tax_backend printenv OLLAMA_BASE_URL
+docker exec tax_backend python -c "
+import os, urllib.request
+base = os.environ['OLLAMA_BASE_URL'].rstrip('/')
+print(urllib.request.urlopen(base + '/api/tags', timeout=5).status)
+"
+```
+
+Windows에서는 정상인데 WSL2에서 실패한다면 Ollama가 loopback에만 바인딩됐을 가능성이 있습니다.
+Windows 사용자 환경변수에 `OLLAMA_HOST=0.0.0.0:11434`를 설정하고 Ollama를 완전히 재시작합니다.
+외부 인터페이스 바인딩 시에는 Windows 방화벽에서 11434 포트를 공용망 전체에 노출하지 말고
+Docker/WSL 사설 네트워크로 접근 범위를 제한합니다.
+
+```powershell
+[Environment]::SetEnvironmentVariable("OLLAMA_HOST", "0.0.0.0:11434", "User")
+```
+
+연결은 되지만 모델 호출이 실패하면 필수 모델을 확인합니다.
+
+```bash
+ollama list
+ollama pull qwen3.5:9b
+ollama pull qwen3-embedding:4b
+```
+
+`dev/docker-up-wsl.sh`는 WSL 게이트웨이 IP 변경을 자동 반영하고, Ollama 연결 또는 필수 모델
+검사에 실패하면 불완전한 상태로 Compose를 실행하지 않습니다. 운영 배포에서는 Windows 게이트웨이
+대신 Ollama를 Compose 서비스로 실행하여 `OLLAMA_BASE_URL=http://ollama:11434`처럼 서비스
+디스커버리를 사용합니다.
+
+### 백엔드가 Alembic 오류로 계속 재시작됨
+
+```
+tax_backend  Restarting
+FAILED: alembic upgrade head
+```
+
+백엔드는 마이그레이션 성공 후에만 FastAPI를 시작합니다. 따라서 migration SQL, DB 권한,
+revision 그래프에 문제가 있으면 의도적으로 서버 시작을 중단합니다.
+
+```bash
+# 1. 실제 마이그레이션 오류 확인
+docker compose logs --tail=150 backend
+
+# 2. 코드가 가진 최신 revision 확인
+docker compose run --rm backend alembic heads
+
+# 3. DB에 적용된 revision 확인(백엔드가 실행 중일 때)
+docker exec tax_backend alembic current
+
+# 4. 미적용 revision 수동 재실행
+docker compose run --rm backend alembic upgrade head
+```
+
+다음과 같은 임시 복구는 데이터와 코드의 실제 스키마를 불일치시키므로 사용하지 않습니다.
+
+```text
+alembic_version 테이블 직접 UPDATE
+문제가 발생한 revision 파일 삭제
+기존 db/migrations/*.sql 수동 재실행
+운영 DB 볼륨 삭제 후 재생성
+```
+
+새 revision이 여러 갈래로 생성되어 `Multiple head revisions`가 발생했다면 먼저 그래프를
+확인하고 merge revision을 생성합니다.
+
+```bash
+docker compose run --rm backend alembic heads
+docker compose run --rm backend alembic merge heads -m "merge migration heads"
+docker compose run --rm backend alembic upgrade head
+```
+
+> 최초 `20260719_0001` baseline은 기존 SQL 기반 DB를 채택하기 위한 마이그레이션이므로
+> 데이터 보호를 위해 파괴적인 downgrade를 지원하지 않습니다. 이후 revision은 가능한 경우
+> 명시적인 `downgrade()`를 함께 작성합니다.
 
 ### pgvector 확장 오류
 ```

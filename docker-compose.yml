@@ -30,12 +30,14 @@ services:
     environment:
       # Docker 내부에서는 서비스명(postgres)으로 접속
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-tax_db}
+      # WSL 실행 스크립트가 현재 Windows 게이트웨이를 아래 별칭에 연결한다.
+      OLLAMA_BASE_URL: http://ollama.windows.host:11434
     depends_on:
       postgres:
         condition: service_healthy
     extra_hosts:
-      # 컨테이너 → 호스트 머신 Ollama 접근 (Linux에서 host.docker.internal 미지원 시 대비)
-      - "host.docker.internal:host-gateway"
+      # WSL2 NAT의 Windows 호스트 IP는 재시작 시 바뀔 수 있으므로 하드코딩하지 않는다.
+      - "ollama.windows.host=${OLLAMA_WINDOWS_IP:?dev/docker-up-wsl.sh를 통해 실행하세요}"
 
   # ── React 프론트엔드 (Nginx) ───────────────────────────────────
   frontend:
