@@ -43,6 +43,45 @@ def test_extract_ignores_web_source():
     assert extract_citations("[웹출처] https://nts.go.kr") == []
 
 
+def test_extract_spaced_article_number_normalized():
+    """모델이 '제 50 조'처럼 공백을 섞어 출력해도 표준형 '제50조'로 추출된다.
+
+    (qwen 계열 토크나이저 특성 — 실제 답변에서 관찰된 형식. 과거 엄격한 패턴은
+    이런 인용을 전부 놓쳐 검증이 조용히 무력화됐다.)
+    """
+    answer = "**[법률] 소득세법 제 50 조 (기본공제)**: 연 150만원을 공제한다."
+    assert extract_citations(answer) == [("법률", "소득세법", "제50조")]
+
+
+def test_extract_spaced_article_with_branch_normalized():
+    """'제 59 조의 4' 같은 가지번호 공백 변형도 '제59조의4'로 정규화된다."""
+    answer = "[법률] 소득세법 제 59 조의 4 - 특별세액공제"
+    assert extract_citations(answer) == [("법률", "소득세법", "제59조의4")]
+
+
+def test_extract_spaced_law_name():
+    """공백 포함 법령명('상속세 및 증여세법')도 통째로 추출된다."""
+    answer = "[법률] 상속세 및 증여세법 제18조 - 기초공제"
+    assert extract_citations(answer) == [("법률", "상속세 및 증여세법", "제18조")]
+
+
+def test_extract_strips_markdown_bold_from_law_name():
+    """'**[법률] 소득세법 제50조**'처럼 볼드로 감싼 인용에서 마커가 법령명에 섞이지 않는다."""
+    answer = "*   **[법률] 소득세법 제50조 (기본공제)**: 연 150만원을 공제한다."
+    citations = extract_citations(answer)
+    assert citations[0][1] == "소득세법"
+    assert citations[0][2] == "제50조"
+
+
+def test_verify_spaced_citation_against_context():
+    """공백 변형 인용도 컨텍스트 대조 검증이 정상 동작해야 한다."""
+    answer = "**[법률] 소득세법 제 55 조 (세율)**에 따라 과세된다."
+    checks = verify_citations(answer, _CONTEXT)
+    assert len(checks) == 1
+    assert checks[0].verified is True
+    assert checks[0].article_no == "제55조"
+
+
 # ── verify_citations ──────────────────────────────────────────────
 
 def test_verify_citation_found_in_context():
@@ -123,3 +162,16 @@ def test_apply_citation_guard_appends_footer():
 def test_apply_citation_guard_no_change_when_clean():
     answer = "[법률] 소득세법 제55조 - 세율"
     assert apply_citation_guard(answer, _CONTEXT) == answer
+
+
+def test_footer_added_when_context_has_source_but_answer_has_no_citation():
+    """검색 컨텍스트가 있는데 답변이 인용을 하나도 달지 않으면(템플릿 이탈) 경고가 붙는다."""
+    answer = "중소기업은 여러 요건을 갖추면 세액감면을 받을 수 있습니다."
+    footer = build_citation_footer(answer, _CONTEXT)
+    assert "인용이 없습니다" in footer
+
+
+def test_footer_empty_when_no_context_and_no_citation():
+    """검색된 법령 자료 자체가 없으면(잡담 등) 인용이 없어도 경고를 붙이지 않는다."""
+    answer = "안녕하세요! 무엇을 도와드릴까요?"
+    assert build_citation_footer(answer, "관련 문서를 찾지 못했습니다.") == ""

@@ -10,20 +10,16 @@ import time
 import uuid as _uuid
 from typing import AsyncGenerator
 
-import httpx
-
 from config import (
     CHAT_MODEL,
     MEMORY_TURNS,
-    OLLAMA_BASE_URL,
-    OLLAMA_KEEP_ALIVE,
-    OLLAMA_NUM_CTX,
     TOP_K,
     TAVILY_API_KEY,
     THINK_ENABLED,
 )
 from app.services.calculator.engine import CalcRun, run_calculation_for_query
 from app.services.citation_guard import apply_citation_guard, build_citation_footer
+from app.services.llm_client import call_llm, stream_llm
 from app.services.search.web_search import tavily_search
 from app.database import get_pool
 from app.services.search.hybrid_search_service import (
@@ -32,8 +28,6 @@ from app.services.search.hybrid_search_service import (
 )
 
 logger = logging.getLogger(__name__)
-
-_CHAT_URL = f"{OLLAMA_BASE_URL}/api/chat"
 
 # 상위 3개 평균 유사도가 이 값 미만일 때만 웹 검색 실행
 # 임베딩 점수 분포상 정답을 top-1으로 찾은 질문도 0.47~0.58 수준이라
@@ -116,32 +110,20 @@ async def detect_law_name(query: str) -> str:
         if any(kw in q for kw in kws):
             return law
 
-    # 키워드 매핑 실패 시 Ollama로 판단
+    # 키워드 매핑 실패 시 LLM으로 판단
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                _CHAT_URL,
-                json={
-                    "model": CHAT_MODEL,
-                    "messages": [{"role": "user", "content": (
-                        "다음 질문이 어떤 세법과 관련 있는지 하나만 답하세요.\n"
-                        "후보: 소득세법, 부가가치세법, 법인세법, 상속세 및 증여세법, "
-                        "지방세법, 조세특례제한법, 국세기본법, ALL\n"
-                        f"질문: {query}\n오직 세법 이름 하나만 출력하세요."
-                    )}],
-                    "stream": False,
-                    "think": False,
-                    "keep_alive": _KEEP_ALIVE,
-                    "options": {
-                        "temperature": 0.0,
-                        "num_predict": 20,
-                        "num_ctx": _NUM_CTX,
-                    },
-                },
-            )
-            resp.raise_for_status()
-            result = resp.json()["message"]["content"].strip()
-            return result if result in _LAW_KW else "ALL"
+        raw = await call_llm(
+            [{"role": "user", "content": (
+                "다음 질문이 어떤 세법과 관련 있는지 하나만 답하세요.\n"
+                "후보: 소득세법, 부가가치세법, 법인세법, 상속세 및 증여세법, "
+                "지방세법, 조세특례제한법, 국세기본법, ALL\n"
+                f"질문: {query}\n오직 세법 이름 하나만 출력하세요."
+            )}],
+            temperature=0.0,
+            num_predict=20,
+        )
+        result = raw.strip()
+        return result if result in _LAW_KW else "ALL"
     except Exception:
         return "ALL"
 
@@ -222,7 +204,11 @@ _COMBINED_PROMPT = (
     "단, 법령 근거 없는 내용은 절대 추정·일반론으로 서술하지 않는다.\n"
     "8. 어떤 항목에 대한 법령 근거가 전혀 없는 경우에만 "
     "'해당 내용에 대한 명확한 법령 근거를 찾지 못했습니다'라고 항목별로 명시한다.\n"
-    "9. 세무 리스크가 있는 판단은 반드시 '전문가 확인 권장'을 표시한다.\n\n"
+    "9. 세무 리스크가 있는 판단은 반드시 '전문가 확인 권장'을 표시한다.\n"
+    "10. '요건은?', '조건은?', '대상은?'처럼 서술형 질문이거나 여러 조문을 함께 "
+    "설명해야 하는 경우에도, 표나 자유 서술로만 답하지 말고 아래 '## 출력 형식'과 "
+    "'## 📋 근거 출처 목록'을 예외 없이 그대로 포함한다. 언급한 조문이 여러 개면 "
+    "근거 출처 목록에 모두 나열한다.\n\n"
 
     "## 세법 일반 원칙\n"
     "- 특별법 우선: 조세특례제한법이 일반 세법보다 우선 적용\n"
@@ -251,6 +237,8 @@ _COMBINED_PROMPT = (
     "- 항상 마크다운으로 작성\n"
     "- 법적 근거는 조문 번호까지 명시\n"
     "- 근거 없는 내용은 절대 추정하지 말 것\n"
+    "- '## 📋 근거 출처 목록' 섹션과 [법률]/[시행령]/[시행규칙]/[유권해석] 브래킷 형식은 "
+    "모든 답변에 예외 없이 포함할 것 — 서술형 질문이라도 생략 금지\n"
     "- <think> 태그 내용은 출력하지 말 것\n"
 )
 
@@ -285,61 +273,33 @@ _COMBINED_CLASSIFY_PROMPT = (
     "- <think> 태그 내용은 출력하지 말 것\n"
 )
 
-# 주의: think·keep_alive는 options가 아닌 요청 최상위 필드 — options에 넣으면 Ollama가 무시함
-_NUM_CTX = OLLAMA_NUM_CTX
-_KEEP_ALIVE = OLLAMA_KEEP_ALIVE
-
-_OLLAMA_OPTIONS             = {"temperature": 0.3, "num_predict": 500,  "num_ctx": _NUM_CTX}
-_OLLAMA_OPTIONS_STREAM      = {"temperature": 0.3, "num_predict": -1,   "num_ctx": _NUM_CTX}
-_OLLAMA_OPTIONS_MULTI_QUERY = {"temperature": 0.0, "num_predict": 150,  "num_ctx": _NUM_CTX}
+# 비스트리밍 답변도 스트리밍과 동일하게 길이 제한 없음(-1).
+# 과거 num_predict=500으로 답변이 ~900자에서 잘려 마지막 섹션(근거 출처 목록)이
+# 통째로 사라졌다 — 인용 정확도 측정에서 무인용 실패 17건의 주원인으로 지목됨.
+_NUM_PREDICT_DEFAULT     = -1
+_NUM_PREDICT_MULTI_QUERY = 150
 
 # Qwen3 계열 모델에서만 /no_think 접두사 사용 (다른 모델에는 노이즈)
 _QWEN3_NO_THINK_PREFIX = "/no_think\n\n" if (
     not THINK_ENABLED and any(k in CHAT_MODEL.lower() for k in ("qwen3",))
 ) else ""
 
-# 싱글톤 httpx 클라이언트 — 매 요청마다 TCP 연결을 새로 열지 않기 위해 재사용
-_chat_client: httpx.AsyncClient | None = None
 # 스트리밍 완료 후 백그라운드로 실행되는 DB 저장 태스크 참조 보관 (GC 방지)
 _bg_tasks: set[asyncio.Task] = set()
 
 
-def _get_chat_client() -> httpx.AsyncClient:
-    global _chat_client
-    if _chat_client is None or _chat_client.is_closed:
-        _chat_client = httpx.AsyncClient(timeout=300.0)
-    return _chat_client
-
-
 async def close_chat_client() -> None:
-    """앱 종료 시 싱글톤 httpx 클라이언트 정리."""
-    global _chat_client
-    if _chat_client and not _chat_client.is_closed:
-        await _chat_client.aclose()
-        _chat_client = None
+    """앱 종료 시 정리 훅. LangChain의 ChatOllama는 호출마다 자체 클라이언트를 관리하므로 no-op."""
+    return
 
 
 async def _call_ollama(
     messages: list[dict],
     temperature: float = 0.3,
-    options: dict | None = None,
+    num_predict: int = _NUM_PREDICT_DEFAULT,
 ) -> str:
-    """Ollama 비스트리밍 호출."""
-    merged_options = {**(options or _OLLAMA_OPTIONS), "temperature": temperature}
-    client = _get_chat_client()
-    resp = await client.post(
-        _CHAT_URL,
-        json={
-            "model":      CHAT_MODEL,
-            "messages":   messages,
-            "stream":     False,
-            "think":      THINK_ENABLED,
-            "keep_alive": _KEEP_ALIVE,
-            "options":    merged_options,
-        },
-    )
-    resp.raise_for_status()
-    return resp.json()["message"]["content"]
+    """LLM 비스트리밍 호출 (llm_client 경유)."""
+    return await call_llm(messages, temperature=temperature, num_predict=num_predict)
 
 
 async def _stream_ollama_response(
@@ -347,7 +307,7 @@ async def _stream_ollama_response(
     temperature: float = 0.3,
 ) -> AsyncGenerator[str, None]:
     """
-    Ollama 스트리밍 호출. <think> 블록은 버퍼 누적 없이 실시간으로 건너뜀.
+    LLM 스트리밍 호출 (llm_client 경유). <think> 블록은 버퍼 누적 없이 실시간으로 건너뜀.
 
     기존 방식은 </think>를 찾을 때까지 모든 토큰을 buf에 쌓아 TTFT가 매우 길었음.
     개선: in_think 상태에서 최대 8자(</think> 경계 감지용)만 보관하고 나머지는 즉시 버림.
@@ -355,66 +315,41 @@ async def _stream_ollama_response(
     in_think = False
     buf = ""   # 태그 경계 감지에만 사용 — 최대 수십 자 이내로 유지
 
-    client = _get_chat_client()
-    async with client.stream(
-        "POST",
-        _CHAT_URL,
-        json={
-            "model":      CHAT_MODEL,
-            "messages":   messages,
-            "stream":     True,
-            "think":      THINK_ENABLED,
-            "keep_alive": _KEEP_ALIVE,
-            "options":    {**_OLLAMA_OPTIONS_STREAM, "temperature": temperature},
-        },
-    ) as resp:
-        resp.raise_for_status()
-        async for line in resp.aiter_lines():
-            if not line:
-                continue
-            try:
-                data = json.loads(line)
-            except Exception:
-                continue
+    async for chunk in stream_llm(messages, temperature=temperature, num_predict=_NUM_PREDICT_DEFAULT):
+        if chunk:
+            buf += chunk
 
-            chunk = data.get("message", {}).get("content", "")
-            if chunk:
-                buf += chunk
+            if in_think:
+                end = buf.find("</think>")
+                if end != -1:
+                    in_think = False
+                    buf = buf[end + 8:]   # 8 = len("</think>")
+                else:
+                    # think 블록 내부 — 경계 감지에 필요한 최소분만 보관
+                    buf = buf[-7:] if len(buf) > 7 else buf
 
-                if in_think:
+            if not in_think and buf:
+                start = buf.find("<think>")
+                if start != -1:
+                    before = buf[:start]
+                    if before:
+                        yield before
+                    in_think = True
+                    logger.info("[STREAM] <think> 블록 감지 — think:False 미적용 상태")
+                    buf = buf[start + 7:]   # 7 = len("<think>")
+                    # 같은 청크에 </think>가 함께 있는 경우
                     end = buf.find("</think>")
                     if end != -1:
                         in_think = False
-                        buf = buf[end + 8:]   # 8 = len("</think>")
+                        buf = buf[end + 8:]
                     else:
-                        # think 블록 내부 — 경계 감지에 필요한 최소분만 보관
                         buf = buf[-7:] if len(buf) > 7 else buf
-
-                if not in_think and buf:
-                    start = buf.find("<think>")
-                    if start != -1:
-                        before = buf[:start]
-                        if before:
-                            yield before
-                        in_think = True
-                        logger.info("[STREAM] <think> 블록 감지 — think:False 미적용 상태")
-                        buf = buf[start + 7:]   # 7 = len("<think>")
-                        # 같은 청크에 </think>가 함께 있는 경우
-                        end = buf.find("</think>")
-                        if end != -1:
-                            in_think = False
-                            buf = buf[end + 8:]
-                        else:
-                            buf = buf[-7:] if len(buf) > 7 else buf
-                    else:
-                        # think 없음 — 마지막 6자는 '<think' 시작 가능성 보존
-                        safe = buf[:-6] if len(buf) > 6 else ""
-                        if safe:
-                            yield safe
-                            buf = buf[len(safe):]
-
-            if data.get("done"):
-                break
+                else:
+                    # think 없음 — 마지막 6자는 '<think' 시작 가능성 보존
+                    safe = buf[:-6] if len(buf) > 6 else ""
+                    if safe:
+                        yield safe
+                        buf = buf[len(safe):]
 
     if buf and not in_think:
         yield buf
@@ -431,7 +366,7 @@ async def generate_search_queries(query: str) -> list[str]:
                 {"role": "user",   "content": query},
             ],
             temperature=0.0,
-            options=_OLLAMA_OPTIONS_MULTI_QUERY,
+            num_predict=_NUM_PREDICT_MULTI_QUERY,
         )
         text  = raw.split("</think>")[-1].strip()
         fence = re.search(r"```(?:json)?\s*\n?([\s\S]*?)\n?```", text)
@@ -488,7 +423,7 @@ async def _classify_and_generate_queries(
                 {"role": "user",   "content": user_content},
             ],
             temperature=0.0,
-            options=_OLLAMA_OPTIONS_MULTI_QUERY,
+            num_predict=_NUM_PREDICT_MULTI_QUERY,
         )
         text = raw.split("</think>")[-1].strip()
         fence = re.search(r"```(?:json)?\s*\n?([\s\S]*?)\n?```", text)

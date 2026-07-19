@@ -56,30 +56,16 @@ async def test_detect_law_name_keyword_hit():
 
 @pytest.mark.asyncio
 async def test_detect_law_name_unknown_falls_back_to_all():
-    """키워드 미매핑 + Ollama 응답이 후보에 없는 경우 ALL 반환."""
-    mock_resp = AsyncMock()
-    mock_resp.json = lambda: {"message": {"content": "모르겠음"}}
-    mock_resp.raise_for_status = lambda: None
-
-    mock_client = AsyncMock()
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__  = AsyncMock(return_value=False)
-    mock_client.post       = AsyncMock(return_value=mock_resp)
-
-    with patch("app.services.chat_service.httpx.AsyncClient", return_value=mock_client):
+    """키워드 미매핑 + LLM 응답이 후보에 없는 경우 ALL 반환."""
+    with patch("app.services.chat_service.call_llm", AsyncMock(return_value="모르겠음")):
         result = await detect_law_name("오늘 날씨가 정말 좋네요")
     assert result == "ALL"
 
 
 @pytest.mark.asyncio
 async def test_detect_law_name_ollama_error_returns_all():
-    """Ollama 호출 실패 시 ALL 반환."""
-    mock_client = AsyncMock()
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__  = AsyncMock(return_value=False)
-    mock_client.post       = AsyncMock(side_effect=Exception("connection refused"))
-
-    with patch("app.services.chat_service.httpx.AsyncClient", return_value=mock_client):
+    """LLM 호출 실패 시 ALL 반환."""
+    with patch("app.services.chat_service.call_llm", AsyncMock(side_effect=Exception("connection refused"))):
         result = await detect_law_name("알 수 없는 질문")
     assert result == "ALL"
 

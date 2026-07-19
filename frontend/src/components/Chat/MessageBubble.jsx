@@ -2,12 +2,14 @@ import { useEffect, useRef } from 'react'
 import { marked } from 'marked'
 
 // _COMBINED_PROMPT의 "근거 출처 목록" 형식과 동일한 패턴 — [법률] 법령명 제N조
-const CITATION_RE = /\[(법률|시행령|시행규칙)\]\s*([^\n[]+?)\s+(제\d+조(?:의\d+)?)/g
+// 조문번호는 공백 변형 허용 (모델이 "제 50 조"처럼 출력하는 경우가 많음, citation_guard.py와 동일)
+const CITATION_RE = /\[(법률|시행령|시행규칙)\]\s*([^\n[]+?)\s*(제\s*\d+\s*조(?:\s*의\s*\d+)?)/g
 
 function linkifyCitations(content) {
   return content.replace(CITATION_RE, (match, label, lawName, articleNo) => {
     const law = lawName.trim().replace(/"/g, '&quot;')
-    return `<span class="citation-link" data-law="${law}" data-article="${articleNo}">${match}</span>`
+    const article = articleNo.replace(/\s+/g, '')  // DB 조회용 표준형('제50조')으로 정규화
+    return `<span class="citation-link" data-law="${law}" data-article="${article}">${match}</span>`
   })
 }
 

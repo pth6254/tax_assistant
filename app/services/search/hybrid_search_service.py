@@ -356,8 +356,8 @@ async def fetch_hybrid_context(
     return format_hybrid_context(results)
 
 
-# 질문 속 조문번호 직접 언급 감지: "부가가치세법 제39조", "제55조" 등
-_ARTICLE_REF_RE = re.compile(r"(?:([가-힣]+법)\s*)?(제\d+조(?:의\d+)?)")
+# 질문 속 조문번호 직접 언급 감지: "부가가치세법 제39조", "제 55 조" 등 (공백 변형 허용)
+_ARTICLE_REF_RE = re.compile(r"(?:([가-힣]+법)\s*)?(제\s*\d+\s*조(?:\s*의\s*\d+)?)")
 
 
 async def _lookup_referenced_article(
@@ -376,7 +376,9 @@ async def _lookup_referenced_article(
     if not law_name:
         return None
 
-    article = await get_law_article(law_name, match.group(2))
+    # DB의 article_no는 표준형("제39조")이므로 공백 변형("제 39 조")을 정규화해 조회
+    article_no = re.sub(r"\s+", "", match.group(2))
+    article = await get_law_article(law_name, article_no)
     if not article:
         return None
 

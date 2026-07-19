@@ -12,8 +12,18 @@ LLM이 생성한 최종 답변에서 법령 인용([법률]/[시행령]/[시행�
 import re
 from dataclasses import dataclass
 
-# _COMBINED_PROMPT의 "근거 출처 목록" 형식과 동일한 패턴
-_CITATION_RE = re.compile(r"\[(법률|시행령|시행규칙)\]\s*([^\n\[]+?)\s+(제\d+조(?:의\d+)?)")
+# _COMBINED_PROMPT의 "근거 출처 목록" 형식과 동일한 패턴.
+# 조문번호는 공백 변형을 허용한다 — qwen 계열 모델이 "제 50 조", "제 59 조의 4"처럼
+# 숫자 주변에 공백을 섞어 출력하는 경우가 많아, 엄격한 "제\d+조" 패턴은 실제 답변의
+# 인용 대부분을 놓쳐 검증이 조용히 무력화된다 (생성 품질 측정에서 발견된 실측 사례).
+_CITATION_RE = re.compile(
+    r"\[(법률|시행령|시행규칙)\]\s*([^\n\[]+?)\s*(제\s*\d+\s*조(?:\s*의\s*\d+)?)"
+)
+
+
+def normalize_article_no(article_no: str) -> str:
+    """조문번호 표기 변형('제 50 조', '제59조의 4')을 표준형('제50조', '제59조의4')으로 정규화."""
+    return re.sub(r"\s+", "", article_no)
 
 # calc_context(format_calculation_context)가 만드는 "- 라벨: 1,234,567원" 형식
 _MONEY_LINE_RE = re.compile(r"[\d][\d,]*원")
@@ -33,8 +43,16 @@ def _normalize(s: str) -> str:
 
 
 def extract_citations(answer: str) -> list[tuple[str, str, str]]:
-    """답변 본문에서 (구분, 법령명, 조문번호) 튜플 목록을 추출한다."""
-    return [(label, name.strip(), article) for label, name, article in _CITATION_RE.findall(answer)]
+    """답변 본문에서 (구분, 법령명, 조문번호) 튜플 목록을 추출한다.
+
+    조문번호는 표준형('제50조')으로 정규화해 반환한다.
+    """
+    return [
+        # 법령명 앞뒤의 마크다운 강조 마커(*, _)와 공백 제거 — 모델이
+        # "**[법률] 소득세법 제50조**"처럼 볼드로 감싸 출력하는 경우가 흔함
+        (label, name.strip(" *_"), normalize_article_no(article))
+        for label, name, article in _CITATION_RE.findall(answer)
+    ]
 
 
 def verify_citations(answer: str, trusted_text: str) -> list[CitationCheck]:
@@ -73,8 +91,12 @@ def build_citation_footer(
     checks = verify_citations(answer, trusted_text)
     unverified = [c for c in checks if not c.verified]
     calc_ok = verify_calc_final_amount(answer, calc_context)
+    # 법령 컨텍스트가 실제로 검색됐는데도([출처: 표시가 있음) 답변에 인용 브래킷이
+    # 하나도 없는 경우 — 모델이 템플릿을 이탈해 근거를 아예 표기하지 않은 사례
+    # (생성 품질 측정에서 발견: temperature 샘플링에 따라 같은 질문도 인용 유무가 갈림).
+    missing_all_citations = "[출처:" in context and not checks
 
-    if not unverified and calc_ok:
+    if not unverified and calc_ok and not missing_all_citations:
         return ""
 
     lines = ["\n\n---", "⚠️ **자동 검증 결과, 아래 항목을 확인해주세요 (AI가 생성 중 착오했을 수 있습니다):**"]
@@ -82,6 +104,8 @@ def build_citation_footer(
         lines.append(f"- 검색 자료에서 확인되지 않은 인용: [{c.label}] {c.law_name} {c.article_no}")
     if not calc_ok:
         lines.append("- 계산기 결과 금액과 답변 속 서술이 일치하지 않을 수 있습니다. 계산 단계를 다시 확인하세요.")
+    if missing_all_citations:
+        lines.append("- 답변에 법령 조문 인용이 없습니다. 검색된 자료를 직접 확인해주세요.")
     return "\n".join(lines)
 
 

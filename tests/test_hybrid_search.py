@@ -111,6 +111,18 @@ async def test_lookup_referenced_article_uses_law_filter_when_name_missing():
 
 
 @pytest.mark.asyncio
+async def test_lookup_referenced_article_normalizes_spaced_number():
+    """'제 39 조'처럼 공백 섞인 조문번호도 표준형으로 정규화해 조회한다."""
+    with patch(
+        "app.services.search.hybrid_search_service.get_law_article",
+        AsyncMock(return_value=_make_article_detail()),
+    ) as mock_get:
+        result = await _lookup_referenced_article("부가가치세법 제 39 조 내용 알려줘", "ALL")
+    assert result is not None
+    mock_get.assert_awaited_once_with("부가가치세법", "제39조")
+
+
+@pytest.mark.asyncio
 async def test_lookup_referenced_article_none_without_article_ref():
     result = await _lookup_referenced_article("매입세액 불공제 대상 알려줘", "부가가치세법")
     assert result is None
