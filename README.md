@@ -331,8 +331,11 @@ tax-assistant/
 │   └── eval_rag.py               # RAG 품질 평가 CLI (골든셋 기반 hit-rate/MRR 측정)
 │
 ├── db/
-│   ├── init.sql                  # DB 초기화 (users, documents, chat_logs, law_articles, conversations)
-│   └── migrations/                # 001~007: 계산기 세율표, 프로필, 대화 세션, 법령명 수정, 사업자 유형, 항 임베딩, 부가세·가산세 세율
+│   ├── init.sql                  # Alembic 최초 baseline이 사용하는 레거시 기본 스키마
+│   └── migrations/               # Alembic 최초 baseline이 채택하는 기존 SQL 마이그레이션
+│
+├── alembic/                      # DB 스키마 버전 관리 및 revision 파일
+├── alembic.ini                   # Alembic 설정
 │
 ├── tests/
 │   ├── test_*.py                 # 단위·API 테스트 (pytest)
@@ -441,22 +444,27 @@ ollama pull qwen3.5:9b
 ollama pull qwen3-embedding:4b
 ```
 
-### 3단계: DB 실행 및 초기화
+### 3단계: DB 실행 및 자동 마이그레이션
 
 ```bash
-# PostgreSQL + pgvector 컨테이너 실행 (init.sql 자동 적용)
-docker compose up -d
+# 전체 서비스 빌드 및 실행
+docker compose up -d --build
 ```
 
-> 컨테이너 최초 생성 시 `db/init.sql`이 자동으로 실행되어 기본 스키마(users, documents, chat_logs, law_articles)가 구성됩니다.
-> `db/migrations/*.sql`은 자동 적용되지 않으므로 번호 순서대로 수동 실행해야 합니다 (계산기 세율표, 대화 세션, 사업자 유형 필드 등).
+백엔드는 시작 전에 자동으로 `alembic upgrade head`를 실행합니다. 새 DB에는 전체 스키마와
+세율 시드가 생성되고, 기존 DB에는 적용되지 않은 revision만 반영됩니다. 마이그레이션이
+실패하면 API 서버는 시작하지 않으므로 불완전한 스키마로 서비스되는 것을 방지합니다.
 
 ```bash
-# 001~005를 순서대로 적용
-for f in db/migrations/0*.sql; do
-  docker exec -i tax_pgvector psql -U postgres -d tax_db < "$f"
-done
+# 현재 적용된 revision 확인
+docker exec tax_backend alembic current
+
+# 새 DB 변경 revision 생성
+docker exec tax_backend alembic revision -m "add new field"
 ```
+
+> 앞으로의 DB 변경은 `db/migrations/*.sql`을 직접 실행하지 않고 새 Alembic revision의
+> `upgrade()`에 작성합니다.
 
 ### 4단계: 법령 데이터 수집 (선택)
 
@@ -926,8 +934,8 @@ VRAM에 동시 상주해(expires 값이 사실상 무제한) 스왑이 사라졌
 유사도만 채택, 히트 시 컨텍스트는 항이 아닌 조문 전체 제공). 신규 수집분은 자동 생성되며,
 기존 데이터는 백필 스크립트로 생성한다:
 ```bash
-# 마이그레이션 적용 후 1회
-docker exec -i tax_pgvector psql -U postgres -d tax_db < db/migrations/006_law_article_clauses.sql
+# Alembic 마이그레이션 적용 후 1회
+docker exec tax_backend alembic upgrade head
 python scripts/embed_clauses.py --run
 ```
 

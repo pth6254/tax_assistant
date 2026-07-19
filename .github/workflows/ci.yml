@@ -23,7 +23,10 @@ jobs:
 
       # 문법 오류(과거 chat_service.py에 한글 'ㅇ'가 섞여 서버가 안 뜨던 사고 재발 방지)
       - name: Compile check
-        run: python -m compileall app scripts main.py config.py -q
+        run: python -m compileall app scripts alembic main.py config.py -q
+
+      - name: Validate Alembic revision graph
+        run: test "$(alembic heads | wc -l)" -eq 1
 
       # 단위·API 테스트 — DB/Ollama 없이 실행됨 (conftest.py가 mock/기본 환경변수 제공)
       - name: Run tests

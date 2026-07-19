@@ -1,0 +1,10 @@
+.git
+.github
+.pytest_cache
+.venv-wsl
+venv-wsl
+__pycache__
+*.py[cod]
+frontend
+assets
+tests/eval/results
