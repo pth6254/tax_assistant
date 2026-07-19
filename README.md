@@ -74,7 +74,7 @@ Agentic RAG 파이프라인 (검색 → 계산 → 합성 → 인용 검증)
 - **PDF 업로드**: 집행기준, 세무 실무자료 등 직접 업로드
   - 파일명 패턴으로 법령 위계 자동 분류 (AI 호출 없이)
   - 800 토큰 청크 분할 + 100 토큰 오버랩
-- **법령해석례(유권해석) 수집**: 국가법령정보 Open API(`target=expc`)로 기획재정부·국세청 등의 유권해석을 수집해 `law_articles`에 `law_type='법령해석례'`로 저장 (법령과 동일한 검색 경로 재사용)
+- **법령해석례(유권해석) 수집**: 국가법령정보 Open API(`target=expc`)로 기획재정부·국세청 등의 유권해석을 수집해 `law_articles`에 `law_type='법령해석례'`로 저장 (법령과 동일한 검색 경로 재사용). 세법 키워드 20개 전수 수집 기준 207건 확보
 - **법령 개정 자동 동기화**: 이미 수집된 법령을 재수집해 조문 내용 변경(SHA-256 해시 비교)을 감지하고 구버전을 `is_current=FALSE`로 폐기, 최신 버전만 검색에 노출
 
 ### 하이브리드 검색
@@ -90,14 +90,15 @@ Agentic RAG 파이프라인 (검색 → 계산 → 합성 → 인용 검증)
 - **비교 질문 처리**: "리스 vs 장기렌트"처럼 A vs B를 묻는 질문에 대해 각 항목별 법령 조문을 근거로 비교표 + 명확한 결론 제시
 - **세금 계산기 tool calling**: 질문에서 계산 의도를 감지하면 LLM이 계산기 종류·입력값을 추출해 DB 세율표 기반 계산기를 실행, 계산 과정과 근거 조문을 답변에 반영
 - **인용 검증(citation guard)**: 답변 생성 후 인용된 조문이 실제 검색 근거에 존재하는지, 계산기 결과 금액과 서술이 일치하는지 자동 대조해 근거 없는 인용에는 경고 각주 추가
-- **SSE 스트리밍**: 토큰 단위 실시간 응답, httpx 싱글톤 클라이언트로 연결 재사용, DB 저장은 백그라운드 처리
+- **인용 누락 자동 보정(structured output)**: 답변에 법령 인용이 하나도 없는 경우(temperature 샘플링에 따른 형식 이탈)에만 JSON Schema로 출력을 강제하는 별도 LLM 호출을 실행해 근거 조문을 추출·검증 후 답변에 덧붙임 — 정상 답변(대다수)에는 추가 지연 없음
+- **SSE 스트리밍**: 토큰 단위 실시간 응답(LangChain `ChatOllama` 경유), DB 저장은 백그라운드 처리
 - **대화 메모리**: 최근 3턴 컨텍스트 유지, 대화별 독립 세션(conversations 테이블)
 - **Tavily 웹검색**: 국세청·법제처·기획재정부 도메인 중심 최신 자료 보완 (DB 상위 3개 평균 유사도 0.55 미만인 경우에만 실행)
 
 ### 세금 계산기
 
 - 종합소득세·양도소득세·상속세·증여세·부가가치세·가산세(무신고·과소신고·납부지연) 6종, DB 세율표(`tax_brackets`/`tax_deductions`) 기반 계산
-- 계산 단계·근거 조문을 함께 반환, 프론트 계산기 화면과 챗봇 tool calling 양쪽에서 재사용
+- 계산 단계·근거 조문을 함께 반환, 소득세·양도세·상속세·증여세는 프론트 계산기 화면과 챗봇 tool calling 양쪽에서 재사용 (부가세·가산세는 현재 챗봇 tool calling 전용, REST 엔드포인트·프론트 화면 미구현)
 - **계산기 ↔ 챗봇 왕복 연결**: 챗봇이 계산기를 실행하면 답변에 "계산기에서 조건 바꿔보기" 버튼(입력값 프리필), 계산기 결과에서 "이 결과에 대해 챗봇에게 질문하기" 버튼으로 상호 이동
 
 ### 세무 일정 관리
@@ -114,6 +115,7 @@ Agentic RAG 파이프라인 (검색 → 계산 → 합성 → 인용 검증)
 
 - `scripts/eval_rag.py`: 골든 평가셋 기반으로 검색 hit-rate·MRR·세목 분류 정확도·인용 정확도를 측정하고 이전 실행과 자동 비교(회귀 감지)
 - 파라미터(임계값, 프롬프트 등) 변경 시 효과를 수치로 검증 가능
+- `--repeat N` 옵션으로 동일 평가를 반복 실행해 생성 품질 지표의 샘플링 편차와 실행마다 결과가 바뀌는 비결정적 항목을 확인 가능
 
 ### 기타
 
@@ -302,7 +304,7 @@ PDF 업로드
 | 프론트엔드 | React 18, Vite |
 | 데이터베이스 | PostgreSQL 17 + pgvector |
 | 인증 | JWT, httpOnly 쿠키, bcrypt |
-| LLM | Ollama qwen3.5:9b (로컬) |
+| LLM | Ollama qwen3.5:9b (로컬), LangChain(`langchain-ollama`) 경유 — provider 교체 시 어댑터 계층만 교체 |
 | 임베딩 | Ollama qwen3-embedding:4b (2560차원, 로컬) |
 | 웹검색 | Tavily Search API |
 | 법령 API | 국가법령정보 Open API |
@@ -330,7 +332,7 @@ tax-assistant/
 │
 ├── db/
 │   ├── init.sql                  # DB 초기화 (users, documents, chat_logs, law_articles, conversations)
-│   └── migrations/                # 001~006: 계산기 세율표, 프로필, 대화 세션, 법령명 수정, 사업자 유형, 항 임베딩
+│   └── migrations/                # 001~007: 계산기 세율표, 프로필, 대화 세션, 법령명 수정, 사업자 유형, 항 임베딩, 부가세·가산세 세율
 │
 ├── tests/
 │   ├── test_*.py                 # 단위·API 테스트 (pytest)
@@ -356,7 +358,7 @@ tax-assistant/
     │   ├── conversations.py      # 대화 세션 CRUD
     │   ├── chat.py               # POST /api/chat, /api/chat/stream
     │   ├── upload.py             # POST /api/upload, 문서 목록/삭제
-    │   ├── calculator.py         # POST /api/calculator/{income-tax,capital-gains,inheritance,gift}
+    │   ├── calculator.py         # POST /api/calculator/{income-tax,capital-gains,inheritance,gift} (vat·penalty_tax는 아직 챗봇 tool calling 전용, REST 미노출)
     │   ├── law.py                # GET /api/law-articles/lookup (조문 원문 뷰어)
     │   └── tax_schedule.py       # GET /api/tax-schedule
     │
@@ -364,10 +366,11 @@ tax-assistant/
     │   ├── auth_service.py       # 이메일 중복, bcrypt 해싱, JWT 발급, 프로필 조회/수정
     │   ├── chat_service.py       # Agentic RAG 파이프라인, 스트리밍, 세목 키워드 매칭
     │   ├── citation_guard.py     # 답변 인용·계산 수치 검증 후처리
+    │   ├── llm_client.py         # LangChain ChatOllama 어댑터 (call_llm/stream_llm/call_llm_structured)
     │   ├── tax_schedule_service.py  # 사업자 유형별 신고 기한 규칙 기반 계산
     │   ├── upload_service.py     # PDF 파싱 → 분류 → 청크 → 임베딩 → 저장
     │   ├── calculator/
-    │   │   ├── income_tax.py / capital_gains.py / inheritance.py / gift_tax.py  # 세목별 계산 로직
+    │   │   ├── income_tax.py / capital_gains.py / inheritance.py / gift_tax.py / vat.py / penalty_tax.py  # 세목별 계산 로직
     │   │   ├── engine.py         # 챗봇 tool calling — 계산 의도 감지·파라미터 추출·실행
     │   │   ├── repository.py    # tax_brackets/tax_deductions 조회
     │   │   └── updater.py       # 법령 개정 감지 시 세율표 자동 갱신 (LLM 추출)
@@ -565,7 +568,7 @@ pytest --lf
 | `test_api_law.py` | 조문 원문 뷰어 조회(200)·404 | 서비스 레이어 mock |
 | `test_api_tax_schedule.py` | 인증 확인(401), 사업자 유형별 일정 응답 | 서비스 레이어 mock |
 
-| `test_chat_service.py` | 세목 키워드 매칭(겹침 억제), 최종 프롬프트 조립, 계산기 메타 | LLM mock |
+| `test_chat_service.py` | 세목 키워드 매칭(겹침 억제), 최종 프롬프트 조립, 계산기 메타, 인용 누락 답변 structured output 보정 | LLM mock |
 | `test_hybrid_search.py` | 컨텍스트 포맷, 우선순위 정렬, 조문번호 fast path | DB·임베딩 mock |
 | `test_clause_splitter.py` | 조문 항(項) 분할, 분할 대상 판정 | DB·외부 의존 없음 |
 | `test_pdf_chunking.py` | PDF 조문 경계 인식 청킹 | DB·외부 의존 없음 |
@@ -583,8 +586,13 @@ python scripts/eval_rag.py --eval
 
 # + 실제 답변 생성 후 인용 정확도까지 확인 (느림)
 python scripts/eval_rag.py --eval --with-answer
+
+# temperature 샘플링 편차 검증: N회 반복해 citation_accuracy 평균/편차와
+# 실행마다 결과가 바뀌는 비결정적 항목을 확인
+python scripts/eval_rag.py --eval --with-answer --repeat 3
 ```
 결과는 `tests/eval/results/`에 타임스탬프 파일로 누적되어 파라미터 변경(임계값, 프롬프트 등) 전후 효과를 수치로 비교할 수 있습니다.
+생성 품질에 영향을 주는 변경(프롬프트, `temperature` 등)은 `temperature=0.3` 샘플링 편차 때문에 1회 실행 비교가 신뢰할 수 없다는 게 실측으로 확인되어(같은 코드로 재평가해도 73.7~84.2% 사이를 오갔음), `--repeat`으로 여러 번 돌린 평균으로 판단합니다. 검색 단계 변경(청킹·임베딩 등)은 결정론적이라 1회 비교로 충분합니다.
 
 ---
 
@@ -736,9 +744,8 @@ Tavily 다중 쿼리도 병렬로 처리하여 대기 시간을 줄입니다.
 
 ### SSE 스트리밍
 
-최종 답변은 Ollama `stream: true` 모드로 토큰 단위 실시간 전송합니다.
+최종 답변은 LangChain `ChatOllama.astream()`으로 토큰 단위 실시간 전송합니다.
 `<think>` 태그는 스트리밍 중 버퍼 최소화 방식으로 실시간 필터링합니다(TTFT 개선).
-httpx 싱글톤 클라이언트를 재사용하여 매 요청마다 TCP 연결을 새로 열지 않습니다.
 스트리밍 이벤트는 `{"type": "chunk", "text": ...}` / `{"type": "calc", "tool": ..., "params": ...}` 형태로 구분되어, 텍스트와 계산기 메타데이터(프론트 프리필용)를 함께 전달합니다.
 스트리밍 완료 후 DB 저장(`_save_history`)은 `asyncio.create_task`로 백그라운드 처리하여 클라이언트 연결을 즉시 종료합니다.
 
@@ -753,6 +760,14 @@ pydantic 스키마로 검증 후 DB 세율표 기반 계산기를 실행하며, 
 LLM은 법조문 번호나 계산 수치를 프롬프트 지시만으로 완벽히 지키지 않습니다.
 답변 생성 후 `[법률]`/`[시행령]`/`[시행규칙]` 인용을 정규식으로 추출해 실제 검색 컨텍스트(+계산기 결과)에 존재하는지 대조하고, 계산기 실행 시 답변 속 금액이 계산 결과의 최종 금액과 일치하는지도 확인합니다.
 불일치가 있으면 답변을 임의로 고치지 않고 하단에 경고 각주만 추가해 사용자가 직접 판단하게 합니다.
+
+**인용이 아예 없는 답변 자동 보정**: `temperature` 샘플링에 따라 모델이 가끔 인용 브래킷 자체를 생략하는데(정규식 검증만으로는 잡을 수 없는 사각지대), 검색 컨텍스트에 법령 자료가 실제로 있었는데도 답변에 인용이 0건이면 `call_llm_structured()`로 "근거 조문만 JSON Schema로 뽑아내는" 짧은 보정 호출을 1회 추가 실행합니다. 스키마의 `pattern` 제약(`^제[0-9]{1,4}조(의[0-9]{1,3})?$`)이 디코딩 단계에서 조문번호 표기를 강제해, 프롬프트 지시로는 못 막던 형식 이탈(공백 변형·마크다운·URL 혼입)을 원천 차단합니다. 추출된 조문도 검색 컨텍스트에 실존하는 것만 채택해(환각 인용 차단) 답변 끝에 "근거 출처 목록" 섹션으로 덧붙입니다. 인용이 이미 있는 답변(대다수)에는 이 보정 호출이 아예 실행되지 않아 지연 비용이 없습니다.
+
+### LLM provider 추상화 (LangChain)
+
+`chat_service.py`는 Ollama의 HTTP 요청 스키마를 직접 알지 못합니다 — `app/services/llm_client.py`가 LangChain의 `ChatOllama`를 감싸 `call_llm()`/`stream_llm()`/`call_llm_structured()`라는 provider 중립 인터페이스만 노출합니다.
+`num_ctx`/`num_predict`가 top-level이 아닌 `options` 안으로, `think`/`keep_alive`가 top-level로 가는 배치(과거 실측으로 확인된 버그 지점)를 LangChain 내부 소스로 직접 검증한 뒤 적용했습니다.
+향후 vLLM(OpenAI 호환 서버)이나 다른 모델로 전환할 때는 `llm_client.py`의 클라이언트 생성 부분만 교체하면 되고, RAG·계산기·citation_guard 등 나머지 로직은 변경이 필요 없습니다.
 
 ### 법령 개정 자동 동기화
 
