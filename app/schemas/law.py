@@ -37,6 +37,18 @@ class HybridSearchResult:
     priority: int
 
 
+class ParsedLawReference(BaseModel):
+    """표준화된 법령 조·항·호·목 참조."""
+    law_name: str
+    article: int
+    article_branch: int | None = None
+    paragraph: int | None = None
+    item: int | None = None
+    item_branch: int | None = None
+    subitem: str | None = None
+    canonical: str
+
+
 class LawArticleDetail(BaseModel):
     """조문 원문 뷰어 응답."""
     law_name: str
@@ -48,3 +60,4 @@ class LawArticleDetail(BaseModel):
     effective_date: str
     amendment_date: str
     source_url: str
+    reference: ParsedLawReference | None = None

@@ -50,7 +50,7 @@ def client(mock_pool):
 @pytest.fixture
 def auth_cookie(client) -> dict:
     """유효한 JWT 쿠키가 담긴 딕셔너리 반환 (인증 필요 엔드포인트 테스트용)."""
-    from app.utils.jwt import create_access_token
+    from app.core.security import create_access_token
     import uuid
 
     token = create_access_token(str(uuid.uuid4()), "test@example.com")

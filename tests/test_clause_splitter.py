@@ -20,14 +20,15 @@ _LONG_ARTICLE = (
 
 def test_split_returns_clauses_with_labels():
     clauses = split_into_clauses(_LONG_ARTICLE)
-    labels = [label for label, _ in clauses]
+    labels = [clause.label for clause in clauses]
     assert labels == ["①", "②", "⑨"]
+    assert [clause.paragraph for clause in clauses] == [1, 2, 9]
 
 
 def test_split_clause_text_starts_with_marker():
     clauses = split_into_clauses(_LONG_ARTICLE)
-    for label, text in clauses:
-        assert text.startswith(label)
+    for clause in clauses:
+        assert clause.text.startswith(clause.label)
 
 
 def test_split_skips_tiny_clauses():
@@ -38,7 +39,7 @@ def test_split_skips_tiny_clauses():
         "② 삭제 <2010.12.30>\n"
         "③ " + "이것도 충분히 긴 항입니다. " * 5
     )
-    labels = [label for label, _ in split_into_clauses(text)]
+    labels = [clause.label for clause in split_into_clauses(text)]
     assert labels == ["①", "③"]
 
 
@@ -77,5 +78,5 @@ def test_extended_circled_numbers_supported():
         "⑳ " + "스무번째 항 내용. " * 10 + "\n"
         "㉑ " + "스물한번째 항 내용. " * 10
     )
-    labels = [label for label, _ in split_into_clauses(text)]
+    labels = [clause.label for clause in split_into_clauses(text)]
     assert labels == ["⑳", "㉑"]

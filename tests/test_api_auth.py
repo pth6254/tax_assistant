@@ -59,7 +59,7 @@ def test_signup_duplicate_email_returns_409(client):
 
 def test_login_success_sets_cookie(client):
     import uuid
-    from app.utils.jwt import create_access_token
+    from app.core.security import create_access_token
 
     token = create_access_token(str(uuid.uuid4()), "user@example.com")
     with patch(

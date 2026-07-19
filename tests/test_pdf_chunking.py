@@ -3,7 +3,10 @@ test_pdf_chunking.py — PDF 청크 분할 단위 테스트 (조문 경계 인�
 """
 import tiktoken
 
-from app.utils.pdf import _MIN_ARTICLES_FOR_STRUCTURED_SPLIT, split_into_chunks
+from app.services.document.pdf_processor import (
+    _MIN_ARTICLES_FOR_STRUCTURED_SPLIT,
+    split_into_chunks,
+)
 from config import CHUNK_SIZE
 
 _enc = tiktoken.get_encoding("cl100k_base")

@@ -24,8 +24,15 @@ import time
 import uuid as _uuid
 
 from app.database import get_pool
-from app.schemas.law import HybridSearchResult, LawArticleDetail
-from app.utils.embeddings import embed_texts, get_http_client
+from app.schemas.law import HybridSearchResult, LawArticleDetail, ParsedLawReference
+from app.services.embedding_service import embed_texts, get_http_client
+from app.services.law.reference_parser import (
+    InvalidLawReference,
+    LawReference,
+    extract_law_reference,
+    normalize_article_no,
+    parse_law_reference,
+)
 from config import OLLAMA_BASE_URL, RERANK_MODEL, SIMILARITY_THRESHOLD, TOP_K
 
 logger = logging.getLogger(__name__)
@@ -312,11 +319,43 @@ async def get_law_article(law_name: str, article_no: str) -> LawArticleDetail | 
 
     조문 원문 뷰어(채팅 답변의 인용을 클릭했을 때) 및 인용 검증에 사용.
     """
+    law_name = law_name.strip()
+    try:
+        parsed_reference = parse_law_reference(article_no)
+    except InvalidLawReference:
+        normalized_article_no = normalize_article_no(article_no)
+        try:
+            parsed_reference = parse_law_reference(normalized_article_no)
+        except InvalidLawReference:
+            parsed_reference = None
+    article_no = normalize_article_no(article_no)
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(_ARTICLE_LOOKUP_SQL, law_name, article_no)
     if not row:
         return None
+    reference = None
+    if parsed_reference and parsed_reference.article is not None:
+        canonical_reference = LawReference(
+            law_name=row["law_name"],
+            article=parsed_reference.article,
+            article_branch=parsed_reference.article_branch,
+            paragraph=parsed_reference.paragraph,
+            item=parsed_reference.item,
+            item_branch=parsed_reference.item_branch,
+            subitem=parsed_reference.subitem,
+        )
+        reference = ParsedLawReference(
+            law_name=row["law_name"],
+            article=canonical_reference.article,
+            article_branch=canonical_reference.article_branch,
+            paragraph=canonical_reference.paragraph,
+            item=canonical_reference.item,
+            item_branch=canonical_reference.item_branch,
+            subitem=canonical_reference.subitem,
+            canonical=canonical_reference.canonical,
+        )
+
     return LawArticleDetail(
         law_name=row["law_name"],
         law_type=row["law_type"],
@@ -327,6 +366,7 @@ async def get_law_article(law_name: str, article_no: str) -> LawArticleDetail | 
         effective_date=row["effective_date"],
         amendment_date=row["amendment_date"],
         source_url=row["source_url"] or "",
+        reference=reference,
     )
 
 
@@ -355,10 +395,6 @@ async def fetch_hybrid_context(
     return format_hybrid_context(results)
 
 
-# 질문 속 조문번호 직접 언급 감지: "부가가치세법 제39조", "제 55 조" 등 (공백 변형 허용)
-_ARTICLE_REF_RE = re.compile(r"(?:([가-힣]+법)\s*)?(제\s*\d+\s*조(?:\s*의\s*\d+)?)")
-
-
 async def _lookup_referenced_article(
     query: str, law_filter: str,
 ) -> HybridSearchResult | None:
@@ -368,15 +404,14 @@ async def _lookup_referenced_article(
     직접 질의를 안정적으로 찾지 못한다 (평가셋 direct-02로 확인된 약점).
     법령명은 질문에서 우선 추출하고, 없으면 세목 필터(law_filter)를 사용한다.
     """
-    match = _ARTICLE_REF_RE.search(query)
-    if not match:
+    reference = extract_law_reference(query)
+    if not reference or not reference.article_no:
         return None
-    law_name = match.group(1) or (law_filter if law_filter != "ALL" else None)
+    law_name = reference.law_name or (law_filter if law_filter != "ALL" else None)
     if not law_name:
         return None
 
-    # DB의 article_no는 표준형("제39조")이므로 공백 변형("제 39 조")을 정규화해 조회
-    article_no = re.sub(r"\s+", "", match.group(2))
+    article_no = reference.article_no
     article = await get_law_article(law_name, article_no)
     if not article:
         return None

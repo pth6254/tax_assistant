@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.schemas.law import LawArticleDetail
 from app.services.search.hybrid_search_service import get_law_article
-from app.utils.jwt import verify_token
+from app.core.security import verify_token
 
 router = APIRouter(prefix="/api/law-articles", tags=["law"])
 

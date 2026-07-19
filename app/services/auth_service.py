@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from passlib.context import CryptContext
 
 from app.database import get_pool
-from app.utils.jwt import create_access_token
+from app.core.security import create_access_token
 
 logger = logging.getLogger(__name__)
 

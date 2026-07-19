@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import pytest
 from jose import jwt
 
-from app.utils.jwt import create_access_token
+from app.core.security import create_access_token
 from config import JWT_ALGORITHM, JWT_SECRET
 
 

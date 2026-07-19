@@ -123,6 +123,33 @@ async def test_lookup_referenced_article_normalizes_spaced_number():
 
 
 @pytest.mark.asyncio
+async def test_lookup_referenced_article_distinguishes_article_branch_from_paragraph():
+    """제59조의4는 조의 가지번호이고, 제9항은 조회 키에서 분리한다."""
+    with patch(
+        "app.services.search.hybrid_search_service.get_law_article",
+        AsyncMock(return_value=_make_article_detail()),
+    ) as mock_get:
+        result = await _lookup_referenced_article(
+            "소득세법 제59조의4 제9항 제1호 내용을 알려줘", "ALL"
+        )
+    assert result is not None
+    mock_get.assert_awaited_once_with("소득세법", "제59조의4")
+
+
+@pytest.mark.asyncio
+async def test_lookup_referenced_enforcement_rule_keeps_full_law_name():
+    with patch(
+        "app.services.search.hybrid_search_service.get_law_article",
+        AsyncMock(return_value=_make_article_detail()),
+    ) as mock_get:
+        result = await _lookup_referenced_article(
+            "소득세법 시행규칙 제58조의2 제1항 제4호 다목을 알려줘", "ALL"
+        )
+    assert result is not None
+    mock_get.assert_awaited_once_with("소득세법 시행규칙", "제58조의2")
+
+
+@pytest.mark.asyncio
 async def test_lookup_referenced_article_none_without_article_ref():
     result = await _lookup_referenced_article("매입세액 불공제 대상 알려줘", "부가가치세법")
     assert result is None

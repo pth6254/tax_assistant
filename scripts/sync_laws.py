@@ -33,7 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.database import close_pool, get_pool
 from app.services.law.ingestion_service import ingest_law
-from app.utils.embeddings import close_http_client
+from app.services.embedding_service import close_http_client
 
 
 async def _list_synced_laws() -> list[dict]:

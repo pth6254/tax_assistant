@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.database import get_pool
-from app.utils.jwt import verify_token
+from app.core.security import verify_token
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 

@@ -6,7 +6,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from app.database import get_pool
-from app.utils.embeddings import get_http_client
+from app.services.embedding_service import get_http_client
 from config import CHAT_MODEL, EMBED_MODEL, OLLAMA_BASE_URL, RERANK_MODEL
 
 logger = logging.getLogger(__name__)

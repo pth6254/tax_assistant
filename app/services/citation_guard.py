@@ -12,6 +12,8 @@ LLM이 생성한 최종 답변에서 법령 인용([법률]/[시행령]/[시행�
 import re
 from dataclasses import dataclass
 
+from app.services.law.reference_parser import normalize_article_no
+
 # _COMBINED_PROMPT의 "근거 출처 목록" 형식과 동일한 패턴.
 # 조문번호는 공백 변형을 허용한다 — qwen 계열 모델이 "제 50 조", "제 59 조의 4"처럼
 # 숫자 주변에 공백을 섞어 출력하는 경우가 많아, 엄격한 "제\d+조" 패턴은 실제 답변의
@@ -20,10 +22,6 @@ _CITATION_RE = re.compile(
     r"\[(법률|시행령|시행규칙)\]\s*([^\n\[]+?)\s*(제\s*\d+\s*조(?:\s*의\s*\d+)?)"
 )
 
-
-def normalize_article_no(article_no: str) -> str:
-    """조문번호 표기 변형('제 50 조', '제59조의 4')을 표준형('제50조', '제59조의4')으로 정규화."""
-    return re.sub(r"\s+", "", article_no)
 
 # calc_context(format_calculation_context)가 만드는 "- 라벨: 1,234,567원" 형식
 _MONEY_LINE_RE = re.compile(r"[\d][\d,]*원")

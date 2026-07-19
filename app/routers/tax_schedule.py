@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from app.schemas.tax_schedule import TaxScheduleResponse
 from app.services import auth_service
 from app.services.tax_schedule_service import compute_upcoming_deadlines
-from app.utils.jwt import verify_token
+from app.core.security import verify_token
 
 router = APIRouter(prefix="/api/tax-schedule", tags=["tax-schedule"])
 

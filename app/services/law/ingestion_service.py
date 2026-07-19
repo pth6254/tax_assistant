@@ -210,7 +210,7 @@ async def _embed_and_update(
     Returns:
         (embedded_count, embed_failed_count)
     """
-    from app.utils.embeddings import embed_texts  # 기존 PDF 임베딩 함수 재사용
+    from app.services.embedding_service import embed_texts
 
     embedded_count    = 0
     embed_failed_count = 0
@@ -277,19 +277,19 @@ async def embed_clauses_for_articles(items: list[tuple[LawArticle, int]]) -> int
         should_split,
         split_into_clauses,
     )
-    from app.utils.embeddings import embed_texts
+    from app.services.embedding_service import embed_texts
 
     # (article_id, clause_label, clause_text, embed_text) 목록 구성
     rows: list[tuple[int, str, str, str]] = []
     for article, db_id in items:
         if not should_split(article.article_text):
             continue
-        for label, clause_text in split_into_clauses(article.article_text):
+        for clause in split_into_clauses(article.article_text):
             embed_text = build_clause_embed_text(
                 article.law_name, article.article_no,
-                article.article_title, article.article_text, clause_text,
+                article.article_title, article.article_text, clause.text,
             )
-            rows.append((db_id, label, clause_text, embed_text))
+            rows.append((db_id, clause.label, clause.text, embed_text))
 
     if not rows:
         return 0

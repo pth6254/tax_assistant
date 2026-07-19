@@ -35,6 +35,7 @@ import unicodedata
 import xml.etree.ElementTree as ET
 
 from app.schemas.law import LawArticle
+from app.services.law.reference_parser import format_article_no
 
 logger = logging.getLogger(__name__)
 
@@ -110,18 +111,6 @@ def _find_element(el: ET.Element, *tag_candidates: str) -> ET.Element | None:
         if child is not None:
             return child
     return None
-
-
-def _build_article_no(no: str, branch: str) -> str:
-    """
-    조문번호 + 조문가지번호 → 표준 조문번호 문자열.
-    예: no="3", branch="2" → "제3조의2"
-        no="1", branch=""  → "제1조"
-    """
-    if not no:
-        return ""
-    base = f"제{no}조"
-    return f"{base}의{branch}" if branch else base
 
 
 def _collect_para_text(article_el: ET.Element) -> str:
@@ -242,7 +231,7 @@ def parse_articles(
             articles.append(LawArticle(
                 law_name=law_name,
                 law_type=law_type,
-                article_no=_build_article_no(no, branch),
+                article_no=format_article_no(no, branch) if no else "",
                 article_title=normalize_text(title),
                 article_text=article_text,
                 effective_date=effective_date,

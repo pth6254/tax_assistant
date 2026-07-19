@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 
 from app.schemas.chat import ChatRequest
 from app.services import chat_service
-from app.utils.jwt import verify_token
+from app.core.security import verify_token
 
 router = APIRouter(prefix="/api", tags=["chat"])
 

@@ -37,7 +37,7 @@ from app.database import close_pool, get_pool
 from app.services.chat_service import _classify_and_generate_queries, process_chat
 from app.services.llm_client import close_llm_client
 from app.services.search.hybrid_search_service import hybrid_search
-from app.utils.embeddings import close_http_client
+from app.services.embedding_service import close_http_client
 from config import TOP_K
 
 _GOLDEN_PATH  = Path(__file__).resolve().parent.parent / "tests" / "eval" / "golden_qa.json"

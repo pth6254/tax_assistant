@@ -1,5 +1,5 @@
 """
-utils/jwt.py — JWT 생성·검증 유틸 (httpOnly 쿠키 방식)
+core/security.py — JWT 생성·검증 및 httpOnly 인증 쿠키 관리
 """
 from datetime import datetime, timedelta, timezone
 

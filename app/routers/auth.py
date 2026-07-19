@@ -7,7 +7,7 @@ from fastapi import APIRouter, Response
 
 from app.schemas.auth import LoginRequest, SignupRequest
 from app.services import auth_service
-from app.utils.jwt import clear_auth_cookie, set_auth_cookie
+from app.core.security import clear_auth_cookie, set_auth_cookie
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 

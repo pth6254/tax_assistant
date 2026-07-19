@@ -12,8 +12,8 @@ from fastapi import HTTPException
 
 from config import CHAT_MODEL, OLLAMA_BASE_URL
 from app.database import get_pool
-from app.utils.embeddings import embed_texts
-from app.utils.pdf import extract_text_from_pdf, split_into_chunks
+from app.services.document.pdf_processor import extract_text_from_pdf, split_into_chunks
+from app.services.embedding_service import embed_texts
 
 logger = logging.getLogger(__name__)
 

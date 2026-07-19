@@ -12,7 +12,7 @@ from app.schemas.calculator import (
     VatRequest,
 )
 from app.services.calculator import capital_gains, gift_tax, income_tax, inheritance, penalty_tax, vat
-from app.utils.jwt import verify_token
+from app.core.security import verify_token
 
 logger = logging.getLogger(__name__)
 

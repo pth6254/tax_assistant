@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app.database import close_pool, get_pool
 from app.services.law.ingestion_service import _TAX_SEARCH_KEYWORDS
 from app.services.law.interpretation_service import ingest_interpretations
-from app.utils.embeddings import close_http_client
+from app.services.embedding_service import close_http_client
 
 
 def _print_result(result: dict) -> None:

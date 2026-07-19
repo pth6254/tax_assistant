@@ -7,7 +7,7 @@ DELETE /api/documents/{filename}
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from app.services import upload_service
-from app.utils.jwt import verify_token
+from app.core.security import verify_token
 from config import MAX_UPLOAD_MB
 
 router = APIRouter(prefix="/api", tags=["upload"])

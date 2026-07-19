@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Response
 
 from app.schemas.auth import DeleteAccountRequest, PasswordChangeRequest, ProfileUpdateRequest, UserResponse
 from app.services import auth_service
-from app.utils.jwt import clear_auth_cookie, verify_token
+from app.core.security import clear_auth_cookie, verify_token
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 

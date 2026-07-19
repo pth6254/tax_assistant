@@ -19,7 +19,7 @@ from app.database import close_pool, get_pool
 from app.schemas.law import LawArticle
 from app.services.law.clause_splitter import CLAUSE_SPLIT_MIN_CHARS, should_split
 from app.services.law.ingestion_service import embed_clauses_for_articles
-from app.utils.embeddings import close_http_client
+from app.services.embedding_service import close_http_client
 
 
 async def main(args: argparse.Namespace) -> None:

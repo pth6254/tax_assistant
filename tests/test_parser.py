@@ -5,10 +5,10 @@ test_parser.py — parser_service 단위 테스트
 """
 import pytest
 from app.services.law.parser_service import (
-    _build_article_no,
     normalize_text,
     parse_articles,
 )
+from app.services.law.reference_parser import format_article_no
 
 # ── normalize_text ───────────────────────────────────────────────
 
@@ -33,18 +33,19 @@ def test_normalize_text_none_equivalent():
     assert normalize_text("   ") == ""
 
 
-# ── _build_article_no ────────────────────────────────────────────
+# ── format_article_no ───────────────────────────────────────────
 
 def test_build_article_no_simple():
-    assert _build_article_no("1", "") == "제1조"
+    assert format_article_no("1", "") == "제1조"
 
 
 def test_build_article_no_with_branch():
-    assert _build_article_no("3", "2") == "제3조의2"
+    assert format_article_no("3", "2") == "제3조의2"
 
 
-def test_build_article_no_empty_returns_empty():
-    assert _build_article_no("", "") == ""
+def test_build_article_no_empty_is_invalid():
+    with pytest.raises(ValueError):
+        format_article_no("", "")
 
 
 # ── parse_articles ───────────────────────────────────────────────

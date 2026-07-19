@@ -144,7 +144,7 @@ graph TD
 
     B --> C[routers/]
     C --> D[services/]
-    D --> E[utils/]
+    C --> E[core/security]
     D --> F[(PostgreSQL<br/>+ pgvector)]
 
     D -->|Ollama REST API| G[Ollama<br/>qwen3.5:9b<br/>qwen3-embedding:4b]
@@ -165,7 +165,7 @@ graph TD
 HTTP 요청
   → routers/     입력 검증, 인증 확인, 응답 포맷
   → services/    비즈니스 로직, RAG 파이프라인
-  → utils/       공통 기능 (JWT, 임베딩, PDF)
+  → core/        JWT·인증 쿠키 등 전역 보안 구성
   → database.py  asyncpg 커넥션 풀 (싱글턴)
 ```
 
@@ -373,9 +373,12 @@ tax-assistant/
     │   ├── auth_service.py       # 이메일 중복, bcrypt 해싱, JWT 발급, 프로필 조회/수정
     │   ├── chat_service.py       # Agentic RAG 파이프라인, 스트리밍, 세목 키워드 매칭
     │   ├── citation_guard.py     # 답변 인용·계산 수치 검증 후처리
+    │   ├── embedding_service.py  # Ollama 임베딩 API와 HTTP 클라이언트 생명주기
     │   ├── llm_client.py         # LangChain ChatOllama 어댑터 (call_llm/stream_llm/call_llm_structured)
     │   ├── tax_schedule_service.py  # 사업자 유형별 신고 기한 규칙 기반 계산
     │   ├── upload_service.py     # PDF 파싱 → 분류 → 청크 → 임베딩 → 저장
+    │   ├── document/
+    │   │   └── pdf_processor.py  # PDF 텍스트 추출, 법령 경계·토큰 기반 청크 분할
     │   ├── calculator/
     │   │   ├── income_tax.py / capital_gains.py / inheritance.py / gift_tax.py / vat.py / penalty_tax.py  # 세목별 계산 로직
     │   │   ├── engine.py         # 챗봇 tool calling — 계산 의도 감지·파라미터 추출·실행
@@ -387,15 +390,14 @@ tax-assistant/
     │   └── law/
     │       ├── api_service.py         # 국가법령정보 API 클라이언트 (법령 + 법령해석례)
     │       ├── parser_service.py      # 법령 XML 조문 파싱 (절/관 표제·삭제 조문 필터링)
+    │       ├── reference_parser.py    # 법률·시행령·시행규칙 조·항·호·목 참조 구조화
     │       ├── clause_splitter.py     # 긴 조문의 항(項) 단위 분할 (보조 임베딩용)
     │       ├── ingestion_service.py   # 법령 수집·저장·임베딩·개정 감지 파이프라인
     │       └── interpretation_service.py  # 법령해석례(유권해석) 수집·저장 파이프라인
     │
+    ├── core/
+    │   └── security.py           # JWT 생성·검증, httpOnly 인증 쿠키 관리
     ├── schemas/                  # pydantic 요청/응답 모델
-    ├── utils/                    # 공통 유틸
-    │   ├── jwt.py                # JWT 생성·검증, httpOnly 쿠키 설정
-    │   ├── embeddings.py         # Ollama 임베딩 API 호출 (싱글턴 클라이언트)
-    │   └── pdf.py                # PDF 텍스트 추출, tiktoken 청크 분할
     │
     └── database.py               # asyncpg 커넥션 풀 싱글턴
 ```
@@ -605,6 +607,7 @@ pytest tests/test_api_auth.py -v            # 인증 API
 pytest tests/test_api_upload.py -v          # 업로드 API
 pytest tests/test_api_chat.py -v            # 채팅 API
 pytest tests/test_api_law.py -v             # 조문 원문 뷰어 API
+pytest tests/test_law_reference.py -v        # 조·항·호·목 법령 참조 파서
 pytest tests/test_api_tax_schedule.py -v    # 세무 일정 API
 ```
 
@@ -633,6 +636,7 @@ pytest --lf
 | `test_api_calculator.py` | 인증 확인(401), 유효성 검사(422), 부가세·가산세 계산 응답 | DB mock |
 | `test_api_chat.py` | 인증 확인(401), 유효성 검사(422), 계산기 메타데이터·스트리밍 이벤트 | 서비스 레이어 mock |
 | `test_api_law.py` | 조문 원문 뷰어 조회(200)·404 | 서비스 레이어 mock |
+| `test_law_reference.py` | 조·항·호·목 구조 파싱, 가지번호 구분, 조문번호 정규화 | DB·외부 의존 없음 |
 | `test_api_tax_schedule.py` | 인증 확인(401), 사업자 유형별 일정 응답 | 서비스 레이어 mock |
 
 | `test_chat_service.py` | 세목 키워드 매칭(겹침 억제), 최종 프롬프트 조립, 계산기 메타, 인용 누락 답변 structured output 보정 | LLM mock |
@@ -720,6 +724,11 @@ python scripts/eval_rag.py --eval --with-answer --repeat 3
 
 > 자동 생성 API 문서: `http://localhost:8000/docs`
 
+`/api/law-articles/lookup`의 `article_no`에는 `59조의4`, `제59조의4 제9항 제1호 가목`처럼
+공백이나 하위 단위가 포함된 표기도 전달할 수 있습니다. 조회에는 정규화된 조 번호
+(`제59조의4`)를 사용하고, 응답의 `reference`에는 `article=59`, `article_branch=4`,
+`paragraph=9`, `item=1`, `subitem="가"`처럼 각 단위를 분리해 반환합니다.
+
 ---
 
 ## 12. 사용 예시
@@ -802,6 +811,19 @@ Compose healthcheck를 적용하고, 프런트엔드는 백엔드가 healthy가 
 WSL 기본 게이트웨이로 Windows Ollama에 접근하고, 운영 환경에서는 IP 하드코딩 대신 Docker
 서비스명 또는 사설 DNS를 사용하도록 설계했습니다. 따라서 RAG·계산기 코드를 수정하지 않고도
 로컬 Ollama, Compose GPU 서비스, 별도 추론 서버 사이를 환경설정만으로 전환할 수 있습니다.
+
+### 조·항·호·목 법령 참조 정규화
+
+법률·시행령·시행규칙에 포함된 인용을 문자열 하나로 취급하지 않고 `law_name`, `article`, `article_branch`,
+`paragraph`, `item`, `item_branch`, `subitem`으로 구조화합니다. 예를 들어 `제59조의4`의
+`4`는 제59조에서 파생된 별도의 **조 가지번호**이고, `제59조 제4항`의 `4`는 해당 조 내부의
+**항 번호**이므로 서로 다른 필드에 저장됩니다. `①`부터 `㉟`까지의 원문 항 표기도 숫자 항으로
+변환하며, `제3호의2` 같은 호 가지번호와 `가목` 같은 목도 별도로 보존합니다.
+
+직접 조문 조회 fast path는 입력을 `제N조(의N)` 형태로 정규화해 DB를 조회하되, 파싱한 하위
+단위는 API 응답의 `reference`에 유지합니다. 유권해석 사건번호 `11-0150`처럼 조문번호가 아닌
+식별자는 변형하지 않습니다. 이 설계로 조문 조회 정확도를 높이고 향후 항·호 단위 검색 및
+인용 검증을 확장할 수 있는 기반을 마련했습니다.
 
 ### 하이브리드 검색 (법령 조문 + PDF)
 

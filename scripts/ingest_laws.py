@@ -26,7 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.database import close_pool, get_pool
-from app.utils.embeddings import close_http_client, embed_texts
+from app.services.embedding_service import close_http_client, embed_texts
 from app.services.law.ingestion_service import (
     LAW_TARGETS,
     ingest_all_laws,
