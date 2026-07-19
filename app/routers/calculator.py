@@ -8,8 +8,10 @@ from app.schemas.calculator import (
     GiftTaxRequest,
     IncomeTaxRequest,
     InheritanceRequest,
+    PenaltyTaxRequest,
+    VatRequest,
 )
-from app.services.calculator import capital_gains, gift_tax, income_tax, inheritance
+from app.services.calculator import capital_gains, gift_tax, income_tax, inheritance, penalty_tax, vat
 from app.utils.jwt import verify_token
 
 logger = logging.getLogger(__name__)
@@ -84,4 +86,39 @@ async def calc_gift_tax(
         )
     except Exception as e:
         logger.warning("증여세 계산 오류: %s", e)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/vat", response_model=CalculationResult)
+async def calc_vat(
+    req: VatRequest,
+    user: dict = Depends(verify_token),
+):
+    try:
+        return await vat.calculate(
+            sales=req.sales,
+            purchases=req.purchases,
+            exempt_sales=req.exempt_sales,
+            is_simplified=req.is_simplified,
+            business_type=req.business_type,
+        )
+    except Exception as e:
+        logger.warning("부가가치세 계산 오류: %s", e)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/penalty-tax", response_model=CalculationResult)
+async def calc_penalty_tax(
+    req: PenaltyTaxRequest,
+    user: dict = Depends(verify_token),
+):
+    try:
+        return await penalty_tax.calculate(
+            unpaid_tax=req.unpaid_tax,
+            penalty_type=req.penalty_type,
+            is_negligent=req.is_negligent,
+            days_late=req.days_late,
+        )
+    except Exception as e:
+        logger.warning("가산세 계산 오류: %s", e)
         raise HTTPException(status_code=400, detail=str(e))

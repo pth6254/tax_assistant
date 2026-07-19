@@ -4,6 +4,8 @@ const fmtPct = (r) => (r * 100).toFixed(2) + '%'
 export default function ResultCard({ result, onAskAboutResult }) {
   if (!result) return null
 
+  const isRefund = result.final_tax < 0
+
   return (
     <div style={{
       background: 'var(--surface)',
@@ -70,7 +72,7 @@ export default function ResultCard({ result, onAskAboutResult }) {
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
         <span style={{ fontFamily: 'var(--font-serif)', fontSize: 14, color: 'var(--text-muted)' }}>
-          최종 납부세액
+          {isRefund ? '환급세액' : '최종 납부세액'}
         </span>
         <span style={{
           fontSize: 24, fontWeight: 700,
@@ -78,7 +80,7 @@ export default function ResultCard({ result, onAskAboutResult }) {
           fontVariantNumeric: 'tabular-nums',
           textShadow: '0 0 20px rgba(124,159,255,.3)',
         }}>
-          {fmt(result.final_tax)}
+          {fmt(Math.abs(result.final_tax))}
         </span>
       </div>
 

@@ -98,7 +98,7 @@ Agentic RAG 파이프라인 (검색 → 계산 → 합성 → 인용 검증)
 ### 세금 계산기
 
 - 종합소득세·양도소득세·상속세·증여세·부가가치세·가산세(무신고·과소신고·납부지연) 6종, DB 세율표(`tax_brackets`/`tax_deductions`) 기반 계산
-- 계산 단계·근거 조문을 함께 반환, 소득세·양도세·상속세·증여세는 프론트 계산기 화면과 챗봇 tool calling 양쪽에서 재사용 (부가세·가산세는 현재 챗봇 tool calling 전용, REST 엔드포인트·프론트 화면 미구현)
+- 계산 단계·근거 조문을 함께 반환, 프론트 계산기 화면과 챗봇 tool calling 양쪽에서 재사용
 - **계산기 ↔ 챗봇 왕복 연결**: 챗봇이 계산기를 실행하면 답변에 "계산기에서 조건 바꿔보기" 버튼(입력값 프리필), 계산기 결과에서 "이 결과에 대해 챗봇에게 질문하기" 버튼으로 상호 이동
 
 ### 세무 일정 관리
@@ -358,7 +358,7 @@ tax-assistant/
     │   ├── conversations.py      # 대화 세션 CRUD
     │   ├── chat.py               # POST /api/chat, /api/chat/stream
     │   ├── upload.py             # POST /api/upload, 문서 목록/삭제
-    │   ├── calculator.py         # POST /api/calculator/{income-tax,capital-gains,inheritance,gift} (vat·penalty_tax는 아직 챗봇 tool calling 전용, REST 미노출)
+    │   ├── calculator.py         # POST /api/calculator/{income-tax,capital-gains,inheritance,gift,vat,penalty-tax}
     │   ├── law.py                # GET /api/law-articles/lookup (조문 원문 뷰어)
     │   └── tax_schedule.py       # GET /api/tax-schedule
     │
@@ -564,6 +564,7 @@ pytest --lf
 | `test_jwt.py` | JWT 토큰 생성 및 클레임 검증 | DB·외부 의존 없음 |
 | `test_api_auth.py` | 회원가입·로그인 유효성 검사 및 응답 코드 | 서비스 레이어 mock |
 | `test_api_upload.py` | 인증 확인(401), 파일 형식 검사(400), 정상 업로드 | 서비스 레이어 mock |
+| `test_api_calculator.py` | 인증 확인(401), 유효성 검사(422), 부가세·가산세 계산 응답 | DB mock |
 | `test_api_chat.py` | 인증 확인(401), 유효성 검사(422), 계산기 메타데이터·스트리밍 이벤트 | 서비스 레이어 mock |
 | `test_api_law.py` | 조문 원문 뷰어 조회(200)·404 | 서비스 레이어 mock |
 | `test_api_tax_schedule.py` | 인증 확인(401), 사업자 유형별 일정 응답 | 서비스 레이어 mock |
