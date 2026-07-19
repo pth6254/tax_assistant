@@ -96,7 +96,7 @@ Agentic RAG 파이프라인 (검색 → 계산 → 합성 → 인용 검증)
 
 ### 세금 계산기
 
-- 종합소득세·양도소득세·상속세·증여세 4종, DB 세율표(`tax_brackets`/`tax_deductions`) 기반 계산
+- 종합소득세·양도소득세·상속세·증여세·부가가치세·가산세(무신고·과소신고·납부지연) 6종, DB 세율표(`tax_brackets`/`tax_deductions`) 기반 계산
 - 계산 단계·근거 조문을 함께 반환, 프론트 계산기 화면과 챗봇 tool calling 양쪽에서 재사용
 - **계산기 ↔ 챗봇 왕복 연결**: 챗봇이 계산기를 실행하면 답변에 "계산기에서 조건 바꿔보기" 버튼(입력값 프리필), 계산기 결과에서 "이 결과에 대해 챗봇에게 질문하기" 버튼으로 상호 이동
 
@@ -527,7 +527,7 @@ pytest tests/test_ingestion.py -v           # 수집·개정 감지 유틸
 pytest tests/test_api_service.py -v         # 국가법령정보 API XML 파싱 (법령 + 법령해석례)
 pytest tests/test_interpretation_service.py -v  # 유권해석 수집 파이프라인
 pytest tests/test_hybrid_search_priority.py -v  # 법령 위계 우선순위 분류
-pytest tests/test_calculator.py -v          # 세금 계산기 4종 (소득세·양도세·상속세·증여세)
+pytest tests/test_calculator.py -v          # 세금 계산기 6종 (소득세·양도세·상속세·증여세·부가세·가산세)
 pytest tests/test_calculator_engine.py -v   # 계산기 tool calling 엔진
 pytest tests/test_citation_guard.py -v      # 답변 인용·수치 검증 후처리
 pytest tests/test_tax_schedule.py -v        # 세무 일정 계산
@@ -554,7 +554,7 @@ pytest --lf
 | `test_api_service.py` | 법령/법령해석례 검색·본문조회 XML 파싱 | DB·외부 의존 없음 |
 | `test_interpretation_service.py` | 유권해석 수집·세목 추론·본문 조합 | DB·외부 의존 없음 (API/DB mock) |
 | `test_hybrid_search_priority.py` | law_type → (우선순위, source_type) 분류 | DB·외부 의존 없음 |
-| `test_calculator.py` | 세금 계산기 4종 세율 구간·공제 로직 | 시드 데이터 mock |
+| `test_calculator.py` | 세금 계산기 6종 세율 구간·공제 로직 | 시드 데이터 mock |
 | `test_calculator_engine.py` | 계산 의도 게이트, LLM 추출 파싱, 도구 디스패치 | LLM mock |
 | `test_citation_guard.py` | 조문 인용 실존 검증, 계산 금액 일치 검증 | DB·외부 의존 없음 |
 | `test_tax_schedule.py` | 사업자 유형별 신고 기한 계산 | DB·외부 의존 없음 |

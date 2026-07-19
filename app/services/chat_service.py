@@ -17,8 +17,8 @@ from config import (
     THINK_ENABLED,
 )
 from app.services.calculator.engine import CalcRun, run_calculation_for_query
-from app.services.citation_guard import apply_citation_guard, build_citation_footer
-from app.services.llm_client import call_llm, stream_llm
+from app.services.citation_guard import apply_citation_guard, build_citation_footer, extract_citations
+from app.services.llm_client import call_llm, call_llm_structured, stream_llm
 from app.services.search.web_search import tavily_search
 from app.database import get_pool
 from app.services.search.hybrid_search_service import (
@@ -234,6 +234,35 @@ _COMBINED_CLASSIFY_PROMPT = (
 #  사라진 사례가 있어, 답변 경로에는 길이 제한을 두지 않는다)
 _NUM_PREDICT_MULTI_QUERY = 150
 
+# ── 인용 누락 답변 보정: structured output으로 근거 출처 목록 생성 ──
+# temperature 샘플링에 따라 모델이 가끔 출력 형식을 이탈해 인용을 아예 달지 않는데
+# (실측: citation_accuracy 73.7~81.6% 변동), 그 경우에만 JSON Schema 강제 디코딩으로
+# 인용 목록을 재추출해 답변 끝에 덧붙인다. pattern 제약이 '제 55 조'류 표기 변형과
+# 마크다운/URL 혼입을 디코딩 단계에서 차단한다.
+_CITATION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "citations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "label":      {"type": "string", "enum": ["법률", "시행령", "시행규칙"]},
+                    "law_name":   {"type": "string", "maxLength": 30},
+                    "article_no": {"type": "string", "pattern": "^제[0-9]{1,4}조(의[0-9]{1,3})?$"},
+                },
+                "required": ["label", "law_name", "article_no"],
+            },
+        },
+    },
+    "required": ["citations"],
+}
+
+_CITATION_EXTRACT_PROMPT = (
+    "답변이 근거로 삼은 법령 조문을 검색 자료와 대조하여 전부 나열하라.\n"
+    "답변과 검색 자료에 실제로 등장하는 조문만 포함하고, 없는 조문을 지어내지 말라."
+)
+
 # Qwen3 계열 모델에서만 /no_think 접두사 사용 (다른 모델에는 노이즈)
 _QWEN3_NO_THINK_PREFIX = "/no_think\n\n" if (
     not THINK_ENABLED and any(k in CHAT_MODEL.lower() for k in ("qwen3",))
@@ -294,6 +323,57 @@ async def _stream_llm_skip_think(
 
     if buf and not in_think:
         yield buf
+
+
+async def _build_source_list_via_structured_output(answer: str, context: str) -> str:
+    """structured output으로 답변의 근거 조문을 추출해 '근거 출처 목록' 섹션 문자열을 만든다.
+
+    추출된 인용은 검색 컨텍스트에 실존하는 것만 채택한다(환각 인용 차단).
+    실패하거나 검증된 인용이 없으면 빈 문자열을 반환한다.
+    """
+    try:
+        data = await call_llm_structured(
+            [
+                {"role": "system", "content": _CITATION_EXTRACT_PROMPT},
+                {"role": "user",   "content": f"[답변]\n{answer}\n\n[검색 자료]\n{context}"},
+            ],
+            _CITATION_SCHEMA,
+        )
+    except Exception as e:
+        logger.warning("[CITATION] structured 인용 추출 실패 — 보정 생략: %s", e)
+        return ""
+
+    norm_context = re.sub(r"\s+", "", context)
+    lines: list[str] = []
+    seen: set[tuple[str, str, str]] = set()
+    for c in data.get("citations", []):
+        law_name   = str(c.get("law_name", "")).strip()
+        article_no = str(c.get("article_no", ""))
+        label      = str(c.get("label", ""))
+        key = (label, re.sub(r"\s+", "", law_name), article_no)
+        if not law_name or key in seen:
+            continue
+        seen.add(key)
+        if key[1] in norm_context and article_no in norm_context:
+            lines.append(f"[{label}] {law_name} {article_no}")
+
+    if not lines:
+        return ""
+    return "\n\n## 📋 근거 출처 목록\n" + "\n".join(lines)
+
+
+async def _append_source_list_if_missing(answer: str, context: str) -> str:
+    """답변에 법령 인용이 하나도 없으면 structured output으로 인용 목록을 생성해 덧붙인다.
+
+    인용이 이미 있는 정상 답변(약 80%)에는 추가 LLM 호출이 없어 지연이 0이고,
+    형식 이탈 답변에만 짧은 보정 호출(1~3초)이 실행된다.
+    """
+    if "[출처:" not in context or extract_citations(answer):
+        return answer
+    section = await _build_source_list_via_structured_output(answer, context)
+    if section:
+        logger.info("[CITATION] 인용 누락 답변 보정 — structured 추출로 출처 목록 추가")
+    return answer + section
 
 
 async def _classify_and_generate_queries(
@@ -445,6 +525,7 @@ async def process_chat(query: str, conversation_id: str, user_id: str) -> tuple[
 
     messages = _build_final_messages(query, context, web_results, history, calc_run)
     answer   = await call_llm(messages, temperature=0.3)
+    answer   = await _append_source_list_if_missing(answer, context)
     answer   = apply_citation_guard(answer, context, calc_run.context if calc_run else None)
 
     await _save_history(conv_id, query, answer, is_first=len(history) == 0)
@@ -478,6 +559,10 @@ async def stream_chat_response(
         yield {"type": "chunk", "text": chunk}
 
     answer = "".join(full_answer)
+    patched = await _append_source_list_if_missing(answer, context)
+    if patched != answer:
+        yield {"type": "chunk", "text": patched[len(answer):]}
+        answer = patched
     calc_context = calc_run.context if calc_run else None
     footer = build_citation_footer(answer, context, calc_context)
     if footer:

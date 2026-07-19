@@ -141,3 +141,62 @@ async def test_run_calculation_extraction_none_returns_none():
     ):
         text = await run_calculation_for_query("세금 5천만원 얼마 계산해줘")
     assert text is None
+
+
+# ── vat / penalty_tax 도구 라우팅 ─────────────────────────────────
+
+def _dummy_vat_result() -> CalculationResult:
+    return CalculationResult(
+        tax_type="부가가치세", steps=[TaxStep(label="차가감 납부(환급)세액", amount=4000000)],
+        taxable_income=100000000, calculated_tax=10000000, final_tax=4000000,
+        effective_rate=0.04, source_articles=["부가가치세법 제37조"],
+    )
+
+
+@pytest.mark.asyncio
+async def test_run_calculation_routes_to_vat():
+    with (
+        patch(
+            "app.services.calculator.engine.extract_calculation_request",
+            AsyncMock(return_value=("vat", {"sales": 100000000, "purchases": 60000000})),
+        ),
+        patch(
+            "app.services.calculator.engine.vat.calculate",
+            AsyncMock(return_value=_dummy_vat_result()),
+        ) as mock_calc,
+    ):
+        run = await run_calculation_for_query("매출 1억 매입 6천만원인데 부가세 얼마 내야해?")
+    assert run is not None
+    assert run.tool == "vat"
+    mock_calc.assert_awaited_once_with(
+        sales=100000000, purchases=60000000, exempt_sales=0,
+        is_simplified=False, business_type="소매업",
+    )
+
+
+def _dummy_penalty_result() -> CalculationResult:
+    return CalculationResult(
+        tax_type="가산세", steps=[TaxStep(label="납부할 총액(본세+가산세)", amount=12000000)],
+        taxable_income=10000000, calculated_tax=2000000, final_tax=12000000,
+        effective_rate=0.2, source_articles=["국세기본법 제47조의2"],
+    )
+
+
+@pytest.mark.asyncio
+async def test_run_calculation_routes_to_penalty_tax():
+    with (
+        patch(
+            "app.services.calculator.engine.extract_calculation_request",
+            AsyncMock(return_value=("penalty_tax", {"unpaid_tax": 10000000, "penalty_type": "무신고"})),
+        ),
+        patch(
+            "app.services.calculator.engine.penalty_tax.calculate",
+            AsyncMock(return_value=_dummy_penalty_result()),
+        ) as mock_calc,
+    ):
+        run = await run_calculation_for_query("종합소득세 1,000만원 무신고했는데 가산세 얼마나 나와?")
+    assert run is not None
+    assert run.tool == "penalty_tax"
+    mock_calc.assert_awaited_once_with(
+        unpaid_tax=10000000, penalty_type="무신고", is_negligent=False, days_late=0,
+    )

@@ -9,6 +9,7 @@ Ollama 고유 옵션 배치 규칙(과거 실측으로 확인된 버그)을 그�
 - num_ctx는 모든 호출에서 동일한 값을 사용해야 함 — 다르면 Ollama가 모델을 리로드해
   호출당 4~10초가 추가됨
 """
+import json
 from typing import AsyncGenerator
 
 from langchain_ollama import ChatOllama
@@ -16,7 +17,7 @@ from langchain_ollama import ChatOllama
 from config import CHAT_MODEL, OLLAMA_BASE_URL, OLLAMA_KEEP_ALIVE, OLLAMA_NUM_CTX, THINK_ENABLED
 
 
-def _build_client(temperature: float, num_predict: int) -> ChatOllama:
+def _build_client(temperature: float, num_predict: int, schema: dict | None = None) -> ChatOllama:
     return ChatOllama(
         model=CHAT_MODEL,
         base_url=OLLAMA_BASE_URL,
@@ -25,6 +26,7 @@ def _build_client(temperature: float, num_predict: int) -> ChatOllama:
         num_ctx=OLLAMA_NUM_CTX,
         keep_alive=OLLAMA_KEEP_ALIVE,
         reasoning=THINK_ENABLED,
+        format=schema,
     )
 
 
@@ -47,6 +49,23 @@ async def call_llm(
     client = _build_client(temperature, num_predict)
     result = await client.ainvoke(messages)
     return result.content
+
+
+async def call_llm_structured(
+    messages: list[dict],
+    schema: dict,
+    temperature: float = 0.0,
+    num_predict: int = -1,
+) -> dict:
+    """JSON Schema로 출력 형식을 강제하는 비스트리밍 호출 (constrained decoding).
+
+    프롬프트 지시("JSON만 출력하라")와 달리 디코딩 단계에서 스키마를 강제하므로
+    형식 이탈이 원천적으로 불가능하다. Ollama의 format 파라미터를 사용하며,
+    OpenAI 호환 provider(vLLM 등)로 바꿀 때는 response_format으로 대응된다.
+    """
+    client = _build_client(temperature, num_predict, schema=schema)
+    result = await client.ainvoke(messages)
+    return json.loads(result.content)
 
 
 async def stream_llm(

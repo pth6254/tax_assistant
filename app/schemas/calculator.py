@@ -48,3 +48,18 @@ class GiftTaxRequest(BaseModel):
     relation: str = "기타"
     is_minor: bool = False
     prior_gifts_10y: int = 0
+
+
+class VatRequest(BaseModel):
+    sales: int
+    purchases: int = 0
+    exempt_sales: int = 0
+    is_simplified: bool = False
+    business_type: str = "소매업"
+
+
+class PenaltyTaxRequest(BaseModel):
+    unpaid_tax: int
+    penalty_type: str = "무신고"       # 무신고 | 과소신고 | 납부지연
+    is_negligent: bool = False        # 부정행위(사기·기타 부정한 방법) 여부 — 무신고/과소신고에만 적용
+    days_late: int = 0                # 납부지연에만 적용

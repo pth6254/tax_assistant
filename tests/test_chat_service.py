@@ -1,12 +1,21 @@
 """
 test_chat_service.py — chat_service 단위 테스트 (DB·Ollama 의존 없음)
 """
+import pytest
+from unittest.mock import AsyncMock, patch
+
 from app.services.calculator.engine import CalcRun
 from app.services.chat_service import (
+    _append_source_list_if_missing,
     _build_final_messages,
     _calc_meta,
     _match_laws_by_keyword,
     _COMBINED_PROMPT,
+)
+
+_CONTEXT = (
+    "[출처: 소득세법 | 소득세법 | 📌 법률 (law)]\n"
+    "제55조 [세율]\n소득세는 다음 각 호의 세율을 적용한다..."
 )
 
 
@@ -107,3 +116,60 @@ def test_calc_meta_none_when_no_calc():
 def test_calc_meta_returns_tool_and_params():
     calc = CalcRun(context="...", tool="gift", params={"gift_amount": 300000000})
     assert _calc_meta(calc) == {"tool": "gift", "params": {"gift_amount": 300000000}}
+
+
+# ── _append_source_list_if_missing — 인용 누락 보정 (structured output) ──
+
+@pytest.mark.asyncio
+async def test_source_list_appended_when_answer_has_no_citation():
+    """인용 없는 답변 + 검증 가능한 structured 추출 결과 → 출처 목록 섹션이 붙는다."""
+    structured = AsyncMock(return_value={"citations": [
+        {"label": "법률", "law_name": "소득세법", "article_no": "제55조"},
+    ]})
+    with patch("app.services.chat_service.call_llm_structured", structured):
+        result = await _append_source_list_if_missing("세율은 6~45%입니다.", _CONTEXT)
+    assert "## 📋 근거 출처 목록" in result
+    assert "[법률] 소득세법 제55조" in result
+
+
+@pytest.mark.asyncio
+async def test_source_list_skipped_when_answer_already_cited():
+    """이미 인용이 있는 답변은 보정 LLM 호출 자체가 실행되지 않는다 (지연 0)."""
+    structured = AsyncMock()
+    answer = "[법률] 소득세법 제55조에 따라 과세됩니다."
+    with patch("app.services.chat_service.call_llm_structured", structured):
+        result = await _append_source_list_if_missing(answer, _CONTEXT)
+    assert result == answer
+    structured.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_source_list_filters_hallucinated_citation():
+    """structured 추출이 컨텍스트에 없는 조문을 반환하면 채택하지 않는다 (환각 차단)."""
+    structured = AsyncMock(return_value={"citations": [
+        {"label": "법률", "law_name": "부가가치세법", "article_no": "제999조"},
+    ]})
+    answer = "관련 규정에 따라 과세됩니다."
+    with patch("app.services.chat_service.call_llm_structured", structured):
+        result = await _append_source_list_if_missing(answer, _CONTEXT)
+    assert result == answer
+
+
+@pytest.mark.asyncio
+async def test_source_list_unchanged_on_structured_call_failure():
+    """보정 호출이 실패해도 원본 답변은 그대로 반환된다."""
+    structured = AsyncMock(side_effect=Exception("ollama down"))
+    answer = "세율은 6~45%입니다."
+    with patch("app.services.chat_service.call_llm_structured", structured):
+        result = await _append_source_list_if_missing(answer, _CONTEXT)
+    assert result == answer
+
+
+@pytest.mark.asyncio
+async def test_source_list_skipped_when_no_law_context():
+    """검색된 법령 자료가 없으면(잡담 등) 보정을 시도하지 않는다."""
+    structured = AsyncMock()
+    with patch("app.services.chat_service.call_llm_structured", structured):
+        result = await _append_source_list_if_missing("안녕하세요!", "관련 문서를 찾지 못했습니다.")
+    assert result == "안녕하세요!"
+    structured.assert_not_awaited()

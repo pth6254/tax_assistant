@@ -24,8 +24,10 @@ from app.schemas.calculator import (
     GiftTaxRequest,
     IncomeTaxRequest,
     InheritanceRequest,
+    PenaltyTaxRequest,
+    VatRequest,
 )
-from app.services.calculator import capital_gains, gift_tax, income_tax, inheritance
+from app.services.calculator import capital_gains, gift_tax, income_tax, inheritance, penalty_tax, vat
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +44,8 @@ _TOOLS = {
     "capital_gains": (CapitalGainsRequest, capital_gains),
     "inheritance":   (InheritanceRequest,  inheritance),
     "gift":          (GiftTaxRequest,      gift_tax),
+    "vat":           (VatRequest,          vat),
+    "penalty_tax":   (PenaltyTaxRequest,   penalty_tax),
 }
 
 # 금액 표현: 숫자 또는 한글 단위(억/천만/백만/만원)
@@ -63,12 +67,21 @@ _EXTRACT_PROMPT = (
     "spouse_inheritance(배우자 상속액, 기본 0), children_count(자녀 수, 기본 0)\n"
     "4. gift — 증여세\n"
     "   params: gift_amount(증여액), relation(배우자|직계존비속|기타친족|기타, 기본 기타), "
-    "is_minor(수증자 미성년 여부, 기본 false), prior_gifts_10y(10년 내 기증여액, 기본 0)\n\n"
+    "is_minor(수증자 미성년 여부, 기본 false), prior_gifts_10y(10년 내 기증여액, 기본 0)\n"
+    "5. vat — 부가가치세 (사업자 매출·매입)\n"
+    "   params: sales(매출액), purchases(매입액, 기본 0), exempt_sales(영세율·면세 매출, 기본 0), "
+    "is_simplified(간이과세자 여부, 기본 false), business_type(업종: 소매업|음식점업|제조업|숙박업|건설업|서비스업|부동산임대업, 기본 소매업)\n"
+    "6. penalty_tax — 가산세 (무신고·과소신고·납부지연)\n"
+    "   params: unpaid_tax(무신고·과소신고·미납 세액), "
+    "penalty_type(무신고|과소신고|납부지연, 기본 무신고), "
+    "is_negligent(부정행위 여부, 기본 false), days_late(납부지연 시 연체일수, 기본 0)\n\n"
     "## 규칙\n"
     "- 금액은 원 단위 정수로 변환 (예: 5천만원 → 50000000, 3억 → 300000000)\n"
     "- 질문에 없는 파라미터는 생략 (기본값 사용)\n"
     "- 계산에 필요한 핵심 금액이 없거나 세금 계산 질문이 아니면 {\"tool\": \"none\"}\n"
-    "- 자녀에게 증여 → relation: 직계존비속, 부모→자녀 상속·증여 모두 직계존비속\n\n"
+    "- 자녀에게 증여 → relation: 직계존비속, 부모→자녀 상속·증여 모두 직계존비속\n"
+    "- '신고 안 했다/무신고'는 penalty_type: 무신고, '적게 신고했다/과소신고'는 과소신고, "
+    "'늦게 냈다/기한 넘겨 납부'는 납부지연\n\n"
     '출력 형식 (JSON만): {"tool": "income_tax", "params": {"income": 50000000}}\n'
     "- <think> 태그 내용은 출력하지 말 것\n"
 )
