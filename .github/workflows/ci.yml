@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # 문법 오류(과거 chat_service.py에 한글 'ㅇ'가 섞여 서버가 안 뜨던 사고 재발 방지)
+      - name: Compile check
+        run: python -m compileall app scripts main.py config.py -q
+
+      # 단위·API 테스트 — DB/Ollama 없이 실행됨 (conftest.py가 mock/기본 환경변수 제공)
+      - name: Run tests
+        run: pytest -q
+        env:
+          JWT_SECRET: ci-test-secret-not-a-real-key

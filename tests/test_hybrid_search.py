@@ -1,20 +1,22 @@
 """
-test_hybrid_search.py — hybrid_search_service 단위 테스트
+test_hybrid_search.py — hybrid_search_service 단위 테스트 (DB·Ollama 의존 없음)
 """
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
-from app.services.law.hybrid_search_service import (
-    HybridSearchResult,
-    format_hybrid_context,
+from app.schemas.law import HybridSearchResult, LawArticleDetail
+from app.services.search.hybrid_search_service import (
+    _lookup_referenced_article,
+    _prepend_direct_hit,
     _search_documents,
+    format_hybrid_context,
     hybrid_search,
 )
 
 
 def _make_result(**kwargs) -> HybridSearchResult:
     defaults = dict(
-        content="조문 내용",
+        content="제1조 [목적]\n조문 내용",
         source="소득세법",
         law_name="소득세법",
         category="법률",
@@ -32,7 +34,7 @@ def test_format_hybrid_context_empty():
     assert format_hybrid_context([]) == "관련 문서를 찾지 못했습니다."
 
 
-def test_format_hybrid_context_contains_source():
+def test_format_hybrid_context_contains_source_and_category():
     r = _make_result(source="소득세법", law_name="소득세법", category="법률")
     text = format_hybrid_context([r])
     assert "소득세법" in text
@@ -48,13 +50,7 @@ def test_format_hybrid_context_multiple_results_separated():
     assert "내용2" in text
 
 
-def test_format_hybrid_context_includes_content():
-    r = _make_result(content="제1조 [목적] 이 법은...")
-    text = format_hybrid_context([r])
-    assert "제1조 [목적] 이 법은..." in text
-
-
-# ── HybridSearchResult 우선순위 정렬 ─────────────────────────────
+# ── 우선순위 정렬 규칙 ────────────────────────────────────────────
 
 def test_priority_sort_law_before_pdf():
     law = _make_result(priority=0, similarity_score=0.8, source_type="law")
@@ -78,49 +74,110 @@ async def test_search_documents_raises_without_user_id():
         await _search_documents([], "ALL", 5, "")
 
 
-# ── hybrid_search (mock) ─────────────────────────────────────────
+# ── 조문번호 직접 질의 fast path ──────────────────────────────────
 
-def _make_pool_mock(law_rows=None, doc_rows=None):
-    """asyncpg pool + conn mock 생성."""
-    conn = AsyncMock()
-    conn.fetch = AsyncMock(side_effect=[law_rows or [], doc_rows or []])
-
-    ctx = MagicMock()
-    ctx.__aenter__ = AsyncMock(return_value=conn)
-    ctx.__aexit__  = AsyncMock(return_value=False)
-
-    pool = MagicMock()
-    pool.acquire.return_value = ctx
-    return pool
+def _make_article_detail() -> LawArticleDetail:
+    return LawArticleDetail(
+        law_name="부가가치세법", law_type="법률", tax_type="부가가치세법",
+        article_no="제39조", article_title="공제하지 아니하는 매입세액",
+        article_text="제39조(공제하지 아니하는 매입세액) ① ...",
+        effective_date="", amendment_date="", source_url="",
+    )
 
 
 @pytest.mark.asyncio
-async def test_hybrid_search_returns_empty_when_no_rows():
-    pool = _make_pool_mock(law_rows=[], doc_rows=[])
+async def test_lookup_referenced_article_with_law_name_in_query():
+    with patch(
+        "app.services.search.hybrid_search_service.get_law_article",
+        AsyncMock(return_value=_make_article_detail()),
+    ) as mock_get:
+        result = await _lookup_referenced_article("부가가치세법 제39조 내용이 궁금해", "ALL")
+    assert result is not None
+    assert result.similarity_score == 1.0
+    assert result.law_name == "부가가치세법"
+    mock_get.assert_awaited_once_with("부가가치세법", "제39조")
+
+
+@pytest.mark.asyncio
+async def test_lookup_referenced_article_uses_law_filter_when_name_missing():
+    """질문에 법령명이 없으면 세목 필터를 법령명으로 사용한다."""
+    with patch(
+        "app.services.search.hybrid_search_service.get_law_article",
+        AsyncMock(return_value=_make_article_detail()),
+    ) as mock_get:
+        result = await _lookup_referenced_article("제39조 내용 알려줘", "부가가치세법")
+    assert result is not None
+    mock_get.assert_awaited_once_with("부가가치세법", "제39조")
+
+
+@pytest.mark.asyncio
+async def test_lookup_referenced_article_none_without_article_ref():
+    result = await _lookup_referenced_article("매입세액 불공제 대상 알려줘", "부가가치세법")
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_lookup_referenced_article_none_when_all_and_no_law_name():
+    """법령명도 없고 필터도 ALL이면 조회하지 않는다."""
+    result = await _lookup_referenced_article("제39조가 뭐야", "ALL")
+    assert result is None
+
+
+def test_prepend_direct_hit_dedupes_and_leads():
+    direct = _make_result(content="제39조 [공제하지 아니하는 매입세액]\n...", law_name="부가가치세법", similarity_score=1.0)
+    duplicate = _make_result(content="제39조 [공제하지 아니하는 매입세액]\n...", law_name="부가가치세법", similarity_score=0.6)
+    other = _make_result(content="제38조 [공제세액]\n...", law_name="부가가치세법", similarity_score=0.7)
+    merged = _prepend_direct_hit(direct, [duplicate, other])
+    assert merged[0] is direct
+    assert duplicate not in merged
+    assert other in merged
+
+
+def test_prepend_direct_hit_noop_when_none():
+    results = [_make_result()]
+    assert _prepend_direct_hit(None, results) == results
+
+
+# ── hybrid_search (검색 함수 mock) ───────────────────────────────
+
+@pytest.mark.asyncio
+async def test_hybrid_search_empty_queries_returns_empty():
+    assert await hybrid_search([]) == []
+
+
+@pytest.mark.asyncio
+async def test_hybrid_search_returns_empty_when_no_hits():
     with (
-        patch("app.services.law.hybrid_search_service.get_pool", AsyncMock(return_value=pool)),
-        patch("app.services.law.hybrid_search_service.embed_texts", AsyncMock(return_value=[[0.0] * 10])),
+        patch("app.services.search.hybrid_search_service.embed_texts", AsyncMock(return_value=[[0.0] * 10])),
+        patch("app.services.search.hybrid_search_service._search_law_articles", AsyncMock(return_value=[])),
+        patch("app.services.search.hybrid_search_service._search_documents", AsyncMock(return_value=[])),
     ):
-        results = await hybrid_search("소득세 신고", user_id="00000000-0000-0000-0000-000000000001")
+        results = await hybrid_search(["소득세 신고"], user_id="00000000-0000-0000-0000-000000000001")
     assert results == []
 
 
 @pytest.mark.asyncio
 async def test_hybrid_search_filters_below_threshold():
     """유사도가 SIMILARITY_THRESHOLD 미만이면 결과에서 제외한다."""
-    law_row = MagicMock()
-    law_row.__getitem__ = lambda self, key: {
-        "law_name": "소득세법", "law_type": "법률", "tax_type": "소득세법",
-        "article_no": "제1조", "article_title": "목적",
-        "article_text": "이 법은...", "source_url": "",
-        "similarity_score": 0.1,  # 임계값 미만
-    }[key]
-
-    pool = _make_pool_mock(law_rows=[law_row], doc_rows=[])
+    low = _make_result(similarity_score=0.1)
     with (
-        patch("app.services.law.hybrid_search_service.get_pool", AsyncMock(return_value=pool)),
-        patch("app.services.law.hybrid_search_service.embed_texts", AsyncMock(return_value=[[0.0] * 10])),
-        patch("app.services.law.hybrid_search_service.SIMILARITY_THRESHOLD", 0.4),
+        patch("app.services.search.hybrid_search_service.embed_texts", AsyncMock(return_value=[[0.0] * 10])),
+        patch("app.services.search.hybrid_search_service._search_law_articles", AsyncMock(return_value=[low])),
+        patch("app.services.search.hybrid_search_service._search_documents", AsyncMock(return_value=[])),
+        patch("app.services.search.hybrid_search_service.SIMILARITY_THRESHOLD", 0.4),
     ):
-        results = await hybrid_search("소득세 신고", user_id="00000000-0000-0000-0000-000000000001")
+        results = await hybrid_search(["소득세 신고"], user_id="00000000-0000-0000-0000-000000000001")
     assert results == []
+
+
+@pytest.mark.asyncio
+async def test_hybrid_search_returns_sorted_hits():
+    law  = _make_result(priority=0, similarity_score=0.8, source_type="law")
+    rule = _make_result(priority=2, similarity_score=0.9, source_type="rule", content="제2조\n...")
+    with (
+        patch("app.services.search.hybrid_search_service.embed_texts", AsyncMock(return_value=[[0.0] * 10])),
+        patch("app.services.search.hybrid_search_service._search_law_articles", AsyncMock(return_value=[rule, law])),
+        patch("app.services.search.hybrid_search_service._search_documents", AsyncMock(return_value=[])),
+    ):
+        results = await hybrid_search(["소득세 신고"], user_id="00000000-0000-0000-0000-000000000001")
+    assert results[0].source_type == "law"  # 우선순위(법률)가 유사도보다 우선
