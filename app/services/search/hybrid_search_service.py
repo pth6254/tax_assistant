@@ -19,7 +19,6 @@ law_articles(공식 법령 조문)와 documents(PDF 업로드) 두 테이블을
 """
 import asyncio
 import logging
-import math
 import re
 import time
 import uuid as _uuid

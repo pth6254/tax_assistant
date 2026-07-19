@@ -10,7 +10,6 @@ services/law_ingestion_service.py — 법령 조문 수집·저장·임베딩 �
   discover_tax_laws()                           API로 세법 관련 법령 전체 탐색
   ingest_all_tax_laws(embed=False)              세법 전체 자동 탐색 + 수집
 """
-import asyncio
 import hashlib
 import logging
 

@@ -1,16 +1,12 @@
 """
 test_chat_service.py — chat_service 단위 테스트 (DB·Ollama 의존 없음)
 """
-import pytest
-from unittest.mock import AsyncMock, patch
-
 from app.services.calculator.engine import CalcRun
 from app.services.chat_service import (
     _build_final_messages,
     _calc_meta,
     _match_laws_by_keyword,
     _COMBINED_PROMPT,
-    detect_law_name,
 )
 
 
@@ -45,29 +41,6 @@ def test_match_overlap_compound_keyword_wins():
 def test_match_generic_deduction_word_not_special_law():
     """'공제'류 일반 용어만으로 조세특례제한법에 매칭되면 안 된다 (과거 버그)."""
     assert _match_laws_by_keyword("종합소득세 기본공제 금액은 얼마인가요?") == ["소득세법"]
-
-
-# ── detect_law_name — 레거시 진입점 (키워드 + LLM 폴백) ───────────
-
-@pytest.mark.asyncio
-async def test_detect_law_name_keyword_hit():
-    assert await detect_law_name("법인세 신고 기한은 언제인가요") == "법인세법"
-
-
-@pytest.mark.asyncio
-async def test_detect_law_name_unknown_falls_back_to_all():
-    """키워드 미매핑 + LLM 응답이 후보에 없는 경우 ALL 반환."""
-    with patch("app.services.chat_service.call_llm", AsyncMock(return_value="모르겠음")):
-        result = await detect_law_name("오늘 날씨가 정말 좋네요")
-    assert result == "ALL"
-
-
-@pytest.mark.asyncio
-async def test_detect_law_name_ollama_error_returns_all():
-    """LLM 호출 실패 시 ALL 반환."""
-    with patch("app.services.chat_service.call_llm", AsyncMock(side_effect=Exception("connection refused"))):
-        result = await detect_law_name("알 수 없는 질문")
-    assert result == "ALL"
 
 
 # ── _build_final_messages ────────────────────────────────────────

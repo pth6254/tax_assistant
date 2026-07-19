@@ -28,6 +28,16 @@ def _build_client(temperature: float, num_predict: int) -> ChatOllama:
     )
 
 
+async def close_llm_client() -> None:
+    """앱 종료 시 LLM 클라이언트 정리 훅.
+
+    ChatOllama는 호출마다 자체 클라이언트를 관리하므로 현재는 no-op이지만,
+    provider를 교체해 명시적 정리(aclose 등)가 필요해지면 여기서 수행한다 —
+    호출부(main.py lifespan, eval_rag.py)는 그대로 유지된다.
+    """
+    return
+
+
 async def call_llm(
     messages: list[dict],
     temperature: float = 0.3,

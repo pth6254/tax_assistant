@@ -13,7 +13,6 @@ from typing import AsyncGenerator
 from config import (
     CHAT_MODEL,
     MEMORY_TURNS,
-    TOP_K,
     TAVILY_API_KEY,
     THINK_ENABLED,
 )
@@ -101,32 +100,6 @@ def _match_laws_by_keyword(query: str) -> list[str]:
         kept.append((start, end, law))
 
     return sorted({law for _, _, law in kept})
-
-
-async def detect_law_name(query: str) -> str:
-    """질문에서 세목명 추출. 불명확하면 'ALL' 반환."""
-    q = query.lower()
-    for law, kws in _LAW_KW.items():
-        if any(kw in q for kw in kws):
-            return law
-
-    # 키워드 매핑 실패 시 LLM으로 판단
-    try:
-        raw = await call_llm(
-            [{"role": "user", "content": (
-                "다음 질문이 어떤 세법과 관련 있는지 하나만 답하세요.\n"
-                "후보: 소득세법, 부가가치세법, 법인세법, 상속세 및 증여세법, "
-                "지방세법, 조세특례제한법, 국세기본법, ALL\n"
-                f"질문: {query}\n오직 세법 이름 하나만 출력하세요."
-            )}],
-            temperature=0.0,
-            num_predict=20,
-        )
-        result = raw.strip()
-        return result if result in _LAW_KW else "ALL"
-    except Exception:
-        return "ALL"
-
 
 
 async def _fetch_history(conversation_id: _uuid.UUID) -> list[dict]:
@@ -242,23 +215,6 @@ _COMBINED_PROMPT = (
     "- <think> 태그 내용은 출력하지 말 것\n"
 )
 
-# ── 멀티쿼리 생성 프롬프트 ────────────────────────────
-_MULTI_QUERY_PROMPT = (
-    "한국 세무 법령 검색을 위한 검색어 3개를 서로 다른 관점으로 생성하라.\n\n"
-    "## 관점\n"
-    "1. 법령/조문 관점: 관련 법령명·조문 번호·법령 용어 중심\n"
-    "2. 요건/대상 관점: 적용 대상·요건·예외사항 중심\n"
-    "3. 계산/절차 관점: 세액 산출·신고 방법·실무 절차 중심\n\n"
-    "## 비교 질문(A vs B) 특별 규칙\n"
-    "- 질문이 두 가지 옵션을 비교하는 경우, A와 B 각각에 대한 쿼리를 최소 1개씩 생성하라.\n"
-    "  예: '리스 vs 장기렌트' → '법인 업무용승용차 리스 손금산입' + '법인 업무용승용차 장기렌트 임차료 손금'\n\n"
-    "## 규칙\n"
-    "- 구어체를 법령 용어로 변환 (예: '알바비' → '인적용역 원천징수')\n"
-    "- 각 검색어는 50자 이내 키워드 나열\n"
-    "- JSON 배열만 출력: [\"검색어1\", \"검색어2\", \"검색어3\"]\n"
-    "- <think> 태그 내용은 출력하지 말 것\n"
-)
-
 # ── 세목 분류 + 쿼리 생성 통합 프롬프트 ─────────────────
 _COMBINED_CLASSIFY_PROMPT = (
     "한국 세무 법령 질문을 분석하여 JSON만 출력하라.\n\n"
@@ -273,10 +229,9 @@ _COMBINED_CLASSIFY_PROMPT = (
     "- <think> 태그 내용은 출력하지 말 것\n"
 )
 
-# 비스트리밍 답변도 스트리밍과 동일하게 길이 제한 없음(-1).
-# 과거 num_predict=500으로 답변이 ~900자에서 잘려 마지막 섹션(근거 출처 목록)이
-# 통째로 사라졌다 — 인용 정확도 측정에서 무인용 실패 17건의 주원인으로 지목됨.
-_NUM_PREDICT_DEFAULT     = -1
+# 분류/멀티쿼리 호출만 짧게 제한 — 답변 생성은 llm_client 기본값(-1, 무제한)을 쓴다.
+# (과거 num_predict=500으로 답변이 ~900자에서 잘려 "근거 출처 목록" 섹션이 통째로
+#  사라진 사례가 있어, 답변 경로에는 길이 제한을 두지 않는다)
 _NUM_PREDICT_MULTI_QUERY = 150
 
 # Qwen3 계열 모델에서만 /no_think 접두사 사용 (다른 모델에는 노이즈)
@@ -288,21 +243,7 @@ _QWEN3_NO_THINK_PREFIX = "/no_think\n\n" if (
 _bg_tasks: set[asyncio.Task] = set()
 
 
-async def close_chat_client() -> None:
-    """앱 종료 시 정리 훅. LangChain의 ChatOllama는 호출마다 자체 클라이언트를 관리하므로 no-op."""
-    return
-
-
-async def _call_ollama(
-    messages: list[dict],
-    temperature: float = 0.3,
-    num_predict: int = _NUM_PREDICT_DEFAULT,
-) -> str:
-    """LLM 비스트리밍 호출 (llm_client 경유)."""
-    return await call_llm(messages, temperature=temperature, num_predict=num_predict)
-
-
-async def _stream_ollama_response(
+async def _stream_llm_skip_think(
     messages: list[dict],
     temperature: float = 0.3,
 ) -> AsyncGenerator[str, None]:
@@ -315,7 +256,7 @@ async def _stream_ollama_response(
     in_think = False
     buf = ""   # 태그 경계 감지에만 사용 — 최대 수십 자 이내로 유지
 
-    async for chunk in stream_llm(messages, temperature=temperature, num_predict=_NUM_PREDICT_DEFAULT):
+    async for chunk in stream_llm(messages, temperature=temperature):
         if chunk:
             buf += chunk
 
@@ -355,35 +296,6 @@ async def _stream_ollama_response(
         yield buf
 
 
-
-
-async def generate_search_queries(query: str) -> list[str]:
-    """질문으로부터 다각도 검색 쿼리 3개 생성. 실패 시 원본만 반환."""
-    try:
-        raw = await _call_ollama(
-            [
-                {"role": "system", "content": _MULTI_QUERY_PROMPT},
-                {"role": "user",   "content": query},
-            ],
-            temperature=0.0,
-            num_predict=_NUM_PREDICT_MULTI_QUERY,
-        )
-        text  = raw.split("</think>")[-1].strip()
-        fence = re.search(r"```(?:json)?\s*\n?([\s\S]*?)\n?```", text)
-        candidate = fence.group(1).strip() if fence else text
-        match = re.search(r"\[[\s\S]*?\]", candidate)
-        if match:
-            queries = json.loads(match.group(0))
-            if isinstance(queries, list):
-                result = [q for q in queries if isinstance(q, str) and q.strip()][:3]
-                if result:
-                    logger.info("[MULTI-QUERY] %d개 생성: %s", len(result), result)
-                    return result
-    except Exception as e:
-        logger.warning("[MULTI-QUERY] 생성 실패 — 원본 사용: %s", e)
-    return [query]
-
-
 async def _classify_and_generate_queries(
     query: str,
     history: list[dict] | None = None,
@@ -417,7 +329,7 @@ async def _classify_and_generate_queries(
         user_content = "[이전 대화 맥락]\n" + "\n".join(parts) + f"\n\n[현재 질문]\n{query}"
 
     try:
-        raw = await _call_ollama(
+        raw = await call_llm(
             [
                 {"role": "system", "content": _COMBINED_CLASSIFY_PROMPT},
                 {"role": "user",   "content": user_content},
@@ -532,7 +444,7 @@ async def process_chat(query: str, conversation_id: str, user_id: str) -> tuple[
     context, web_results, history, calc_run = await _fetch_rag_and_web_context(query, conv_id, user_id)
 
     messages = _build_final_messages(query, context, web_results, history, calc_run)
-    answer   = await _call_ollama(messages, temperature=0.3)
+    answer   = await call_llm(messages, temperature=0.3)
     answer   = apply_citation_guard(answer, context, calc_run.context if calc_run else None)
 
     await _save_history(conv_id, query, answer, is_first=len(history) == 0)
@@ -561,7 +473,7 @@ async def stream_chat_response(
     is_first = len(history) == 0
 
     logger.info("[STREAM] 최종 답변 스트리밍 시작")
-    async for chunk in _stream_ollama_response(messages, temperature=0.3):
+    async for chunk in _stream_llm_skip_think(messages, temperature=0.3):
         full_answer.append(chunk)
         yield {"type": "chunk", "text": chunk}
 
