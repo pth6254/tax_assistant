@@ -2,27 +2,17 @@
 routers/chat.py — 채팅 엔드포인트
 POST /api/chat         비스트리밍 응답
 POST /api/chat/stream  SSE 스트리밍 응답
-GET  /api/health
 """
 import json
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
-from app.database import get_pool
 from app.schemas.chat import ChatRequest
 from app.services import chat_service
 from app.utils.jwt import verify_token
 
 router = APIRouter(prefix="/api", tags=["chat"])
-
-
-@router.get("/health")
-async def health():
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        ver = await conn.fetchval("SELECT version()")
-    return {"status": "ok", "db": ver[:60]}
 
 
 @router.post("/chat")

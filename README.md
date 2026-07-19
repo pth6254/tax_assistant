@@ -363,6 +363,7 @@ tax-assistant/
     │   ├── users.py              # GET·PATCH·DELETE /api/users/me
     │   ├── conversations.py      # 대화 세션 CRUD
     │   ├── chat.py               # POST /api/chat, /api/chat/stream
+    │   ├── health.py             # live/ready/dependencies 상태 진단
     │   ├── upload.py             # POST /api/upload, 문서 목록/삭제
     │   ├── calculator.py         # POST /api/calculator/{income-tax,capital-gains,inheritance,gift,vat,penalty-tax}
     │   ├── law.py                # GET /api/law-articles/lookup (조문 원문 뷰어)
@@ -692,6 +693,9 @@ python scripts/eval_rag.py --eval --with-answer --repeat 3
 | POST | `/api/auth/signup` | 회원가입 | 불필요 |
 | POST | `/api/auth/login` | 로그인 (httpOnly 쿠키 발급) | 불필요 |
 | POST | `/api/auth/logout` | 로그아웃 (쿠키 삭제) | 불필요 |
+| GET | `/api/health/live` | FastAPI 프로세스 liveness | 불필요 |
+| GET | `/api/health/ready` | DB·Alembic readiness (Docker healthcheck) | 불필요 |
+| GET | `/api/health/dependencies` | DB·Ollama·필수 모델 상세 상태 | 불필요 |
 | GET | `/api/users/me` | 내 프로필 조회 (사업자 유형 포함) | ✅ 필요 |
 | PATCH | `/api/users/me` | 프로필 수정 (이름·전화번호·사업자 유형) | ✅ 필요 |
 | PATCH | `/api/users/me/password` | 비밀번호 변경 | ✅ 필요 |
@@ -783,6 +787,14 @@ python scripts/eval_rag.py --eval --with-answer --repeat 3
 세율 시드를 생성합니다. Docker는 `alembic upgrade head` 성공 후에만 API를 시작하며 CI에서
 revision head가 하나인지 검사합니다. 이를 통해 **신규 설치 재현성, 점진적 스키마 변경,
 배포 실패 조기 차단**을 하나의 흐름으로 통합했습니다.
+
+### Liveness·readiness·외부 의존성 상태 분리
+
+FastAPI 프로세스 생존 여부(`/health/live`), DB와 Alembic 기반 서비스 준비 상태
+(`/health/ready`), Ollama·필수 모델을 포함한 상세 상태(`/health/dependencies`)를 분리했습니다.
+Docker는 readiness만으로 백엔드 상태를 판단하므로 Ollama가 일시 중단되어도 인증·계산기 같은
+비AI 기능까지 장애로 오인하지 않습니다. PostgreSQL·백엔드·프런트엔드에는 서비스 특성에 맞는
+Compose healthcheck를 적용하고, 프런트엔드는 백엔드가 healthy가 된 뒤 시작합니다.
 
 ### 개발·운영 환경을 분리한 Ollama endpoint 설계
 
