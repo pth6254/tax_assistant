@@ -5,7 +5,8 @@
     "python scripts/eval_rag.py --build 실행 후 candidates에 채워진 실제 DB 검색 후보를 검토하여",
     "정답 조문번호를 expected_article_no에 직접 입력하세요 (조문번호를 추측해서 넣지 마세요).",
     "grounded=true 항목은 세금 계산기 시드 데이터(db/migrations/001_tax_calculator.sql)의",
-    "source_article 값을 그대로 가져온 것이라 이미 확정된 정답입니다."
+    "source_article 값을 그대로 가져온 것이라 이미 확정된 정답입니다.",
+    "grounded=true로 새로 확정된 항목들은 DB에 저장된 실제 조문 원문의 제목·본문과 대조하여 확정했습니다 (2026-07-18)."
   ],
   "items": [
     {
@@ -100,171 +101,192 @@
       "id": "vat-01",
       "query": "간이과세자의 부가가치세 신고 기준은 어떻게 되나요?",
       "expected_law_name": "부가가치세법",
-      "expected_article_no": null,
-      "grounded": false,
-      "candidates": []
+      "expected_article_no": "제67조",
+      "grounded": true,
+      "candidates": [],
+      "note": "DB 조문 원문 제목 대조로 확정 (2026-07-18)"
     },
     {
       "id": "vat-02",
       "query": "매입세액 불공제 대상을 알려주세요.",
       "expected_law_name": "부가가치세법",
-      "expected_article_no": null,
-      "grounded": false,
-      "candidates": []
+      "expected_article_no": "제39조",
+      "grounded": true,
+      "candidates": [],
+      "note": "DB 조문 원문 제목 대조로 확정 (2026-07-18)"
     },
     {
       "id": "vat-03",
       "query": "세금계산서 발급 의무가 없는 경우는 어떤 경우인가요?",
       "expected_law_name": "부가가치세법",
-      "expected_article_no": null,
-      "grounded": false,
-      "candidates": []
+      "expected_article_no": "제33조",
+      "grounded": true,
+      "candidates": [],
+      "note": "DB 조문 원문 제목 대조로 확정 (2026-07-18)"
     },
     {
       "id": "vat-04",
       "query": "의제매입세액공제는 어떤 사업자가 적용받을 수 있나요?",
       "expected_law_name": "부가가치세법",
-      "expected_article_no": null,
-      "grounded": false,
-      "candidates": []
+      "expected_article_no": "제42조",
+      "grounded": true,
+      "candidates": [],
+      "note": "DB 조문 원문 제목 대조로 확정 (2026-07-18)"
     },
     {
       "id": "vat-05",
       "query": "수출품에 영세율이 적용되는 요건은 무엇인가요?",
       "expected_law_name": "부가가치세법",
-      "expected_article_no": null,
-      "grounded": false,
-      "candidates": []
+      "expected_article_no": "제21조",
+      "grounded": true,
+      "candidates": [],
+      "note": "DB 조문 원문 제목 대조로 확정 (2026-07-18)"
     },
     {
       "id": "corp-01",
       "query": "법인의 접대비 한도는 어떻게 계산하나요?",
       "expected_law_name": "법인세법",
-      "expected_article_no": null,
-      "grounded": false,
-      "candidates": []
+      "expected_article_no": "제25조",
+      "grounded": true,
+      "candidates": [],
+      "note": "DB 조문 원문 제목 대조로 확정 (2026-07-18)"
     },
     {
       "id": "corp-02",
       "query": "법인 업무용승용차 관련 비용의 손금산입 한도는 얼마인가요?",
       "expected_law_name": "법인세법",
-      "expected_article_no": null,
-      "grounded": false,
-      "candidates": []
+      "expected_article_no": "제27조의2",
+      "grounded": true,
+      "candidates": [],
+      "note": "DB 조문 원문 제목 대조로 확정 (2026-07-18)"
     },
     {
       "id": "corp-03",
       "query": "결손금 소급공제 신청 방법을 알려주세요.",
       "expected_law_name": "법인세법",
-      "expected_article_no": null,
-      "grounded": false,
-      "candidates": []
+      "expected_article_no": "제72조",
+      "grounded": true,
+      "candidates": [],
+      "note": "DB 조문 원문 제목 대조로 확정 (2026-07-18)"
     },
     {
       "id": "corp-04",
       "query": "법인세법상 익금불산입 항목에는 어떤 것들이 있나요?",
       "expected_law_name": "법인세법",
-      "expected_article_no": null,
-      "grounded": false,
-      "candidates": []
+      "expected_article_no": "제18조",
+      "grounded": true,
+      "candidates": [],
+      "note": "DB 조문 원문 제목 대조로 확정 (2026-07-18)"
     },
     {
       "id": "basic-01",
       "query": "경정청구 기한은 얼마나 되나요?",
       "expected_law_name": "국세기본법",
-      "expected_article_no": null,
-      "grounded": false,
-      "candidates": []
+      "expected_article_no": "제45조의2",
+      "grounded": true,
+      "candidates": [],
+      "note": "DB 조문 원문 제목 대조로 확정 (2026-07-18)"
     },
     {
       "id": "basic-02",
       "query": "가산세를 감면받을 수 있는 경우는 어떤 경우인가요?",
       "expected_law_name": "국세기본법",
-      "expected_article_no": null,
-      "grounded": false,
-      "candidates": []
+      "expected_article_no": "제48조",
+      "grounded": true,
+      "candidates": [],
+      "note": "DB 조문 원문 제목 대조로 확정 (2026-07-18)"
     },
     {
       "id": "basic-03",
       "query": "조세심판청구 기한은 언제까지인가요?",
       "expected_law_name": "국세기본법",
-      "expected_article_no": null,
-      "grounded": false,
-      "candidates": []
+      "expected_article_no": "제68조",
+      "grounded": true,
+      "candidates": [],
+      "note": "DB 조문 원문 제목 대조로 확정 (2026-07-18)"
     },
     {
       "id": "basic-04",
       "query": "기한후신고를 하면 가산세는 어떻게 되나요?",
       "expected_law_name": "국세기본법",
-      "expected_article_no": null,
-      "grounded": false,
-      "candidates": []
+      "expected_article_no": "제45조의3",
+      "grounded": true,
+      "candidates": [],
+      "note": "DB 조문 원문 제목 대조로 확정 (2026-07-18)"
     },
     {
       "id": "trc-01",
       "query": "중소기업 특별세액감면 요건은 무엇인가요?",
       "expected_law_name": "조세특례제한법",
-      "expected_article_no": null,
-      "grounded": false,
-      "candidates": []
+      "expected_article_no": "제7조",
+      "grounded": true,
+      "candidates": [],
+      "note": "DB 조문 원문 제목 대조로 확정 (2026-07-18)"
     },
     {
       "id": "trc-02",
       "query": "고용증대세액공제는 어떤 조건에서 적용되나요?",
       "expected_law_name": "조세특례제한법",
-      "expected_article_no": null,
-      "grounded": false,
-      "candidates": []
+      "expected_article_no": "제29조의7",
+      "grounded": true,
+      "candidates": [],
+      "note": "DB 조문 원문 제목 대조로 확정 (2026-07-18)"
     },
     {
       "id": "trc-03",
       "query": "청년 창업 중소기업 세액감면 대상은 누구인가요?",
       "expected_law_name": "조세특례제한법",
-      "expected_article_no": null,
-      "grounded": false,
-      "candidates": []
+      "expected_article_no": "제6조",
+      "grounded": true,
+      "candidates": [],
+      "note": "DB 조문 원문 제목 대조로 확정 (2026-07-18)"
     },
     {
       "id": "local-01",
       "query": "부동산 취득세 세율은 어떻게 되나요?",
       "expected_law_name": "지방세법",
-      "expected_article_no": null,
-      "grounded": false,
-      "candidates": []
+      "expected_article_no": "제11조",
+      "grounded": true,
+      "candidates": [],
+      "note": "DB 조문 원문 제목 대조로 확정 (2026-07-18)"
     },
     {
       "id": "local-02",
       "query": "재산세 과세기준일은 언제인가요?",
       "expected_law_name": "지방세법",
-      "expected_article_no": null,
-      "grounded": false,
-      "candidates": []
+      "expected_article_no": "제114조",
+      "grounded": true,
+      "candidates": [],
+      "note": "DB 조문 원문 제목 대조로 확정 (2026-07-18)"
     },
     {
       "id": "cust-01",
       "query": "관세 환급을 받을 수 있는 요건은 무엇인가요?",
       "expected_law_name": "관세법",
-      "expected_article_no": null,
-      "grounded": false,
-      "candidates": []
+      "expected_article_no": "제106조",
+      "grounded": true,
+      "candidates": [],
+      "note": "DB 조문 원문 제목 대조로 확정 (2026-07-18)"
     },
     {
       "id": "cmp-01",
       "query": "법인 업무용승용차를 리스로 이용하는 것과 장기렌트로 이용하는 것 중 손금산입 측면에서 어느 쪽이 유리한가요?",
       "expected_law_name": "법인세법",
-      "expected_article_no": null,
-      "grounded": false,
+      "expected_article_no": "제27조의2",
+      "grounded": true,
       "candidates": [],
-      "comparison": true
+      "comparison": true,
+      "note": "DB 조문 원문 제목 대조로 확정 (2026-07-18)"
     },
     {
       "id": "cmp-02",
       "query": "간이과세자와 일반과세자 중 연매출 7천만원인 개인사업자에게 유리한 쪽은 어디인가요?",
       "expected_law_name": "부가가치세법",
-      "expected_article_no": null,
-      "grounded": false,
+      "expected_article_no": "제61조",
+      "grounded": true,
       "candidates": [],
-      "comparison": true
+      "comparison": true,
+      "note": "DB 조문 원문 제목 대조로 확정 (2026-07-18)"
     },
     {
       "id": "cmp-03",
@@ -274,6 +296,60 @@
       "grounded": false,
       "candidates": [],
       "comparison": true
+    },
+    {
+      "id": "direct-01",
+      "query": "소득세법 제55조에 뭐라고 되어 있는지 알려줘",
+      "expected_law_name": "소득세법",
+      "expected_article_no": "제55조",
+      "grounded": true,
+      "candidates": [],
+      "note": "조문번호 직접 질의형 — 키워드/조문번호 검색 개선 효과 측정용"
+    },
+    {
+      "id": "direct-02",
+      "query": "부가가치세법 제39조 내용이 궁금해",
+      "expected_law_name": "부가가치세법",
+      "expected_article_no": "제39조",
+      "grounded": true,
+      "candidates": [],
+      "note": "조문번호 직접 질의형"
+    },
+    {
+      "id": "hard-01",
+      "query": "1세대 1주택을 팔면 양도소득세가 비과세되는 근거 조문은?",
+      "expected_law_name": "소득세법",
+      "expected_article_no": "제89조",
+      "grounded": true,
+      "candidates": [],
+      "note": "실무 용어형 — 비과세 양도소득"
+    },
+    {
+      "id": "hard-02",
+      "query": "회사에서 연말정산은 언제 어떻게 하나요?",
+      "expected_law_name": "소득세법",
+      "expected_article_no": "제137조",
+      "grounded": true,
+      "candidates": [],
+      "note": "실무 용어형 — 근로소득세액의 연말정산"
+    },
+    {
+      "id": "hard-03",
+      "query": "상속세 신고는 언제까지 해야 하나요?",
+      "expected_law_name": "상속세 및 증여세법",
+      "expected_article_no": "제67조",
+      "grounded": true,
+      "candidates": [],
+      "note": "실무 용어형 — 상속세 과세표준신고 기한"
+    },
+    {
+      "id": "expc-01",
+      "query": "부당해고로 복직하면서 받은 해고기간 임금 상당액도 근로소득으로 과세되나요?",
+      "expected_law_name": "소득세법",
+      "expected_article_no": "10-0075",
+      "grounded": true,
+      "candidates": [],
+      "note": "유권해석 정답형 — 법령해석례 10-0075가 top-k에 나와야 함"
     }
   ]
 }
