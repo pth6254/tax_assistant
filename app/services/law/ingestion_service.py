@@ -253,7 +253,68 @@ async def _embed_and_update(
             embed_failed_count += len(batch)
             logger.error("[embed] 배치 실패 (%d~%d): %s", batch_start + 1, batch_end, e)
 
+    # 긴 조문은 항(項) 단위 보조 임베딩도 생성 — 조문 전체 벡터에서
+    # 특정 항의 내용이 희석되어 검색에 안 걸리는 문제 보완
+    try:
+        clause_count = await embed_clauses_for_articles(new_items)
+        if clause_count:
+            logger.info("[embed] 항 단위 보조 임베딩 %d건 생성", clause_count)
+    except Exception as e:
+        logger.error("[embed] 항 단위 임베딩 실패 (조문 임베딩은 정상): %s", e)
+
     return embedded_count, embed_failed_count
+
+
+async def embed_clauses_for_articles(items: list[tuple[LawArticle, int]]) -> int:
+    """긴 조문(should_split 기준)의 항 단위 보조 임베딩을 생성해 law_article_clauses에 저장한다.
+
+    기존 항 임베딩이 있으면 삭제 후 재생성 (idempotent).
+
+    Returns:
+        생성된 항 임베딩 수
+    """
+    from app.services.law.clause_splitter import (
+        build_clause_embed_text,
+        should_split,
+        split_into_clauses,
+    )
+    from app.utils.embeddings import embed_texts
+
+    # (article_id, clause_label, clause_text, embed_text) 목록 구성
+    rows: list[tuple[int, str, str, str]] = []
+    for article, db_id in items:
+        if not should_split(article.article_text):
+            continue
+        for label, clause_text in split_into_clauses(article.article_text):
+            embed_text = build_clause_embed_text(
+                article.law_name, article.article_no,
+                article.article_title, article.article_text, clause_text,
+            )
+            rows.append((db_id, label, clause_text, embed_text))
+
+    if not rows:
+        return 0
+
+    pool = await get_pool()
+    article_ids = list({r[0] for r in rows})
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "DELETE FROM law_article_clauses WHERE article_id = ANY($1)", article_ids
+        )
+
+    inserted = 0
+    for batch_start in range(0, len(rows), _EMBED_BATCH_SIZE):
+        batch = rows[batch_start : batch_start + _EMBED_BATCH_SIZE]
+        embeddings = await embed_texts([r[3] for r in batch])
+        async with pool.acquire() as conn:
+            await conn.executemany(
+                """INSERT INTO law_article_clauses (article_id, clause_label, clause_text, embedding)
+                   VALUES ($1, $2, $3, $4)""",
+                [(r[0], r[1], r[2], emb) for r, emb in zip(batch, embeddings)],
+            )
+        inserted += len(batch)
+
+    return inserted
 
 
 # ── 공개 함수 ────────────────────────────────────────────────────

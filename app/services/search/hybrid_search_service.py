@@ -20,6 +20,7 @@ law_articles(공식 법령 조문)와 documents(PDF 업로드) 두 테이블을
 import asyncio
 import logging
 import math
+import re
 import time
 import uuid as _uuid
 
@@ -101,6 +102,23 @@ ORDER BY embedding::halfvec(2560) <=> $1::vector::halfvec(2560)
 LIMIT $3
 """
 
+# 긴 조문의 항(項) 단위 보조 임베딩 검색 — 히트 시 부모 조문 전체를 반환한다.
+# 조문 벡터에서 희석되는 특정 항의 내용(예: 제59조의4 ⑨항)도 검색에 걸리게 함.
+_LAW_CLAUSES_SQL = """
+SELECT
+    la.law_name, la.law_type, la.tax_type,
+    la.article_no, la.article_title, la.article_text,
+    la.source_url,
+    1 - (c.embedding::halfvec(2560) <=> $1::vector::halfvec(2560)) AS similarity_score
+FROM law_article_clauses c
+JOIN law_articles la ON la.id = c.article_id
+WHERE la.is_current = TRUE
+  AND c.embedding IS NOT NULL
+  AND ($2::text IS NULL OR la.tax_type = $2)
+ORDER BY c.embedding::halfvec(2560) <=> $1::vector::halfvec(2560)
+LIMIT $3
+"""
+
 _DOCUMENTS_SQL = """
 SELECT
     content,
@@ -117,37 +135,49 @@ LIMIT $4
 
 # ── 내부 검색 함수 ───────────────────────────────────────────────
 
+def _row_to_article_result(r) -> HybridSearchResult:
+    law_type = r["law_type"] or ""
+    priority, source_type = _classify_law_type(law_type)
+
+    article_header = r["article_no"]
+    if r["article_title"]:
+        article_header += f" [{r['article_title']}]"
+
+    return HybridSearchResult(
+        content=f"{article_header}\n{r['article_text']}",
+        source=r["source_url"] or r["law_name"],
+        law_name=r["law_name"],
+        category=law_type,
+        source_type=source_type,
+        similarity_score=round(float(r["similarity_score"]), 4),
+        priority=priority,
+    )
+
+
 async def _search_law_articles(
     q_emb: list[float],
     law_filter: str,
     top_k: int,
 ) -> list[HybridSearchResult]:
-    """law_articles 테이블 벡터 검색."""
+    """law_articles 조문 벡터 + law_article_clauses 항 벡터를 함께 검색한다.
+
+    같은 조문이 양쪽에서 나오면 유사도가 높은 쪽만 남긴다 (항 히트도 컨텍스트는 조문 전체).
+    """
     tax_type_filter = None if law_filter == "ALL" else law_filter
 
     pool = await get_pool()
     async with pool.acquire() as conn:
-        rows = await conn.fetch(_LAW_ARTICLES_SQL, q_emb, tax_type_filter, top_k)
+        article_rows = await conn.fetch(_LAW_ARTICLES_SQL, q_emb, tax_type_filter, top_k)
+        clause_rows  = await conn.fetch(_LAW_CLAUSES_SQL, q_emb, tax_type_filter, top_k)
 
-    results = []
-    for r in rows:
-        law_type = r["law_type"] or ""
-        priority, source_type = _classify_law_type(law_type)
+    best: dict[tuple[str, str], HybridSearchResult] = {}
+    for r in list(article_rows) + list(clause_rows):
+        result = _row_to_article_result(r)
+        key = (result.law_name, r["article_no"])
+        if key not in best or result.similarity_score > best[key].similarity_score:
+            best[key] = result
 
-        article_header = r["article_no"]
-        if r["article_title"]:
-            article_header += f" [{r['article_title']}]"
-
-        results.append(HybridSearchResult(
-            content=f"{article_header}\n{r['article_text']}",
-            source=r["source_url"] or r["law_name"],
-            law_name=r["law_name"],
-            category=law_type,
-            source_type=source_type,
-            similarity_score=round(float(r["similarity_score"]), 4),
-            priority=priority,
-        ))
-
+    results = sorted(best.values(), key=lambda x: -x.similarity_score)[:top_k]
     return results
 
 
@@ -326,6 +356,57 @@ async def fetch_hybrid_context(
     return format_hybrid_context(results)
 
 
+# 질문 속 조문번호 직접 언급 감지: "부가가치세법 제39조", "제55조" 등
+_ARTICLE_REF_RE = re.compile(r"(?:([가-힣]+법)\s*)?(제\d+조(?:의\d+)?)")
+
+
+async def _lookup_referenced_article(
+    query: str, law_filter: str,
+) -> HybridSearchResult | None:
+    """질문이 조문번호를 직접 언급하면 벡터 검색을 거치지 않고 해당 조문을 조회한다.
+
+    조문번호("제39조")는 임베딩 유사도에 거의 반영되지 않아 벡터 검색만으로는
+    직접 질의를 안정적으로 찾지 못한다 (평가셋 direct-02로 확인된 약점).
+    법령명은 질문에서 우선 추출하고, 없으면 세목 필터(law_filter)를 사용한다.
+    """
+    match = _ARTICLE_REF_RE.search(query)
+    if not match:
+        return None
+    law_name = match.group(1) or (law_filter if law_filter != "ALL" else None)
+    if not law_name:
+        return None
+
+    article = await get_law_article(law_name, match.group(2))
+    if not article:
+        return None
+
+    priority, source_type = _classify_law_type(article.law_type)
+    header = article.article_no + (f" [{article.article_title}]" if article.article_title else "")
+    return HybridSearchResult(
+        content=f"{header}\n{article.article_text}",
+        source=article.source_url or article.law_name,
+        law_name=article.law_name,
+        category=article.law_type,
+        source_type=source_type,
+        similarity_score=1.0,   # 직접 조회 — 항상 최상위
+        priority=priority,
+    )
+
+
+def _prepend_direct_hit(
+    direct: HybridSearchResult | None,
+    results: list[HybridSearchResult],
+) -> list[HybridSearchResult]:
+    """직접 조회된 조문을 결과 맨 앞에 두고 중복을 제거한다."""
+    if direct is None:
+        return results
+    deduped = [
+        r for r in results
+        if not (r.law_name == direct.law_name and r.content.split("\n", 1)[0] == direct.content.split("\n", 1)[0])
+    ]
+    return [direct] + deduped[: TOP_K - 1]
+
+
 async def hybrid_search(
     queries: list[str],
     law_filter: str = "ALL",
@@ -334,6 +415,7 @@ async def hybrid_search(
 ) -> list[HybridSearchResult]:
     """law_articles + documents를 동시에 검색하고 우선순위 순으로 병합한다.
 
+    질문이 조문번호를 직접 언급하면 해당 조문을 벡터 검색 없이 조회해 최상위에 둔다.
     단일 쿼리는 직접 벡터 검색, 복수 쿼리는 RRF로 결합 후 리랭킹.
     """
     if not queries:
@@ -341,11 +423,17 @@ async def hybrid_search(
 
     t0 = time.perf_counter()
 
+    direct = await _lookup_referenced_article(original_query or queries[0], law_filter)
+    if direct:
+        logger.info("[SEARCH] 조문번호 직접 질의 감지 — %s %s 최상위 배치",
+                    direct.law_name, direct.content.split(chr(10), 1)[0])
+
     if len(queries) == 1:
         q_emb = (await embed_texts(queries))[0]
         fetch_k = TOP_K * 3 if RERANK_MODEL else TOP_K
         merged = await _search_all(q_emb, law_filter, fetch_k, user_id)
         final  = await _rerank(original_query or queries[0], merged, TOP_K)
+        final  = _prepend_direct_hit(direct, final)
         if not final:
             logger.warning(
                 "[SEARCH] 검색 결과 없음 (필터=%s) — law_articles 또는 documents에 임베딩된 데이터가 없습니다.",
@@ -367,6 +455,7 @@ async def hybrid_search(
 
     merged = _rrf_merge(list(results_per_query), top_k=TOP_K * 2)
     final  = await _rerank(original_query or queries[0], merged, TOP_K)
+    final  = _prepend_direct_hit(direct, final)
 
     logger.info(
         "[MULTI-QUERY] %d개 쿼리 → RRF %d건 → 최종 %d건 (%.2fs)",

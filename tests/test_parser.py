@@ -137,6 +137,56 @@ def test_parse_articles_law_type_real_api_tag():
     assert result[0].law_type == "법률"
 
 
+# 절/관/장 구조 표제는 <조문여부>전문</조문여부>으로 내려오며 다음 조문과 같은
+# 조문번호를 공유한다. 과거 이를 걸러내지 않아 코퍼스의 12%가 표제 쓰레기 행이었음.
+_HEADING_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<법령>
+  <기본정보>
+    <법령명_한글>소득세법</법령명_한글>
+    <법종구분>법률</법종구분>
+    <시행일자>20260101</시행일자>
+    <공포일자>20251231</공포일자>
+  </기본정보>
+  <조문>
+    <조문단위>
+      <조문번호>55</조문번호>
+      <조문여부>전문</조문여부>
+      <조문내용>제4절 세액의 계산 &lt;개정 2009.12.31&gt;</조문내용>
+    </조문단위>
+    <조문단위>
+      <조문번호>55</조문번호>
+      <조문여부>전문</조문여부>
+      <조문내용>제1관 세율 &lt;개정 2009.12.31&gt;</조문내용>
+    </조문단위>
+    <조문단위>
+      <조문번호>55</조문번호>
+      <조문가지번호/>
+      <조문여부>조문</조문여부>
+      <조문제목>세율</조문제목>
+      <조문내용>제55조(세율) ①거주자의 종합소득에 대한 소득세는...</조문내용>
+    </조문단위>
+  </조문>
+</법령>"""
+
+
+def test_parse_articles_skips_section_headings():
+    """조문여부='전문'인 절/관 표제는 저장 대상에서 제외되어야 한다."""
+    result = parse_articles(_HEADING_XML)
+    assert len(result) == 1
+    assert result[0].article_no == "제55조"
+    assert result[0].article_title == "세율"
+    assert result[0].article_text.startswith("제55조(세율)")
+
+
+def test_parse_articles_empty_status_still_parsed():
+    """조문여부 태그가 없는 XML 변형에서는 방어적으로 조문을 통과시킨다."""
+    xml = _HEADING_XML.replace("<조문여부>조문</조문여부>", "")
+    result = parse_articles(xml)
+    # 표제 2개('전문')는 여전히 걸러지고, 태그 없는 실제 조문은 살아남아야 함
+    assert len(result) == 1
+    assert result[0].article_title == "세율"
+
+
 def test_parse_articles_article_no_format():
     result = parse_articles(_SAMPLE_XML)
     assert result[0].article_no == "제1조"

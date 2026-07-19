@@ -216,9 +216,12 @@ def parse_articles(
     articles: list[LawArticle] = []
     for unit in units:
         try:
-            # 삭제 조문 건너뜀
+            # 실제 조문만 저장 — "삭제"(삭제 조문)와 "전문"(편/장/절/관 구조 표제)은 건너뜀.
+            # 과거 "삭제"만 걸러서 절/관 표제가 조문번호를 공유한 채 저장되던 버그가 있었음
+            # (예: <조문여부>전문</조문여부> + 조문내용 "제4절 세액의 계산").
+            # status가 빈 값(태그 누락 XML 변형)이면 방어적으로 통과시킨다.
             status = _find_text(unit, *_ARTICLE_STATUS_TAGS)
-            if status == "삭제":
+            if status and status != "조문":
                 continue
 
             no     = _find_text(unit, *_ARTICLE_NO_TAGS)
