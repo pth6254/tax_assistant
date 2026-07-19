@@ -290,9 +290,14 @@ async def main(args: argparse.Namespace) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="RAG 검색/답변 품질 평가 스크립트")
-    parser.add_argument("--build",       action="store_true", help="골든셋 각 질문의 실제 검색 후보를 candidates에 채움")
-    parser.add_argument("--eval",        action="store_true", help="expected_article_no가 채워진 항목으로 hit-rate/MRR/분류정확도 평가")
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--build",       action="store_true", help="골든셋 각 질문의 실제 검색 후보를 candidates에 채움")
+    mode.add_argument("--eval",        action="store_true", help="expected_article_no가 채워진 항목으로 hit-rate/MRR/분류정확도 평가")
     parser.add_argument("--with-answer", action="store_true", help="--eval 과 함께: 실제 답변 생성 후 인용 조문 정확도까지 확인 (느림)")
     parser.add_argument("--repeat", type=int, default=1, help="--eval을 N회 반복해 citation_accuracy 편차와 비결정적 항목을 확인 (temperature 샘플링 검증용)")
     args = parser.parse_args()
+    if args.repeat < 1:
+        parser.error("--repeat는 1 이상이어야 합니다.")
+    if args.build and (args.with_answer or args.repeat != 1):
+        parser.error("--with-answer와 --repeat는 --eval에서만 사용할 수 있습니다.")
     asyncio.run(main(args))

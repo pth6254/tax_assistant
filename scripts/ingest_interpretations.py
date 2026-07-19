@@ -78,8 +78,9 @@ async def main(args: argparse.Namespace) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="법령해석례(유권해석) 수집 스크립트")
-    parser.add_argument("--query",             type=str, default="", help="검색 키워드 (예: --query 소득세)")
-    parser.add_argument("--all-tax-keywords",  action="store_true", help="세법 전체 키워드로 자동 수집")
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--query",             type=str, default="", help="검색 키워드 (예: --query 소득세)")
+    source.add_argument("--all-tax-keywords",  action="store_true", help="세법 전체 키워드로 자동 수집")
     parser.add_argument("--embed",             action="store_true", help="수집 시 임베딩 생성")
     parser.add_argument("--max-results",       type=int, default=100, help="키워드당 최대 수집 건수 (기본 100)")
     args = parser.parse_args()

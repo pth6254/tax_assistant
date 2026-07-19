@@ -1,7 +1,7 @@
 """
 scripts/embed_clauses.py — 기존 조문의 항(項) 단위 보조 임베딩 백필
 
-db/migrations/006_law_article_clauses.sql 적용 후 1회 실행한다.
+Alembic ``upgrade head`` 적용 후 기존 데이터에 대해 1회 실행한다.
 이후 신규 수집분은 ingestion_service._embed_and_update가 자동으로 항 임베딩을 생성한다.
 
 사용법:

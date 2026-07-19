@@ -11,8 +11,8 @@ law_type 값에 의존하므로, 기존 데이터를 보정하지 않으면 법�
 scripts/sync_laws.py의 재수집으로는 고쳐지지 않는다 — 이 스크립트로 별도 보정한다.
 
 사용법:
-  python scripts/backfill_law_type.py            # 실제 반영
-  python scripts/backfill_law_type.py --dry-run  # 무엇이 바뀔지만 확인
+  python scripts/backfill_law_type.py        # 무엇이 바뀔지만 확인 (dry-run)
+  python scripts/backfill_law_type.py --run  # 실제 반영
 """
 import argparse
 import asyncio
@@ -40,7 +40,7 @@ async def main(args: argparse.Namespace) -> int:
             print("보정이 필요한 법령이 없습니다.")
             return 0
 
-        print(f"보정 대상 {len(law_names)}개 법령{' (dry-run)' if args.dry_run else ''}\n")
+        print(f"보정 대상 {len(law_names)}개 법령{' (dry-run)' if not args.run else ''}\n")
 
         fixed = 0
         not_found: list[str] = []
@@ -59,7 +59,7 @@ async def main(args: argparse.Namespace) -> int:
                 continue
 
             law_type = laws[0].law_type
-            if args.dry_run:
+            if not args.run:
                 print(f"  '{law_name}' → law_type='{law_type}' (dry-run, 미반영)")
             else:
                 result = await pool.execute(
@@ -85,6 +85,6 @@ async def main(args: argparse.Namespace) -> int:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="law_articles.law_type 일괄 보정 스크립트")
-    parser.add_argument("--dry-run", action="store_true", help="실제 반영 없이 변경 내용만 출력")
+    parser.add_argument("--run", action="store_true", help="실제 DB에 보정 결과 반영 (기본은 dry-run)")
     args = parser.parse_args()
     sys.exit(asyncio.run(main(args)))

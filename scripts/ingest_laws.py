@@ -168,10 +168,15 @@ def _print_summary(results: list[dict]) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="법령 수집 / 임베딩 스크립트")
     parser.add_argument("--embed",       action="store_true", help="수집 시 임베딩 생성")
-    parser.add_argument("--embed-only",  action="store_true", help="저장된 조문 중 embedding=NULL 만 임베딩")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--embed-only",  action="store_true", help="저장된 조문 중 embedding=NULL 만 임베딩")
     parser.add_argument("--tax-type",    type=str, default="", help="--embed-only 시 특정 세목만 (예: 소득세법)")
     parser.add_argument("--batch-size",  type=int, default=50, help="임베딩 배치 크기 (기본 50)")
-    parser.add_argument("--targets-only",action="store_true", help="LAW_TARGETS 7개 법령만 수집")
-    parser.add_argument("--law",         type=str, default="", help="단일 법령 수집 (예: --law 소득세법)")
+    mode.add_argument("--targets-only",action="store_true", help="LAW_TARGETS 7개 법령만 수집")
+    mode.add_argument("--law",         type=str, default="", help="단일 법령 수집 (예: --law 소득세법)")
     args = parser.parse_args()
+    if args.tax_type and not args.embed_only:
+        parser.error("--tax-type은 --embed-only와 함께 사용해야 합니다.")
+    if args.embed and args.embed_only:
+        parser.error("--embed-only 자체가 임베딩 작업이므로 --embed를 함께 지정하지 마세요.")
     asyncio.run(main(args))

@@ -326,6 +326,7 @@ tax-assistant/
 │   └── docker-up-wsl.sh          # Windows Ollama 주소 자동 탐지·검증 후 Compose 실행
 │
 ├── scripts/
+│   ├── README.md                 # 배치 작업 분류·실행 원칙·안전 주의사항
 │   ├── ingest_laws.py            # 법령 수집 CLI (수집/임베딩/재수집)
 │   ├── ingest_interpretations.py # 법령해석례(유권해석) 수집 CLI
 │   ├── sync_laws.py              # 법령 개정 자동 동기화 CLI (cron 등록 대상)
