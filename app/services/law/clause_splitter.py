@@ -8,15 +8,8 @@ services/law/clause_splitter.py — 조문 본문의 항(項) 단위 분할
 순수 함수만 포함 — DB/LLM 의존 없음.
 """
 from dataclasses import dataclass
-import re
 
-from app.services.law.reference_parser import (
-    PARAGRAPH_MARKERS,
-    PARAGRAPH_MARKER_PATTERN,
-    paragraph_label_to_number,
-)
-
-_CLAUSE_MARKER_RE = re.compile(rf"(?={PARAGRAPH_MARKER_PATTERN})")
+from app.services.law.structure_parser import split_paragraphs
 
 # 이 길이(문자 수) 이상이고 항이 2개 이상인 조문만 분할 대상.
 # 300~1000자 조문 10개로 실험한 결과 hit_rate는 동일(10/10)했지만 MRR이 개선되었고
@@ -42,21 +35,20 @@ def split_into_clauses(article_text: str) -> list[LawClause]:
     첫 원문자 이전 부분(조문 제목 줄 등)은 각 항의 맥락으로만 쓰이고
     별도 항목으로 반환하지 않는다. 항이 2개 미만이면 빈 목록을 반환한다.
     """
-    parts = [p for p in _CLAUSE_MARKER_RE.split(article_text) if p.strip()]
-    clauses = [p for p in parts if p and p[0] in PARAGRAPH_MARKERS]
-    if len(clauses) < 2:
+    paragraphs = split_paragraphs(article_text)
+    if len(paragraphs) < 2:
         return []
 
     result = []
-    for clause in clauses:
-        text = clause.strip()
+    for paragraph in paragraphs:
+        text = paragraph.text
         if len(text) < _MIN_CLAUSE_CHARS:
             continue
-        label = text[0]
-        paragraph = paragraph_label_to_number(label)
-        if paragraph is None:
-            continue
-        result.append(LawClause(paragraph=paragraph, label=label, text=text))
+        result.append(LawClause(
+            paragraph=paragraph.number,
+            label=paragraph.label,
+            text=text,
+        ))
     return result
 
 

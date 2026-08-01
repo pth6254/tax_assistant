@@ -325,6 +325,10 @@ tax-assistant/
 ├── dev/
 │   └── docker-up-wsl.sh          # Windows Ollama 주소 자동 탐지·검증 후 Compose 실행
 │
+├── AGENTS.md                     # Codex 및 공통 AI 작업 진입 지침
+├── CLAUDE.md                     # Claude Code 작업 진입 지침
+├── docs/ai/                      # 프로젝트 컨텍스트·현재 상태·설계 결정·인수인계
+│
 ├── scripts/
 │   ├── README.md                 # 배치 작업 분류·실행 원칙·안전 주의사항
 │   ├── ingest_laws.py            # 법령 수집 CLI (수집/임베딩/재수집)
@@ -729,6 +733,9 @@ python scripts/eval_rag.py --eval --with-answer --repeat 3
 공백이나 하위 단위가 포함된 표기도 전달할 수 있습니다. 조회에는 정규화된 조 번호
 (`제59조의4`)를 사용하고, 응답의 `reference`에는 `article=59`, `article_branch=4`,
 `paragraph=9`, `item=1`, `subitem="가"`처럼 각 단위를 분리해 반환합니다.
+하위 단위가 지정되면 `target`에 실제 본문 대조 결과도 포함됩니다. `target.exists=true`이면
+요청한 항·호·목의 `text`를 반환하고, 존재하지 않으면 조 전체 조회는 유지한 채
+`target.exists=false`와 누락된 단계(`level`)·사유(`detail`)를 반환합니다.
 
 ---
 
@@ -822,9 +829,14 @@ WSL 기본 게이트웨이로 Windows Ollama에 접근하고, 운영 환경에�
 변환하며, `제3호의2` 같은 호 가지번호와 `가목` 같은 목도 별도로 보존합니다.
 
 직접 조문 조회 fast path는 입력을 `제N조(의N)` 형태로 정규화해 DB를 조회하되, 파싱한 하위
-단위는 API 응답의 `reference`에 유지합니다. 유권해석 사건번호 `11-0150`처럼 조문번호가 아닌
+단위는 API 응답의 `reference`에 유지하고 저장된 원문에서 해당 항·호·목의 실존 여부와 가장
+구체적인 본문을 `target`으로 반환합니다. 유권해석 사건번호 `11-0150`처럼 조문번호가 아닌
 식별자는 변형하지 않습니다. 이 설계로 조문 조회 정확도를 높이고 향후 항·호 단위 검색 및
 인용 검증을 확장할 수 있는 기반을 마련했습니다.
+
+국가법령정보 XML 수집기는 `<항번호>`, `<호번호>`, `<목번호>`와 각 본문을 줄 단위 원문으로
+보존합니다. 이 기능 적용 전에 수집된 데이터는 과거 파서가 호·목을 누락했을 수 있으므로
+`python scripts/sync_laws.py --embed`로 재수집해야 호·목 실존 검증이 완전하게 적용됩니다.
 
 ### 하이브리드 검색 (법령 조문 + PDF)
 

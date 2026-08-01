@@ -24,7 +24,12 @@ import time
 import uuid as _uuid
 
 from app.database import get_pool
-from app.schemas.law import HybridSearchResult, LawArticleDetail, ParsedLawReference
+from app.schemas.law import (
+    HybridSearchResult,
+    LawArticleDetail,
+    LawReferenceTarget,
+    ParsedLawReference,
+)
 from app.services.embedding_service import embed_texts, get_http_client
 from app.services.law.reference_parser import (
     InvalidLawReference,
@@ -33,6 +38,7 @@ from app.services.law.reference_parser import (
     normalize_article_no,
     parse_law_reference,
 )
+from app.services.law.structure_parser import resolve_reference_target
 from config import OLLAMA_BASE_URL, RERANK_MODEL, SIMILARITY_THRESHOLD, TOP_K
 
 logger = logging.getLogger(__name__)
@@ -335,6 +341,7 @@ async def get_law_article(law_name: str, article_no: str) -> LawArticleDetail | 
     if not row:
         return None
     reference = None
+    target = None
     if parsed_reference and parsed_reference.article is not None:
         canonical_reference = LawReference(
             law_name=row["law_name"],
@@ -355,6 +362,18 @@ async def get_law_article(law_name: str, article_no: str) -> LawArticleDetail | 
             subitem=canonical_reference.subitem,
             canonical=canonical_reference.canonical,
         )
+        resolved = resolve_reference_target(row["article_text"], canonical_reference)
+        if resolved is not None:
+            target = LawReferenceTarget(
+                exists=resolved.exists,
+                level=resolved.level,
+                paragraph=resolved.paragraph,
+                item=resolved.item,
+                item_branch=resolved.item_branch,
+                subitem=resolved.subitem,
+                text=resolved.text,
+                detail=resolved.detail,
+            )
 
     return LawArticleDetail(
         law_name=row["law_name"],
@@ -367,6 +386,7 @@ async def get_law_article(law_name: str, article_no: str) -> LawArticleDetail | 
         amendment_date=row["amendment_date"],
         source_url=row["source_url"] or "",
         reference=reference,
+        target=target,
     )
 
 

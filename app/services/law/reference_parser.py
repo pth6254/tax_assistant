@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import re
 
 
-_SUBITEM_LABELS = "가나다라마바사아자차카타파하"
+SUBITEM_LABELS = "가나다라마바사아자차카타파하"
 _CIRCLED_TO_NUMBER = {
     **{chr(0x2460 + index): index + 1 for index in range(20)},
     **{chr(0x3251 + index): index + 21 for index in range(15)},
@@ -78,7 +78,7 @@ _REFERENCE_PATTERN = re.compile(
     (?:\s*의\s*(?P<article_branch>\d+))?
     (?:\s*(?:(?:제\s*)?(?P<paragraph>\d+)\s*항|(?P<circled>[{_CIRCLED_CLASS}])))?
     (?:\s*(?:제\s*)?(?P<item>\d+)\s*호(?:\s*의\s*(?P<item_branch>\d+))?)?
-    (?:\s*(?P<subitem>[{_SUBITEM_LABELS}])\s*목)?
+    (?:\s*(?P<subitem>[{SUBITEM_LABELS}])\s*목)?
     \s*$
     """,
     re.VERBOSE,
@@ -91,7 +91,7 @@ _REFERENCE_SEARCH_PATTERN = re.compile(
     (?:\s*의\s*(?P<article_branch>\d+))?
     (?:\s*(?:(?:제\s*)?(?P<paragraph>\d+)\s*항|(?P<circled>[{_CIRCLED_CLASS}])))?
     (?:\s*(?:제\s*)?(?P<item>\d+)\s*호(?:\s*의\s*(?P<item_branch>\d+))?)?
-    (?:\s*(?P<subitem>[{_SUBITEM_LABELS}])\s*목)?
+    (?:\s*(?P<subitem>[{SUBITEM_LABELS}])\s*목)?
     """,
     re.VERBOSE,
 )

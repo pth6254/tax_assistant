@@ -49,6 +49,18 @@ class ParsedLawReference(BaseModel):
     canonical: str
 
 
+class LawReferenceTarget(BaseModel):
+    """요청한 항·호·목의 본문 대조 결과."""
+    exists: bool
+    level: str
+    paragraph: int | None = None
+    item: int | None = None
+    item_branch: int | None = None
+    subitem: str | None = None
+    text: str | None = None
+    detail: str | None = None
+
+
 class LawArticleDetail(BaseModel):
     """조문 원문 뷰어 응답."""
     law_name: str
@@ -61,3 +73,4 @@ class LawArticleDetail(BaseModel):
     amendment_date: str
     source_url: str
     reference: ParsedLawReference | None = None
+    target: LawReferenceTarget | None = None

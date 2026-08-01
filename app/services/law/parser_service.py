@@ -35,7 +35,7 @@ import unicodedata
 import xml.etree.ElementTree as ET
 
 from app.schemas.law import LawArticle
-from app.services.law.reference_parser import format_article_no
+from app.services.law.reference_parser import PARAGRAPH_MARKERS, format_article_no
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,14 @@ _ARTICLE_STATUS_TAGS        = ["조문여부"]
 _ARTICLE_TITLE_TAGS         = ["조문제목", "조제목"]
 _ARTICLE_CONTENT_TAGS       = ["조문내용", "조내용"]
 _PARA_UNIT_TAGS             = ["항"]
+_PARA_NO_TAGS               = ["항번호"]
 _PARA_CONTENT_TAGS          = ["항내용"]
+_ITEM_UNIT_TAGS             = ["호"]
+_ITEM_NO_TAGS               = ["호번호"]
+_ITEM_CONTENT_TAGS          = ["호내용"]
+_SUBITEM_UNIT_TAGS          = ["목"]
+_SUBITEM_NO_TAGS            = ["목번호"]
+_SUBITEM_CONTENT_TAGS       = ["목내용"]
 
 
 def normalize_text(text: str) -> str:
@@ -113,24 +120,67 @@ def _find_element(el: ET.Element, *tag_candidates: str) -> ET.Element | None:
     return None
 
 
+def _numbered_line(marker: str, content: str) -> str:
+    """XML 번호 태그와 본문을 중복 없이 한 줄로 결합한다."""
+    marker = normalize_text(marker)
+    content = normalize_text(content)
+    if not marker:
+        return content
+    if content.startswith(marker):
+        return content
+    if marker not in PARAGRAPH_MARKERS and not marker.endswith("."):
+        marker += "."
+    separator = "" if marker in PARAGRAPH_MARKERS else " "
+    return f"{marker}{separator}{content}".strip()
+
+
+def _collect_items(parent_el: ET.Element) -> list[str]:
+    parts: list[str] = []
+    for item_tag in _ITEM_UNIT_TAGS:
+        for item_el in parent_el.findall(item_tag):
+            item_line = _numbered_line(
+                _find_text(item_el, *_ITEM_NO_TAGS),
+                _find_text(item_el, *_ITEM_CONTENT_TAGS),
+            )
+            if item_line:
+                parts.append(item_line)
+            for subitem_tag in _SUBITEM_UNIT_TAGS:
+                for subitem_el in item_el.findall(subitem_tag):
+                    subitem_line = _numbered_line(
+                        _find_text(subitem_el, *_SUBITEM_NO_TAGS),
+                        _find_text(subitem_el, *_SUBITEM_CONTENT_TAGS),
+                    )
+                    if subitem_line:
+                        parts.append(subitem_line)
+    return parts
+
+
 def _collect_para_text(article_el: ET.Element) -> str:
     """
     항 요소들의 내용을 모아 하나의 문자열로 반환한다.
-    항/호/목 세분화 없이 항내용만 순서대로 합산한다.
+    항번호·항내용과 그 아래 호·목을 원문 순서대로 합산한다.
     """
     parts: list[str] = []
     for para_tag in _PARA_UNIT_TAGS:
         for para_el in article_el.findall(para_tag):
-            content = _find_text(para_el, *_PARA_CONTENT_TAGS)
-            if content:
-                parts.append(content)
+            para_line = _numbered_line(
+                _find_text(para_el, *_PARA_NO_TAGS),
+                _find_text(para_el, *_PARA_CONTENT_TAGS),
+            )
+            if para_line:
+                parts.append(para_line)
+            parts.extend(_collect_items(para_el))
+    # 항 없이 조문 바로 아래에 놓인 호도 보존한다.
+    parts.extend(_collect_items(article_el))
     return "\n".join(parts)
 
 
 def _parse_basic_info(root: ET.Element) -> dict[str, str]:
     """기본정보 섹션에서 법령명/종류/날짜를 추출한다."""
     # 기본정보 섹션 탐색 (없으면 루트에서 직접 읽기)
-    basic_el = root.find("기본정보") or root
+    basic_el = root.find("기본정보")
+    if basic_el is None:
+        basic_el = root
 
     result: dict[str, str] = {}
     for key, candidates in _BASIC_TAG_CANDIDATES.items():

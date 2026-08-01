@@ -227,3 +227,22 @@ def test_parse_articles_hint_fallback():
     result = parse_articles(xml_no_name, law_name_hint="법인세법", law_type_hint="법률")
     assert result[0].law_name == "법인세법"
     assert result[0].law_type == "법률"
+
+
+def test_parse_articles_preserves_paragraph_item_and_subitem_text():
+    xml = """<법령>
+      <기본정보><법령명_한글>소득세법 시행령</법령명_한글><법종구분>대통령령</법종구분></기본정보>
+      <조문><조문단위>
+        <조문번호>10</조문번호><조문여부>조문</조문여부><조문내용>제10조(요건)</조문내용>
+        <항><항번호>①</항번호><항내용>다음 각 호에 해당한다.</항내용>
+          <호><호번호>1</호번호><호내용>첫 번째 요건</호내용>
+            <목><목번호>가</목번호><목내용>세부 요건</목내용></목>
+          </호>
+        </항>
+      </조문단위></조문>
+    </법령>"""
+    result = parse_articles(xml)
+    assert len(result) == 1
+    assert "①다음 각 호에 해당한다." in result[0].article_text
+    assert "1. 첫 번째 요건" in result[0].article_text
+    assert "가. 세부 요건" in result[0].article_text
