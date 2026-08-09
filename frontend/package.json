@@ -9,9 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "dompurify": "^3.4.13",
+    "marked": "^9.1.6",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "marked": "^9.1.6"
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",

@@ -1,6 +1,6 @@
 # 현재 구현 상태
 
-기준일: 2026-08-01
+기준일: 2026-08-10
 
 이 문서는 세션 간 작업 맥락을 전달하는 상태판이다. 완료 여부가 의심되면 실제 코드,
 `git status`, 테스트 결과를 우선 확인한다.
@@ -27,36 +27,42 @@
 - liveness·readiness·dependency healthcheck
 - Alembic legacy baseline과 Docker 시작 시 `upgrade head`
 - 수집·동기화·백필·RAG 평가 CLI
+- 채팅 실행 전 `conversation_id`와 로그인 사용자의 소유권 검증
+- AI Markdown 응답을 DOMPurify로 정화한 뒤 렌더링
+- Docker 빌드 컨텍스트에서 `.env`와 `.env.*` 제외
 
 ## 2. 최근 구현 및 검증 상태
 
-최근 작업은 법령 참조 구조화와 본문 대조 기능이다.
+최근 작업은 법령 참조 구조화와 다중 사용자 보안 보강이다.
 
 - `reference_parser.py`: 법률·시행령·시행규칙의 조·항·호·목 참조 파싱
 - `structure_parser.py`: 요청한 항·호·목의 실제 본문 추출과 실존 여부 반환
 - `parser_service.py`: 국가법령정보 XML의 `<항>`, `<호>`, `<목>` 보존
 - `LawArticleDetail`: 구조화된 `reference`와 본문 대조 `target` 응답
 - 실제 국가법령정보 XML에서 `소득세법 제59조의4 제9항 제2호 가목` 추출 확인
-- 마지막 보고된 전체 테스트: `275 passed`
+- `require_conversation_owner`: 일반·SSE 채팅 모두 응답 시작 전에 대화 소유권 확인, 타인 소유·잘못된 UUID는 동일한 404 반환
+- `MessageBubble.jsx`: `marked` 변환 결과를 DOMPurify로 정화하여 저장형 XSS 차단
+- `.dockerignore`: `.env`, `.env.*` 제외 및 `.env.example`만 예외 허용
+- `dev/docker-up-wsl.sh`로 backend·frontend 재빌드 및 DB·Alembic·Ollama dependency `ready` 확인
+- 현재 backend 이미지의 `/app/.env` 부재 확인
+- 마지막 보고된 전체 테스트: `278 passed`
 
 검증 명령은 항상 현재 코드로 다시 실행한다. 위 숫자는 영구 기준이 아니라 마지막 확인 기록이다.
 
 ## 3. 현재 작업 트리 주의
 
-2026-08-01 확인 시 법령 구조화 관련 변경이 아직 작업 트리에 존재했다. 새 세션은 반드시
+2026-08-10 확인 시 보안 보강 관련 변경이 아직 작업 트리에 존재했다. 새 세션은 반드시
 `git status --short`와 `git diff`를 먼저 확인하고 사용자 변경을 덮어쓰지 않는다.
 
 주요 변경 가능 파일:
 
-- `README.md`
-- `app/schemas/law.py`
-- `app/services/law/reference_parser.py`
-- `app/services/law/structure_parser.py`
-- `app/services/law/clause_splitter.py`
-- `app/services/law/parser_service.py`
-- `app/services/search/hybrid_search_service.py`
-- `tests/test_parser.py`
-- `tests/test_law_structure.py`
+- `.dockerignore`
+- `app/services/conversation_service.py`
+- `app/routers/chat.py`
+- `app/routers/conversations.py`
+- `frontend/src/components/Chat/MessageBubble.jsx`
+- `frontend/package.json`, `frontend/package-lock.json`
+- `tests/test_api_chat.py`
 
 ## 4. 남은 우선순위
 
@@ -88,4 +94,3 @@
 [ ] git diff --check
 [ ] CURRENT_STATUS/HANDOFF 갱신
 ```
-

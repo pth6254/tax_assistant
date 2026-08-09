@@ -2,6 +2,7 @@
 test_api_chat.py — 채팅 엔드포인트 테스트
 """
 import pytest
+import uuid
 from unittest.mock import AsyncMock, patch
 
 
@@ -26,7 +27,9 @@ def test_chat_missing_query_returns_422(client, auth_cookie):
 
 # ── 정상 응답 (서비스 mock) ───────────────────────────────────────
 
-def test_chat_returns_output(client, auth_cookie):
+def test_chat_returns_output(client, auth_cookie, mock_pool):
+    _, conn = mock_pool
+    conn.fetchval.return_value = uuid.uuid4()
     with patch(
         "app.services.chat_service.process_chat",
         AsyncMock(return_value=("소득세 최고세율은 45%입니다.", None)),
@@ -42,7 +45,9 @@ def test_chat_returns_output(client, auth_cookie):
     assert body["calculator"] is None
 
 
-def test_chat_returns_calculator_metadata_when_present(client, auth_cookie):
+def test_chat_returns_calculator_metadata_when_present(client, auth_cookie, mock_pool):
+    _, conn = mock_pool
+    conn.fetchval.return_value = uuid.uuid4()
     calc_meta = {"tool": "income_tax", "params": {"income": 50000000}}
     with patch(
         "app.services.chat_service.process_chat",
@@ -59,7 +64,10 @@ def test_chat_returns_calculator_metadata_when_present(client, auth_cookie):
 
 # ── 스트리밍 응답 (서비스 mock) ────────────────────────────────────
 
-def test_chat_stream_emits_chunk_and_calc_events(client, auth_cookie):
+def test_chat_stream_emits_chunk_and_calc_events(client, auth_cookie, mock_pool):
+    _, conn = mock_pool
+    conn.fetchval.return_value = uuid.uuid4()
+
     async def fake_stream(query, conversation_id, user_id):
         yield {"type": "chunk", "text": "결정세액은 "}
         yield {"type": "chunk", "text": "589만원입니다."}
@@ -76,6 +84,41 @@ def test_chat_stream_emits_chunk_and_calc_events(client, auth_cookie):
     assert '"type": "calc"' in resp.text
     assert '"tool": "income_tax"' in resp.text
     assert "[DONE]" in resp.text
+
+
+@pytest.mark.parametrize("path", ["/api/chat", "/api/chat/stream"])
+def test_chat_rejects_conversation_owned_by_another_user(
+    client, auth_cookie, mock_pool, path,
+):
+    _, conn = mock_pool
+    conn.fetchval.return_value = None
+
+    with patch("app.services.chat_service.process_chat", AsyncMock()) as process_chat:
+        resp = client.post(
+            path,
+            json={
+                "query": "테스트 질문",
+                "conversation_id": "00000000-0000-0000-0000-000000000001",
+            },
+            cookies=auth_cookie,
+        )
+
+    assert resp.status_code == 404
+    process_chat.assert_not_awaited()
+
+
+def test_chat_rejects_malformed_conversation_id(client, auth_cookie, mock_pool):
+    _, conn = mock_pool
+    conn.fetchval.reset_mock()
+
+    resp = client.post(
+        "/api/chat",
+        json={"query": "테스트 질문", "conversation_id": "not-a-uuid"},
+        cookies=auth_cookie,
+    )
+
+    assert resp.status_code == 404
+    conn.fetchval.assert_not_awaited()
 
 
 # ── 헬스체크 ─────────────────────────────────────────────────────

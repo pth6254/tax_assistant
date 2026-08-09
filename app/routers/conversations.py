@@ -9,26 +9,18 @@ DELETE /api/conversations/{id}         대화 삭제
 import json
 import uuid as _uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from app.database import get_pool
 from app.core.security import verify_token
+from app.services.conversation_service import require_conversation_owner
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 
 
 class RenameRequest(BaseModel):
     title: str
-
-
-async def _verify_ownership(conn, conv_id: _uuid.UUID, user_id: str) -> None:
-    exists = await conn.fetchval(
-        "SELECT id FROM conversations WHERE id = $1 AND user_id = $2",
-        conv_id, _uuid.UUID(user_id),
-    )
-    if not exists:
-        raise HTTPException(status_code=404, detail="대화를 찾을 수 없습니다.")
 
 
 @router.get("")
@@ -85,10 +77,9 @@ async def create_conversation(user: dict = Depends(verify_token)):
 
 @router.get("/{conv_id}/messages")
 async def get_messages(conv_id: str, user: dict = Depends(verify_token)):
-    cid = _uuid.UUID(conv_id)
     pool = await get_pool()
     async with pool.acquire() as conn:
-        await _verify_ownership(conn, cid, user["id"])
+        cid = await require_conversation_owner(conn, conv_id, user["id"])
         rows = await conn.fetch(
             "SELECT message FROM chat_logs WHERE conversation_id = $1 ORDER BY created_at ASC",
             cid,
@@ -108,10 +99,9 @@ async def rename_conversation(
     body: RenameRequest,
     user: dict = Depends(verify_token),
 ):
-    cid = _uuid.UUID(conv_id)
     pool = await get_pool()
     async with pool.acquire() as conn:
-        await _verify_ownership(conn, cid, user["id"])
+        cid = await require_conversation_owner(conn, conv_id, user["id"])
         await conn.execute(
             "UPDATE conversations SET title = $1, updated_at = now() WHERE id = $2",
             body.title[:50], cid,
@@ -121,10 +111,9 @@ async def rename_conversation(
 
 @router.delete("/{conv_id}")
 async def delete_conversation(conv_id: str, user: dict = Depends(verify_token)):
-    cid = _uuid.UUID(conv_id)
     pool = await get_pool()
     async with pool.acquire() as conn:
-        await _verify_ownership(conn, cid, user["id"])
+        cid = await require_conversation_owner(conn, conv_id, user["id"])
         await conn.execute("DELETE FROM chat_logs    WHERE conversation_id = $1", cid)
         await conn.execute("DELETE FROM conversations WHERE id = $1", cid)
     return {"message": "대화가 삭제되었습니다."}

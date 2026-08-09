@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 
 // _COMBINED_PROMPT의 "근거 출처 목록" 형식과 동일한 패턴 — [법률] 법령명 제N조
@@ -26,7 +27,10 @@ export default function MessageBubble({ message, userInitial, onCitationClick, o
 
   useEffect(() => {
     if (!isUser && bubbleRef.current) {
-      bubbleRef.current.innerHTML = marked.parse(linkifyCitations(message.content))
+      const rendered = marked.parse(linkifyCitations(message.content))
+      bubbleRef.current.innerHTML = DOMPurify.sanitize(rendered, {
+        ALLOW_DATA_ATTR: true,
+      })
     }
   }, [message.content, isUser])
 
