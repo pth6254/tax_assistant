@@ -86,12 +86,12 @@ Agentic RAG 파이프라인 (검색 → 계산 → 합성 → 인용 검증)
 
 ### Agentic RAG 채팅
 
-- **RAG 파이프라인**: 세목 분류 + 멀티쿼리 생성 → 하이브리드 벡터 검색(RRF 병합) → 리랭킹 → 조건부 웹검색 → 세금 계산기(조건부) → 최종 합성 → 인용 검증
+- **RAG 파이프라인**: 세목 분류 + 멀티쿼리 생성 → 하이브리드 벡터 검색(RRF 병합) → 조건부 웹검색 → 세금 계산기(조건부) → 최종 합성 → 인용 검증
 - **비교 질문 처리**: "리스 vs 장기렌트"처럼 A vs B를 묻는 질문에 대해 각 항목별 법령 조문을 근거로 비교표 + 명확한 결론 제시
 - **세금 계산기 tool calling**: 질문에서 계산 의도를 감지하면 LLM이 계산기 종류·입력값을 추출해 DB 세율표 기반 계산기를 실행, 계산 과정과 근거 조문을 답변에 반영
 - **인용 검증(citation guard)**: 답변 생성 후 인용된 조문이 실제 검색 근거에 존재하는지, 계산기 결과 금액과 서술이 일치하는지 자동 대조해 근거 없는 인용에는 경고 각주 추가
 - **인용 누락 자동 보정(structured output)**: 답변에 법령 인용이 하나도 없는 경우(temperature 샘플링에 따른 형식 이탈)에만 JSON Schema로 출력을 강제하는 별도 LLM 호출을 실행해 근거 조문을 추출·검증 후 답변에 덧붙임 — 정상 답변(대다수)에는 추가 지연 없음
-- **SSE 스트리밍**: 토큰 단위 실시간 응답(LangChain `ChatOllama` 경유), DB 저장은 백그라운드 처리
+- **SSE 스트리밍**: llama.cpp OpenAI 호환 API의 토큰 단위 실시간 응답, DB 저장은 백그라운드 처리
 - **대화 메모리**: 최근 3턴 컨텍스트 유지, 대화별 독립 세션(conversations 테이블)
 - **Tavily 웹검색**: 국세청·법제처·기획재정부 도메인 중심 최신 자료 보완 (DB 상위 3개 평균 유사도 0.55 미만인 경우에만 실행)
 
@@ -147,7 +147,9 @@ graph TD
     C --> E[core/security]
     D --> F[(PostgreSQL<br/>+ pgvector)]
 
-    D -->|Ollama REST API| G[Ollama<br/>qwen3.5:9b<br/>qwen3-embedding:4b]
+    D -->|OpenAI 호환 API| G[llama.cpp<br/>Qwen3.5-9B GGUF]
+    D -->|임베딩 API| H[Ollama<br/>qwen3-embedding:4b]
+    D -->|임베딩 API| I[llama.cpp<br/>Qwen3 Embedding 4B GGUF]
     D -->|Tavily API| H[Tavily Search]
     D -->|국가법령정보 API| I[법령정보 Open API<br/>law + expc]
 
@@ -262,7 +264,6 @@ PDF 업로드
      2순위: 시행규칙 (law_articles, law_type=총리령/부령)
      3순위: 유권해석 (law_articles, law_type=법령해석례) / 법령 PDF
      4~7순위: 시행령·시행규칙 PDF, 집행기준, 기타 PDF (category 기준)
-  → 리랭킹 (RERANK_MODEL 설정 시 Ollama /api/rerank 호출)
   │
   ├─ [조건부] 웹검색 (DB 상위 3개 평균 유사도 < 0.55인 경우만)
   │    Tavily 검색 (nts.go.kr, law.go.kr, moef.go.kr)
@@ -304,13 +305,14 @@ PDF 업로드
 | 프론트엔드 | React 18, Vite |
 | 데이터베이스 | PostgreSQL 17 + pgvector |
 | 인증 | JWT, httpOnly 쿠키, bcrypt |
-| LLM | Ollama qwen3.5:9b (로컬), LangChain(`langchain-ollama`) 경유 — provider 교체 시 어댑터 계층만 교체 |
+| LLM | llama.cpp OpenAI 호환 서버 + Qwen3.5-9B GGUF (로컬), Ollama fallback |
 | 임베딩 | Ollama qwen3-embedding:4b (2560차원, 로컬) |
+| 임베딩 서빙 | llama.cpp + Qwen3-Embedding-4B GGUF (CPU), 기존 Ollama v1 |
 | 웹검색 | Tavily Search API |
 | 법령 API | 국가법령정보 Open API |
 | 컨테이너 | Docker Compose (pgvector/pgvector:pg17) |
 
-> **로컬 모델 선택 이유**: OpenAI API 대신 Ollama를 사용하여 세무 데이터를 외부에 전송하지 않고, API 비용 없이 운영합니다.
+> **로컬 모델 선택 이유**: 외부 생성 API 대신 llama.cpp·Ollama를 로컬에서 운영하여 세무 데이터를 외부에 전송하지 않고 API 비용 없이 처리합니다.
 
 ---
 
@@ -324,6 +326,7 @@ tax-assistant/
 │
 ├── dev/
 │   └── docker-up-wsl.sh          # Windows Ollama 주소 자동 탐지·검증 후 Compose 실행
+│   └── docker-up-llamacpp-wsl.sh # GPU·임베딩 검사 후 llama.cpp overlay로 Compose 실행
 │
 ├── AGENTS.md                     # Codex 및 공통 AI 작업 진입 지침
 ├── CLAUDE.md                     # Claude Code 작업 진입 지침
@@ -379,7 +382,7 @@ tax-assistant/
     │   ├── chat_service.py       # Agentic RAG 파이프라인, 스트리밍, 세목 키워드 매칭
     │   ├── citation_guard.py     # 답변 인용·계산 수치 검증 후처리
     │   ├── embedding_service.py  # Ollama 임베딩 API와 HTTP 클라이언트 생명주기
-    │   ├── llm_client.py         # LangChain ChatOllama 어댑터 (call_llm/stream_llm/call_llm_structured)
+    │   ├── llm_client.py         # llama.cpp OpenAI 호환 API·Ollama fallback 어댑터
     │   ├── tax_schedule_service.py  # 사업자 유형별 신고 기한 규칙 기반 계산
     │   ├── upload_service.py     # PDF 파싱 → 분류 → 청크 → 임베딩 → 저장
     │   ├── document/
@@ -417,6 +420,7 @@ tax-assistant/
 - Node.js 18+
 - Docker & Docker Compose (PostgreSQL + pgvector 포함)
 - [Ollama](https://ollama.com) 설치
+- NVIDIA GPU 드라이버 및 WSL Docker용 NVIDIA Container Toolkit (llama.cpp CUDA 사용 시)
 - [Tavily API Key](https://tavily.com) (선택, 웹검색 보완 기능)
 - [국가법령정보 Open API Key](https://www.law.go.kr/LSO/openApi/openApiIntroPage.do) (법령 자동 수집 시 필요)
 
@@ -437,7 +441,7 @@ OLLAMA_BASE_URL=http://localhost:11434
 CHAT_MODEL=qwen3.5:9b
 EMBED_MODEL=qwen3-embedding:4b
 # 모든 chat 호출에서 동일해야 함 — 값이 다르면 Ollama가 호출마다 모델을 리로드함
-OLLAMA_NUM_CTX=6144
+OLLAMA_NUM_CTX=4096
 # 유휴 시 모델 언로드 방지 (-1 = 무제한 유지, 콜드 스타트 방지)
 OLLAMA_KEEP_ALIVE_SEC=-1
 
@@ -455,6 +459,9 @@ ollama pull qwen3.5:9b
 ollama pull qwen3-embedding:4b
 ```
 
+생성 모델은 llama.cpp가 최초 실행 시 Qwen3.5-9B GGUF를 내려받습니다. Ollama의
+`qwen3.5:9b`는 fallback 생성 환경도 유지할 때만 설치합니다.
+
 #### 실행 환경별 Ollama 연결 설정
 
 `OLLAMA_BASE_URL`은 FastAPI가 **어디서 실행되는지**를 기준으로 설정합니다.
@@ -471,8 +478,8 @@ ollama pull qwen3-embedding:4b
 이를 해결하기 위해 전용 실행 스크립트가 매번 현재 주소를 탐지합니다.
 
 ```bash
-# venv-wsl 활성화, Windows IP 탐지, Ollama·필수 모델 검사, Compose 실행
-bash dev/docker-up-wsl.sh
+# venv-wsl 활성화, Windows IP·임베딩 모델·Docker GPU 검사, llama.cpp Compose 실행
+bash dev/docker-up-llamacpp-wsl.sh
 ```
 
 스크립트는 탐지한 IP를 `OLLAMA_WINDOWS_IP`로 Compose에 전달하고, 컨테이너에는 고정된
@@ -492,10 +499,53 @@ FastAPI → http://ollama.windows.host:11434
 
 ### 3단계: DB 실행 및 자동 마이그레이션
 
+소규모 서비스의 기본 생성 엔진은 llama.cpp입니다. WSL/NVIDIA에서는 다음 스크립트로
+Qwen3.5-9B GGUF Q4_K_M 생성 서버와 Qwen3 Embedding 4B GGUF Q4_K_M 비교 서버를 실행합니다.
+
 ```bash
-# 권장: WSL/Ollama 사전검사를 포함한 전체 실행
-bash dev/docker-up-wsl.sh
+bash dev/docker-up-llamacpp-wsl.sh
 ```
+
+생성 서버는 GPU를 사용하고 임베딩 서버는 12GB VRAM 충돌을 막기 위해 CPU를 사용합니다.
+임베딩은 Qwen 권장값인 `--pooling last`를 강제합니다. 기존 pgvector 데이터는 즉시
+교체하지 않으며 `embedding_v2` 백필과 골든셋 평가를 통과한 뒤 활성화합니다.
+
+```bash
+# Ollama v1과 llama.cpp v2 벡터 비교
+docker exec tax_backend python scripts/compare_embedding_providers.py
+
+# 백필 대상 확인 후 실제 실행
+docker exec tax_backend python scripts/backfill_embeddings_v2.py --table all
+docker exec tax_backend python scripts/backfill_embeddings_v2.py --table all --run
+
+# v2 환경으로 골든셋 평가
+docker exec tax_backend python scripts/eval_rag.py --eval
+```
+
+`EMBEDDING_VERSION=v2`는 세 테이블의 `embedding_v2 IS NULL`이 0건이고 골든셋 성능이
+기존보다 하락하지 않았을 때만 적용합니다. `v1`로 되돌리면 기존 검색으로 롤백됩니다.
+
+WSL Docker에서 `could not select device driver ... gpu` 오류가 발생하면 NVIDIA Container
+Toolkit을 WSL 안에 한 번 설치합니다.
+
+```bash
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+  | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+  | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+  | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+sudo apt-get update
+sudo apt-get install -y nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+
+docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu24.04 nvidia-smi
+bash dev/docker-up-llamacpp-wsl.sh
+```
+
+최초 실행은 모델 다운로드와 양자화 적재로 시간이 걸립니다. 이후 모델은
+`llama_cache` named volume에서 재사용됩니다. Ollama 생성 환경으로 되돌릴 때는
+`bash dev/docker-up-wsl.sh`를 실행합니다.
 
 `docker compose up -d --build`를 직접 실행하면 현재 Windows 주소를 알 수 없으므로 의도적으로
 설정 오류를 반환합니다. 자동 탐지 없이 직접 실행해야 한다면 먼저 `OLLAMA_WINDOWS_IP`를
@@ -503,7 +553,7 @@ bash dev/docker-up-wsl.sh
 
 ```bash
 export OLLAMA_WINDOWS_IP="$(ip -4 route show default | awk 'NR == 1 { print $3 }')"
-docker compose up -d --build
+docker compose -f docker-compose.yml -f docker-compose.llamacpp.yml up -d --build
 ```
 
 백엔드는 시작 전에 자동으로 `alembic upgrade head`를 실행합니다. 새 DB에는 전체 스키마와
@@ -683,10 +733,14 @@ python scripts/eval_rag.py --eval --with-answer --repeat 3
 | `OLLAMA_BASE_URL` | — | `http://localhost:11434` | FastAPI 기준 Ollama 주소. WSL2 Docker 개발환경은 Windows 게이트웨이, 운영 Compose는 `http://ollama:11434` 권장 |
 | `CHAT_MODEL` | — | `qwen3.5:9b` | 답변 생성 LLM 모델명 |
 | `EMBED_MODEL` | — | `qwen3-embedding:4b` | 임베딩 모델명 |
-| `RERANK_MODEL` | — | — | 리랭킹 모델명 (예: `bge-reranker-v2-m3`, 비워두면 리랭킹 비활성화) |
+| `EMBEDDING_PROVIDER` | — | `ollama` | 임베딩 provider. `ollama` 또는 `llamacpp` |
+| `EMBEDDING_BASE_URL` | — | Ollama 주소 | 활성 임베딩 provider 주소 |
+| `EMBEDDING_VERSION` | — | `v1` | 검색 컬럼 선택. 검증 완료 후에만 `v2`로 전환 |
+| `EMBEDDING_DUAL_WRITE` | — | `false` | 신규 데이터의 v1·v2 임베딩 동시 저장 여부 |
+| `RERANK_CANDIDATE_K` | — | `4` | CPU Cross-Encoder 한 배치에 전달할 상위 후보 수 |
 | `THINK_ENABLED` | — | `false` | Qwen3 계열 모델의 Think 모드 활성화 |
-| `OLLAMA_NUM_CTX` | — | `6144` | 모든 chat 호출의 컨텍스트 길이 — 호출마다 값이 다르면 Ollama가 매번 모델을 리로드함 |
-| `OLLAMA_KEEP_ALIVE_SEC` | — | `-1` | 유휴 시 모델 언로드까지 대기시간(초). `-1`은 무제한 유지(콜드 스타트 방지) |
+| `OLLAMA_NUM_CTX` | — | `4096` | 모든 chat 호출의 컨텍스트 길이 — 12GB GPU에서 생성·임베딩 동시 적재를 위한 기본값 |
+| `OLLAMA_KEEP_ALIVE_SEC` | — | `-1` | Ollama 채팅 LLM의 유휴 언로드 대기시간(초). 임베딩 요청에는 적용하지 않음 |
 | `EMBED_DIM` | — | `2560` | 임베딩 차원 수 (모델과 DB 일치 필수) |
 | `SIMILARITY_THRESHOLD` | — | `0.4` | 검색 결과 최소 유사도 (0~1, 낮출수록 더 많은 결과 반환) |
 | `MAX_UPLOAD_MB` | — | `50` | PDF 업로드 최대 크기 (MB) |
@@ -704,7 +758,7 @@ python scripts/eval_rag.py --eval --with-answer --repeat 3
 | POST | `/api/auth/logout` | 로그아웃 (쿠키 삭제) | 불필요 |
 | GET | `/api/health/live` | FastAPI 프로세스 liveness | 불필요 |
 | GET | `/api/health/ready` | DB·Alembic readiness (Docker healthcheck) | 불필요 |
-| GET | `/api/health/dependencies` | DB·Ollama·필수 모델 상세 상태 | 불필요 |
+| GET | `/api/health/dependencies` | DB와 역할별 LLM·임베딩 provider 상세 상태 | 불필요 |
 | GET | `/api/users/me` | 내 프로필 조회 (사업자 유형 포함) | ✅ 필요 |
 | PATCH | `/api/users/me` | 프로필 수정 (이름·전화번호·사업자 유형) | ✅ 필요 |
 | PATCH | `/api/users/me/password` | 비밀번호 변경 | ✅ 필요 |
@@ -873,7 +927,7 @@ Tavily 다중 쿼리도 병렬로 처리하여 대기 시간을 줄입니다.
 
 ### SSE 스트리밍
 
-최종 답변은 LangChain `ChatOllama.astream()`으로 토큰 단위 실시간 전송합니다.
+최종 답변은 provider 중립 `stream_llm()`을 통해 llama.cpp OpenAI 호환 SSE 토큰을 실시간 전송합니다.
 `<think>` 태그는 스트리밍 중 버퍼 최소화 방식으로 실시간 필터링합니다(TTFT 개선).
 스트리밍 이벤트는 `{"type": "chunk", "text": ...}` / `{"type": "calc", "tool": ..., "params": ...}` 형태로 구분되어, 텍스트와 계산기 메타데이터(프론트 프리필용)를 함께 전달합니다.
 스트리밍 완료 후 DB 저장(`_save_history`)은 `asyncio.create_task`로 백그라운드 처리하여 클라이언트 연결을 즉시 종료합니다.
@@ -894,9 +948,9 @@ LLM은 법조문 번호나 계산 수치를 프롬프트 지시만으로 완벽�
 
 ### LLM provider 추상화 (LangChain)
 
-`chat_service.py`는 Ollama의 HTTP 요청 스키마를 직접 알지 못합니다 — `app/services/llm_client.py`가 LangChain의 `ChatOllama`를 감싸 `call_llm()`/`stream_llm()`/`call_llm_structured()`라는 provider 중립 인터페이스만 노출합니다.
+`chat_service.py`는 특정 추론 서버의 요청 스키마를 직접 알지 못합니다. `app/services/llm_client.py`가 llama.cpp OpenAI 호환 API와 Ollama fallback을 감싸 `call_llm()`/`stream_llm()`/`call_llm_structured()`라는 provider 중립 인터페이스를 노출합니다.
 `num_ctx`/`num_predict`가 top-level이 아닌 `options` 안으로, `think`/`keep_alive`가 top-level로 가는 배치(과거 실측으로 확인된 버그 지점)를 LangChain 내부 소스로 직접 검증한 뒤 적용했습니다.
-향후 vLLM(OpenAI 호환 서버)이나 다른 모델로 전환할 때는 `llm_client.py`의 클라이언트 생성 부분만 교체하면 되고, RAG·계산기·citation_guard 등 나머지 로직은 변경이 필요 없습니다.
+향후 다른 OpenAI 호환 서버나 모델로 전환할 때는 `llm_client.py`의 클라이언트 생성 부분만 교체하면 되고, RAG·계산기·citation_guard 등 나머지 로직은 변경이 필요 없습니다.
 
 ### 법령 개정 자동 동기화
 
@@ -984,7 +1038,6 @@ Docker/WSL 사설 네트워크로 접근 범위를 제한합니다.
 
 ```bash
 ollama list
-ollama pull qwen3.5:9b
 ollama pull qwen3-embedding:4b
 ```
 
@@ -1098,7 +1151,7 @@ ValueError: 임베딩 차원 불일치: 예상 2560, 실제 768
 **해결**: 모든 chat 호출에서 `OLLAMA_NUM_CTX`를 동일한 값으로 통일하고,
 `keep_alive`·`think`를 `options{}`가 아닌 요청 최상위 필드로 이동했다.
 ```env
-OLLAMA_NUM_CTX=6144
+OLLAMA_NUM_CTX=4096
 OLLAMA_KEEP_ALIVE_SEC=-1
 ```
 ```bash

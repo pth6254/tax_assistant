@@ -30,7 +30,7 @@ from app.schemas.law import (
     LawReferenceTarget,
     ParsedLawReference,
 )
-from app.services.embedding_service import embed_texts, get_http_client
+from app.services.embedding_service import embed_texts
 from app.services.law.reference_parser import (
     InvalidLawReference,
     LawReference,
@@ -39,7 +39,7 @@ from app.services.law.reference_parser import (
     parse_law_reference,
 )
 from app.services.law.structure_parser import resolve_reference_target
-from config import OLLAMA_BASE_URL, RERANK_MODEL, SIMILARITY_THRESHOLD, TOP_K
+from config import EMBEDDING_VERSION, SIMILARITY_THRESHOLD, TOP_K
 
 logger = logging.getLogger(__name__)
 
@@ -94,53 +94,51 @@ _DOC_CATEGORY_SOURCE_TYPE: dict[str, str] = {
 }
 _DOC_CATEGORY_DEFAULT_SOURCE_TYPE = "user_pdf"
 
-# ── 리랭킹 설정 ─────────────────────────────────────────────────
-_RERANK_URL           = f"{OLLAMA_BASE_URL}/api/rerank"
-_RERANK_CONTENT_LIMIT = 500
-
 # ── 검색 SQL ────────────────────────────────────────────────────
 
-_LAW_ARTICLES_SQL = """
+_EMBEDDING_COLUMN = "embedding_v2" if EMBEDDING_VERSION == "v2" else "embedding"
+
+_LAW_ARTICLES_SQL = f"""
 SELECT
     law_name, law_type, tax_type,
     article_no, article_title, article_text,
     source_url,
-    1 - (embedding::halfvec(2560) <=> $1::vector::halfvec(2560)) AS similarity_score
+    1 - ({_EMBEDDING_COLUMN}::halfvec(2560) <=> $1::vector::halfvec(2560)) AS similarity_score
 FROM law_articles
 WHERE is_current = TRUE
-  AND embedding IS NOT NULL
+  AND {_EMBEDDING_COLUMN} IS NOT NULL
   AND ($2::text IS NULL OR tax_type = $2)
-ORDER BY embedding::halfvec(2560) <=> $1::vector::halfvec(2560)
+ORDER BY {_EMBEDDING_COLUMN}::halfvec(2560) <=> $1::vector::halfvec(2560)
 LIMIT $3
 """
 
 # 긴 조문의 항(項) 단위 보조 임베딩 검색 — 히트 시 부모 조문 전체를 반환한다.
 # 조문 벡터에서 희석되는 특정 항의 내용(예: 제59조의4 ⑨항)도 검색에 걸리게 함.
-_LAW_CLAUSES_SQL = """
+_LAW_CLAUSES_SQL = f"""
 SELECT
     la.law_name, la.law_type, la.tax_type,
     la.article_no, la.article_title, la.article_text,
     la.source_url,
-    1 - (c.embedding::halfvec(2560) <=> $1::vector::halfvec(2560)) AS similarity_score
+    1 - (c.{_EMBEDDING_COLUMN}::halfvec(2560) <=> $1::vector::halfvec(2560)) AS similarity_score
 FROM law_article_clauses c
 JOIN law_articles la ON la.id = c.article_id
 WHERE la.is_current = TRUE
-  AND c.embedding IS NOT NULL
+  AND c.{_EMBEDDING_COLUMN} IS NOT NULL
   AND ($2::text IS NULL OR la.tax_type = $2)
-ORDER BY c.embedding::halfvec(2560) <=> $1::vector::halfvec(2560)
+ORDER BY c.{_EMBEDDING_COLUMN}::halfvec(2560) <=> $1::vector::halfvec(2560)
 LIMIT $3
 """
 
-_DOCUMENTS_SQL = """
+_DOCUMENTS_SQL = f"""
 SELECT
     content,
     metadata,
-    1 - (embedding::halfvec(2560) <=> $1::vector::halfvec(2560)) AS similarity_score
+    1 - ({_EMBEDDING_COLUMN}::halfvec(2560) <=> $1::vector::halfvec(2560)) AS similarity_score
 FROM documents
-WHERE embedding IS NOT NULL
+WHERE {_EMBEDDING_COLUMN} IS NOT NULL
   AND user_id = $2::uuid
   AND ($3 = 'ALL' OR metadata->>'law_name' = $3)
-ORDER BY embedding::halfvec(2560) <=> $1::vector::halfvec(2560)
+ORDER BY {_EMBEDDING_COLUMN}::halfvec(2560) <=> $1::vector::halfvec(2560)
 LIMIT $4
 """
 
@@ -268,39 +266,6 @@ async def _search_all(
     merged = [r for r in merged if r.similarity_score >= SIMILARITY_THRESHOLD]
     merged.sort(key=lambda r: (r.priority, -r.similarity_score))
     return merged
-
-
-# ── 리랭킹 ───────────────────────────────────────────────────────
-
-async def _rerank(
-    original_query: str,
-    results: list[HybridSearchResult],
-    top_k: int,
-) -> list[HybridSearchResult]:
-    """Ollama /api/rerank로 결과를 재정렬한다. 미설정 또는 실패 시 원본 top_k 슬라이싱."""
-    if not RERANK_MODEL or not results:
-        return results[:top_k]
-
-    documents = [r.content[:_RERANK_CONTENT_LIMIT] for r in results]
-    t0 = time.perf_counter()
-    try:
-        client = get_http_client()
-        resp = await client.post(
-            _RERANK_URL,
-            json={
-                "model":     RERANK_MODEL,
-                "query":     original_query,
-                "documents": documents,
-            },
-        )
-        resp.raise_for_status()
-        ranked = resp.json().get("results", [])
-        reranked = [results[item["index"]] for item in ranked[:top_k]]
-        logger.info("[RERANK] %d→%d건 재정렬 완료 (%.2fs)", len(results), len(reranked), time.perf_counter() - t0)
-        return reranked
-    except Exception as e:
-        logger.warning("[RERANK] 실패 — 기존 정렬 사용: %s", e)
-        return results[:top_k]
 
 
 # ── 조문 원문 조회 ───────────────────────────────────────────────
@@ -472,7 +437,7 @@ async def hybrid_search(
     """law_articles + documents를 동시에 검색하고 우선순위 순으로 병합한다.
 
     질문이 조문번호를 직접 언급하면 해당 조문을 벡터 검색 없이 조회해 최상위에 둔다.
-    단일 쿼리는 직접 벡터 검색, 복수 쿼리는 RRF로 결합 후 리랭킹.
+    단일 쿼리는 직접 벡터 검색, 복수 쿼리는 RRF로 결합한다.
     """
     if not queries:
         return []
@@ -486,9 +451,9 @@ async def hybrid_search(
 
     if len(queries) == 1:
         q_emb = (await embed_texts(queries))[0]
-        fetch_k = TOP_K * 3 if RERANK_MODEL else TOP_K
-        merged = await _search_all(q_emb, law_filter, fetch_k, user_id)
-        final  = await _rerank(original_query or queries[0], merged, TOP_K)
+        merged = await _search_all(q_emb, law_filter, TOP_K, user_id)
+        candidates = merged[:TOP_K]
+        final = candidates
         final  = _prepend_direct_hit(direct, final)
         if not final:
             logger.warning(
@@ -498,7 +463,7 @@ async def hybrid_search(
         else:
             logger.info(
                 "[SEARCH] 필터=%s | 후보 %d건 → 최종 %d건 (%.2fs)",
-                law_filter, len(merged), len(final), time.perf_counter() - t0,
+                law_filter, len(candidates), len(final), time.perf_counter() - t0,
             )
         return final
 
@@ -509,8 +474,8 @@ async def hybrid_search(
         for q_emb in q_embs
     ])
 
-    merged = _rrf_merge(list(results_per_query), top_k=TOP_K * 2)
-    final  = await _rerank(original_query or queries[0], merged, TOP_K)
+    merged = _rrf_merge(list(results_per_query), top_k=TOP_K)
+    final = merged[:TOP_K]
     final  = _prepend_direct_hit(direct, final)
 
     logger.info(

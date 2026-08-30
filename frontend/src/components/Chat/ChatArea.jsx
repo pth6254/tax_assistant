@@ -3,6 +3,7 @@ import { useChat } from '../../hooks/useChat'
 import MessageBubble from './MessageBubble'
 import ChatInput from './ChatInput'
 import ArticleViewer from './ArticleViewer'
+import AiServiceStatus from './AiServiceStatus'
 
 const QUICK_QUESTIONS = [
   '양도소득세 계산 방법을 알려주세요',
@@ -108,6 +109,7 @@ export default function ChatArea({ user, conversationId, conversationTitle, onMe
         }}>
           {conversationTitle || '새 대화'}
         </h1>
+        <AiServiceStatus />
       </header>
 
       {/* 메시지 목록 */}

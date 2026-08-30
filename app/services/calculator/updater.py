@@ -3,14 +3,10 @@ import logging
 import re
 from datetime import date
 
-import httpx
-
-from config import CHAT_MODEL, OLLAMA_BASE_URL, OLLAMA_KEEP_ALIVE, OLLAMA_NUM_CTX
 from app.database import get_pool
+from app.services.llm_client import call_llm
 
 logger = logging.getLogger(__name__)
-
-_CHAT_URL = f"{OLLAMA_BASE_URL}/api/chat"
 
 _TARGET_ARTICLES = {
     "소득세법": {"제55조": "소득세"},
@@ -26,23 +22,14 @@ _EXTRACT_PROMPT = (
 
 async def _call_ollama_extract(article_text: str) -> list[dict] | None:
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            resp = await client.post(
-                _CHAT_URL,
-                json={
-                    "model": CHAT_MODEL,
-                    "messages": [
-                        {"role": "system", "content": _EXTRACT_PROMPT},
-                        {"role": "user", "content": article_text},
-                    ],
-                    "stream": False,
-                    "think": False,
-                    "keep_alive": OLLAMA_KEEP_ALIVE,
-                    "options": {"temperature": 0.0, "num_predict": 500, "num_ctx": OLLAMA_NUM_CTX},
-                },
-            )
-            resp.raise_for_status()
-            raw = resp.json()["message"]["content"]
+        raw = await call_llm(
+            [
+                {"role": "system", "content": _EXTRACT_PROMPT},
+                {"role": "user", "content": article_text},
+            ],
+            temperature=0.0,
+            num_predict=500,
+        )
         text = raw.split("</think>")[-1].strip()
         fence = re.search(r"```(?:json)?\s*\n?([\s\S]*?)\n?```", text)
         candidate = fence.group(1).strip() if fence else text
@@ -52,7 +39,7 @@ async def _call_ollama_extract(article_text: str) -> list[dict] | None:
             if isinstance(brackets, list):
                 return brackets
     except Exception as e:
-        logger.warning("Ollama 세율 추출 실패: %s", e)
+        logger.warning("LLM 세율 추출 실패: %s", e)
     return None
 
 

@@ -18,6 +18,8 @@
 |---|---|---|
 | `python scripts/backfill_law_type.py` | 과거 빈 `law_type` 데이터 점검·보정 | 기본 dry-run, `--run`일 때만 반영 |
 | `python scripts/embed_clauses.py` | 항 단위 임베딩 대상 확인 | 기본 dry-run, `--run`일 때만 반영 |
+| `python scripts/compare_embedding_providers.py` | Ollama v1과 llama.cpp v2 벡터 cosine 호환성 비교 | DB 변경 없음 |
+| `python scripts/backfill_embeddings_v2.py` | 법령·항·PDF `embedding_v2` 백필 | 기본 dry-run, `--run`일 때만 반영 |
 
 백필을 실행하기 전에 반드시 `alembic upgrade head`가 완료돼 있어야 합니다. 백필 스크립트는
 스키마를 만들지 않으며 Alembic revision을 대신하지 않습니다.

@@ -1,50 +1,81 @@
-"""
-services/embedding_service.py — Ollama 임베딩 서비스
-OpenAI 클라이언트 대신 Ollama REST API를 직접 호출합니다.
-모델: qwen3-embedding:4b (2560차원, 다국어 MTEB 1위)
-"""
-import httpx
+"""Backward-compatible facade for provider-neutral embedding clients."""
+import asyncio
+from app.services.inference.embedding import create_embedding_provider
+from config import (
+    EMBED_DIM,
+    EMBEDDING_BASE_URL,
+    EMBEDDING_DUAL_WRITE,
+    EMBEDDING_MODEL,
+    EMBEDDING_PROVIDER,
+    EMBEDDING_TIMEOUT_SEC,
+    EMBEDDING_VERSION,
+    EMBEDDING_V1_BASE_URL,
+    EMBEDDING_V1_MODEL,
+    EMBEDDING_V1_PROVIDER,
+    EMBEDDING_V2_BASE_URL,
+    EMBEDDING_V2_MODEL,
+    EMBEDDING_V2_PROVIDER,
+)
 
-from config import EMBED_MODEL, OLLAMA_BASE_URL, OLLAMA_KEEP_ALIVE
-
-# Ollama 임베딩 엔드포인트
-_EMBED_URL = f"{OLLAMA_BASE_URL}/api/embed"
-
-# 싱글턴 httpx 클라이언트 (커넥션 재사용)
-_client: httpx.AsyncClient | None = None
+_providers = {}
 
 
-def get_http_client() -> httpx.AsyncClient:
-    """싱글턴 httpx 클라이언트 반환."""
-    global _client
-    if _client is None or _client.is_closed:
-        _client = httpx.AsyncClient(timeout=300.0)
-    return _client
+def _provider(provider: str, base_url: str, model: str):
+    key = (provider, base_url, model)
+    if key not in _providers:
+        _providers[key] = create_embedding_provider(
+            provider, base_url, model, EMBEDDING_TIMEOUT_SEC
+        )
+    return _providers[key]
+
+
+def get_embedding_provider(version: str | None = None):
+    if version == "v1":
+        return _provider(EMBEDDING_V1_PROVIDER, EMBEDDING_V1_BASE_URL, EMBEDDING_V1_MODEL)
+    if version == "v2":
+        return _provider(EMBEDDING_V2_PROVIDER, EMBEDDING_V2_BASE_URL, EMBEDDING_V2_MODEL)
+    return _provider(EMBEDDING_PROVIDER, EMBEDDING_BASE_URL, EMBEDDING_MODEL)
+
+
+def _validate(vectors: list[list[float]], expected_count: int) -> list[list[float]]:
+    if len(vectors) != expected_count:
+        raise ValueError(f"Embedding count mismatch: expected {expected_count}, got {len(vectors)}")
+    for vector in vectors:
+        if len(vector) != EMBED_DIM:
+            raise ValueError(f"Embedding dimension mismatch: expected {EMBED_DIM}, got {len(vector)}")
+    return vectors
 
 
 async def embed_texts(texts: list[str]) -> list[list[float]]:
-    """
-    텍스트 리스트 → 임베딩 벡터 리스트.
-    Ollama /api/embed 엔드포인트 사용 (배치 처리 지원).
-    """
-    client = get_http_client()
-    response = await client.post(
-        _EMBED_URL,
-        json={
-            "model": EMBED_MODEL,
-            "input": texts,   # 배치 입력 지원
-            "keep_alive": OLLAMA_KEEP_ALIVE,  # 유휴 언로드 방지 — 재로드 시 chat 모델 스왑 유발
-        },
-    )
-    response.raise_for_status()
-    data = response.json()
-    # Ollama 응답 형식: {"embeddings": [[...], [...]]}
-    return data["embeddings"]
+    if not texts:
+        return []
+    return _validate(await get_embedding_provider().embed(texts), len(texts))
+
+
+async def embed_texts_for_version(texts: list[str], version: str) -> list[list[float]]:
+    if version not in {"v1", "v2"}:
+        raise ValueError("version must be 'v1' or 'v2'")
+    if not texts:
+        return []
+    return _validate(await get_embedding_provider(version).embed(texts), len(texts))
+
+
+async def embed_texts_for_storage(
+    texts: list[str],
+) -> tuple[list[list[float]] | None, list[list[float]] | None]:
+    """Return vectors for the legacy and v2 columns, optionally dual-writing."""
+    if EMBEDDING_DUAL_WRITE:
+        v1, v2 = await asyncio.gather(
+            embed_texts_for_version(texts, "v1"),
+            embed_texts_for_version(texts, "v2"),
+        )
+        return v1, v2
+    vectors = await embed_texts(texts)
+    return (None, vectors) if EMBEDDING_VERSION == "v2" else (vectors, None)
 
 
 async def close_http_client() -> None:
-    """앱 종료 시 클라이언트 정리."""
-    global _client
-    if _client and not _client.is_closed:
-        await _client.aclose()
-        _client = None
+    providers = list(_providers.values())
+    _providers.clear()
+    for provider in providers:
+        await provider.close()

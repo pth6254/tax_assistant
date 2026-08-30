@@ -18,7 +18,7 @@
 - PostgreSQL·pgvector 기반 법령 및 사용자 PDF 하이브리드 검색
 - 법률 → 시행령 → 시행규칙 → 유권해석 → 사용자 문서 순의 근거 우선순위
 - 내부 검색 품질이 부족할 때만 공공기관 중심 웹 검색
-- Ollama 기반 로컬 생성·임베딩 모델
+- 현재 Ollama 기반 로컬 생성·v1 임베딩, 향후 재도입 가능한 llama.cpp provider 코드
 - DB 세율표 기반 세금 계산기 tool calling
 - 답변의 법령 인용과 계산 금액을 검증하는 citation guard
 - JWT httpOnly 쿠키 인증, 대화 관리, 세무 일정, PDF 업로드
@@ -35,10 +35,10 @@ React + Nginx
             ├─ calculator: 결정론적 세금 계산
             ├─ document: PDF 추출·청킹
             ├─ chat_service: RAG 오케스트레이션
-            ├─ llm_client: LangChain ChatOllama 어댑터
+            ├─ llm_client: llama.cpp OpenAI 호환 API·Ollama 어댑터
             └─ citation_guard: 생성 결과 검증
         → PostgreSQL + pgvector
-        → Ollama
+        → 현재 Ollama 생성·v1 임베딩 / 선택형 llama.cpp 생성·v2 임베딩
 ```
 
 주요 컨테이너:
@@ -49,6 +49,9 @@ React + Nginx
 | `tax_frontend` | React 빌드 결과를 제공하는 Nginx |
 | `tax_pgvector` | PostgreSQL 17 + pgvector |
 | `tax_pgadmin` | 개발용 DB 관리 UI |
+| Windows Ollama | 현재 Qwen3.5-9B 생성·Qwen3 Embedding 4B v1 임베딩 서빙 |
+
+`tax_llama_chat`·`tax_llama_embedding`은 선택형 overlay를 실행할 때만 생성되며 현재는 없다.
 
 ## 4. 코드 책임
 
@@ -127,4 +130,3 @@ scripts/
 - 현재 진행 상태: `docs/ai/CURRENT_STATUS.md`
 - 설계 결정: `docs/ai/DECISIONS.md`
 - 세션 인수인계: `docs/ai/HANDOFF.md`
-

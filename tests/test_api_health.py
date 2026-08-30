@@ -31,20 +31,24 @@ def test_readiness_returns_503_when_database_fails(client, mock_pool):
     conn.fetchval.side_effect = None
 
 
-def test_dependencies_reports_ollama_degradation_without_503(client, mock_pool):
+def test_dependencies_reports_embedding_degradation_without_503(client, mock_pool):
     _, conn = mock_pool
     conn.fetchval.side_effect = ["PostgreSQL 17.0 on x86_64", "20260719_0001"]
-    ollama = {
+    embedding = {
         "status": "unreachable",
+        "provider": "llamacpp",
         "connected": False,
-        "required_models": ["qwen3.5:9b", "qwen3-embedding:4b"],
-        "missing_models": ["qwen3.5:9b", "qwen3-embedding:4b"],
+        "model": "Qwen/Qwen3-Embedding-4B",
     }
+    llm = {"status": "ok"}
 
-    with patch("app.routers.health._ollama_status", AsyncMock(return_value=ollama)):
+    with (
+        patch("app.routers.health._embedding_status", AsyncMock(return_value=embedding)),
+        patch("app.routers.health._llm_status", AsyncMock(return_value=llm)),
+    ):
         response = client.get("/api/health/dependencies")
 
     assert response.status_code == 200
     assert response.json()["status"] == "degraded"
-    assert response.json()["ollama"]["connected"] is False
+    assert response.json()["embedding"]["connected"] is False
     conn.fetchval.side_effect = None

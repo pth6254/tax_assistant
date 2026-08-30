@@ -210,7 +210,7 @@ async def _embed_and_update(
     Returns:
         (embedded_count, embed_failed_count)
     """
-    from app.services.embedding_service import embed_texts
+    from app.services.embedding_service import embed_texts_for_storage
 
     embedded_count    = 0
     embed_failed_count = 0
@@ -227,10 +227,10 @@ async def _embed_and_update(
         logger.info("[embed] %d~%d / %d 임베딩 중...", batch_start + 1, batch_end, total)
 
         try:
-            embeddings = await embed_texts(texts)
+            embeddings, embeddings_v2 = await embed_texts_for_storage(texts)
 
             # 차원 불일치 검증
-            for emb in embeddings:
+            for emb in (embeddings or embeddings_v2 or []):
                 if len(emb) != EMBED_DIM:
                     raise ValueError(
                         f"임베딩 차원 불일치: 예상 {EMBED_DIM}차원, 실제 {len(emb)}차원. "
@@ -241,8 +241,15 @@ async def _embed_and_update(
 
             async with pool.acquire() as conn:
                 await conn.executemany(
-                    "UPDATE law_articles SET embedding = $1 WHERE id = $2",
-                    list(zip(embeddings, db_ids)),
+                    "UPDATE law_articles SET embedding = $1, embedding_v2 = $2 WHERE id = $3",
+                    [
+                        (
+                            embeddings[index] if embeddings else None,
+                            embeddings_v2[index] if embeddings_v2 else None,
+                            db_id,
+                        )
+                        for index, db_id in enumerate(db_ids)
+                    ],
                 )
 
             embedded_count += len(batch)
@@ -277,7 +284,7 @@ async def embed_clauses_for_articles(items: list[tuple[LawArticle, int]]) -> int
         should_split,
         split_into_clauses,
     )
-    from app.services.embedding_service import embed_texts
+    from app.services.embedding_service import embed_texts_for_storage
 
     # (article_id, clause_label, clause_text, embed_text) 목록 구성
     rows: list[tuple[int, str, str, str]] = []
@@ -304,12 +311,20 @@ async def embed_clauses_for_articles(items: list[tuple[LawArticle, int]]) -> int
     inserted = 0
     for batch_start in range(0, len(rows), _EMBED_BATCH_SIZE):
         batch = rows[batch_start : batch_start + _EMBED_BATCH_SIZE]
-        embeddings = await embed_texts([r[3] for r in batch])
+        embeddings, embeddings_v2 = await embed_texts_for_storage([r[3] for r in batch])
         async with pool.acquire() as conn:
             await conn.executemany(
-                """INSERT INTO law_article_clauses (article_id, clause_label, clause_text, embedding)
-                   VALUES ($1, $2, $3, $4)""",
-                [(r[0], r[1], r[2], emb) for r, emb in zip(batch, embeddings)],
+                """INSERT INTO law_article_clauses
+                   (article_id, clause_label, clause_text, embedding, embedding_v2)
+                   VALUES ($1, $2, $3, $4, $5)""",
+                [
+                    (
+                        row[0], row[1], row[2],
+                        embeddings[index] if embeddings else None,
+                        embeddings_v2[index] if embeddings_v2 else None,
+                    )
+                    for index, row in enumerate(batch)
+                ],
             )
         inserted += len(batch)
 

@@ -16,15 +16,16 @@
 
 ## 실행 및 검증
 
-- 표준 개발 실행은 Windows에서 WSL 가상환경을 활성화한 뒤 `dev/docker-up-wsl.sh`를 사용한다.
+- 표준 생성 LLM 개발 실행은 WSL 가상환경을 활성화한 뒤 `dev/docker-up-llamacpp-wsl.sh`를 사용한다.
 
 ```bash
 cd '/mnt/c/Users/Laptop PC/Desktop/tax_assistant'
 source venv-wsl/bin/activate
-bash dev/docker-up-wsl.sh
+bash dev/docker-up-llamacpp-wsl.sh
 ```
 
-- `docker compose up -d --build`를 직접 실행하면 `OLLAMA_WINDOWS_IP`가 없어 실패할 수 있으므로 위 스크립트를 우선한다.
+- 스크립트는 Windows Ollama 임베딩 주소와 Docker GPU runtime을 검사하고 llama.cpp Compose overlay를 적용한다.
+- Ollama 생성 LLM로 되돌릴 때만 `dev/docker-up-wsl.sh`를 사용한다.
 - 전체 백엔드 테스트는 최신 이미지에서 실행한다.
 
 ```bash
@@ -40,4 +41,3 @@ docker exec tax_backend pytest -q
 - `git diff --check`를 실행한다.
 - 아키텍처, 실행법, 현재 상태 또는 다음 작업이 달라졌다면 `docs/ai/` 문서를 갱신한다.
 - 미완료 작업이나 데이터 보정 필요 사항은 `docs/ai/HANDOFF.md`에 구체적으로 남긴다.
-

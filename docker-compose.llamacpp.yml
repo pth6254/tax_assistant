@@ -1,0 +1,83 @@
+services:
+  llama_chat:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    container_name: tax_llama_chat
+    restart: unless-stopped
+    gpus: all
+    ports:
+      - "127.0.0.1:8001:8080"
+    volumes:
+      - llama_cache:/root/.cache/llama.cpp
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+    command:
+      - -hf
+      - "${LLAMACPP_CHAT_REPO:-unsloth/Qwen3.5-9B-GGUF:Q4_K_M}"
+      - --alias
+      - "${CHAT_MODEL:-qwen3.5:9b}"
+      - --no-mmproj
+      - --ctx-size
+      - "${LLAMACPP_CHAT_CTX_SIZE:-2048}"
+      - --parallel
+      - "${LLAMACPP_CHAT_PARALLEL:-1}"
+      - --n-gpu-layers
+      - "${LLAMACPP_CHAT_GPU_LAYERS:-99}"
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 80
+      start_period: 300s
+
+  llama_embedding:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    container_name: tax_llama_embedding
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8003:8080"
+    volumes:
+      - llama_cache:/root/.cache/llama.cpp
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+    command:
+      - -hf
+      - "${LLAMACPP_EMBEDDING_REPO:-Qwen/Qwen3-Embedding-4B-GGUF:Q4_K_M}"
+      - --alias
+      - "${LLAMACPP_EMBEDDING_MODEL:-qwen3-embedding:4b-gguf}"
+      - --embedding
+      - --pooling
+      - last
+      - --ctx-size
+      - "${LLAMACPP_EMBEDDING_CTX_SIZE:-8192}"
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 80
+      start_period: 300s
+
+  backend:
+    environment:
+      LLM_PROVIDER: llamacpp
+      LLM_BASE_URL: http://llama_chat:8080/v1
+      LLM_API_KEY: local-llamacpp
+      LLM_DEVICE: gpu
+      EMBEDDING_V2_PROVIDER: llamacpp
+      EMBEDDING_V2_BASE_URL: http://llama_embedding:8080/v1
+      EMBEDDING_V2_MODEL: ${LLAMACPP_EMBEDDING_MODEL:-qwen3-embedding:4b-gguf}
+    depends_on:
+      llama_chat:
+        condition: service_healthy
+      llama_embedding:
+        condition: service_healthy
+
+volumes:
+  llama_cache:

@@ -7,17 +7,14 @@ import logging
 import time
 import uuid as _uuid
 
-import httpx
 from fastapi import HTTPException
 
-from config import CHAT_MODEL, OLLAMA_BASE_URL
 from app.database import get_pool
 from app.services.document.pdf_processor import extract_text_from_pdf, split_into_chunks
-from app.services.embedding_service import embed_texts
+from app.services.embedding_service import embed_texts_for_storage
+from app.services.llm_client import call_llm
 
 logger = logging.getLogger(__name__)
-
-_CHAT_URL = f"{OLLAMA_BASE_URL}/api/chat"
 
 
 async def classify_document(source: str, preview: str) -> dict:
@@ -70,31 +67,20 @@ async def classify_document(source: str, preview: str) -> dict:
         "오직 JSON만 출력하세요. 다른 텍스트는 절대 포함하지 마세요."
     )
     try:
-        async with httpx.AsyncClient(timeout=180.0) as client:
-            resp = await client.post(
-                _CHAT_URL,
-                json={
-                    "model": CHAT_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "stream": False,
-                    "format": "json",
-                    "options": {
-                        "temperature": 0.0,
-                        "num_predict": 100,
-                    },
-                },
-            )
-            resp.raise_for_status()
-            content = resp.json()["message"]["content"]
-            result = json.loads(content)
+        content = await call_llm(
+            [{"role": "user", "content": prompt}],
+            temperature=0.0,
+            num_predict=100,
+        )
+        result = json.loads(content)
             
             # 파일명에서 부분적으로 감지된 값으로 보완
-            if detected_category:
-                result["category"] = detected_category
-            if detected_law:
-                result["law_name"] = detected_law
+        if detected_category:
+            result["category"] = detected_category
+        if detected_law:
+            result["law_name"] = detected_law
                 
-            return result
+        return result
     except Exception:
         return {
             "category": detected_category or "기타",
@@ -147,10 +133,15 @@ async def process_upload(
     # 4. 임베딩 (100개 배치)
     t1 = time.perf_counter()
     embeddings: list[list[float]] = []
+    embeddings_v2: list[list[float]] = []
     for i in range(0, len(chunks), 100):
         batch_end = min(i + 100, len(chunks))
         logger.info("[UPLOAD] 임베딩 중 %d~%d / %d ...", i + 1, batch_end, len(chunks))
-        embeddings.extend(await embed_texts(chunks[i:batch_end]))
+        batch_v1, batch_v2 = await embed_texts_for_storage(chunks[i:batch_end])
+        if batch_v1:
+            embeddings.extend(batch_v1)
+        if batch_v2:
+            embeddings_v2.extend(batch_v2)
     logger.info("[UPLOAD] 임베딩 완료 (%.1fs)", time.perf_counter() - t1)
 
     # 5. DB 저장
@@ -170,10 +161,17 @@ async def process_upload(
             logger.info("[UPLOAD] 기존 청크 %d개 삭제 (덮어쓰기)", deleted)
 
         await conn.executemany(
-            "INSERT INTO documents (content, embedding, metadata, user_id) VALUES ($1, $2, $3, $4)",
+            "INSERT INTO documents (content, embedding, embedding_v2, metadata, user_id) "
+            "VALUES ($1, $2, $3, $4, $5)",
             [
-                (chunk, emb, json.dumps({**metadata_base, "chunk_index": idx}), uid)
-                for idx, (chunk, emb) in enumerate(zip(chunks, embeddings))
+                (
+                    chunk,
+                    embeddings[idx] if embeddings else None,
+                    embeddings_v2[idx] if embeddings_v2 else None,
+                    json.dumps({**metadata_base, "chunk_index": idx}),
+                    uid,
+                )
+                for idx, chunk in enumerate(chunks)
             ],
         )
 

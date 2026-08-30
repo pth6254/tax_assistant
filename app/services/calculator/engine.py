@@ -14,10 +14,9 @@ import logging
 import re
 from dataclasses import dataclass
 
-import httpx
 from pydantic import ValidationError
 
-from config import CHAT_MODEL, OLLAMA_BASE_URL, OLLAMA_KEEP_ALIVE, OLLAMA_NUM_CTX
+from config import CHAT_MODEL
 from app.schemas.calculator import (
     CalculationResult,
     CapitalGainsRequest,
@@ -28,10 +27,9 @@ from app.schemas.calculator import (
     VatRequest,
 )
 from app.services.calculator import capital_gains, gift_tax, income_tax, inheritance, penalty_tax, vat
+from app.services.llm_client import call_llm
 
 logger = logging.getLogger(__name__)
-
-_CHAT_URL = f"{OLLAMA_BASE_URL}/api/chat"
 
 # Qwen3 계열은 options.think=False가 무시되는 경우가 있어 /no_think 접두사 병행
 # (chat_service._QWEN3_NO_THINK_PREFIX와 동일한 대응)
@@ -110,23 +108,14 @@ def _parse_extraction_json(raw: str) -> dict | None:
 async def extract_calculation_request(query: str) -> tuple[str, dict] | None:
     """LLM으로 계산기 종류와 입력값을 추출한다. 대상 아님/실패 시 None."""
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                _CHAT_URL,
-                json={
-                    "model": CHAT_MODEL,
-                    "messages": [
-                        {"role": "system", "content": _EXTRACT_PROMPT},
-                        {"role": "user", "content": _NO_THINK_PREFIX + query},
-                    ],
-                    "stream": False,
-                    "think": False,
-                    "keep_alive": OLLAMA_KEEP_ALIVE,
-                    "options": {"temperature": 0.0, "num_predict": 400, "num_ctx": OLLAMA_NUM_CTX},
-                },
-            )
-            resp.raise_for_status()
-            raw = resp.json()["message"]["content"]
+        raw = await call_llm(
+            [
+                {"role": "system", "content": _EXTRACT_PROMPT},
+                {"role": "user", "content": _NO_THINK_PREFIX + query},
+            ],
+            temperature=0.0,
+            num_predict=400,
+        )
     except Exception as e:
         logger.warning("[CALC] 파라미터 추출 LLM 호출 실패: %s", e)
         return None
