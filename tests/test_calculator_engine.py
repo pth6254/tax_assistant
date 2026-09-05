@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 
 from app.schemas.calculator import CalculationResult, TaxStep
 from app.services.calculator.engine import (
-    _parse_extraction_json,
+    extract_calculation_request,
     format_calculation_context,
     has_calculation_intent,
     run_calculation_for_query,
@@ -36,25 +36,33 @@ def test_calculation_intent_not_detected(query):
     assert has_calculation_intent(query) is False
 
 
-# ── _parse_extraction_json ───────────────────────────────────────
+# ── 실제 추출 파이프라인의 JSON 처리 ─────────────────────────────
 
-def test_parse_plain_json():
+@pytest.mark.asyncio
+async def test_extraction_plain_json():
     raw = '{"tool": "income_tax", "params": {"income": 50000000}}'
-    assert _parse_extraction_json(raw) == {"tool": "income_tax", "params": {"income": 50000000}}
+    with patch("app.services.calculator.engine.call_llm", AsyncMock(return_value=raw)):
+        assert await extract_calculation_request("소득 5천만원") == ("income_tax", {"income": 50000000})
 
 
-def test_parse_json_in_code_fence():
+@pytest.mark.asyncio
+async def test_extraction_json_in_code_fence():
     raw = '```json\n{"tool": "gift", "params": {"gift_amount": 300000000}}\n```'
-    assert _parse_extraction_json(raw)["tool"] == "gift"
+    with patch("app.services.calculator.engine.call_llm", AsyncMock(return_value=raw)):
+        assert await extract_calculation_request("증여 3억") == ("gift", {"gift_amount": 300000000})
 
 
-def test_parse_json_after_think_block():
+@pytest.mark.asyncio
+async def test_extraction_json_after_think_block():
     raw = '<think>어떤 계산기...</think>{"tool": "none"}'
-    assert _parse_extraction_json(raw) == {"tool": "none"}
+    with patch("app.services.calculator.engine.call_llm", AsyncMock(return_value=raw)):
+        assert await extract_calculation_request("안녕하세요") is None
 
 
-def test_parse_invalid_returns_none():
-    assert _parse_extraction_json("죄송합니다, 판단할 수 없습니다.") is None
+@pytest.mark.asyncio
+async def test_extraction_invalid_returns_none():
+    with patch("app.services.calculator.engine.call_llm", AsyncMock(return_value="죄송합니다, 판단할 수 없습니다.")):
+        assert await extract_calculation_request("계산해줘") is None
 
 
 # ── format_calculation_context ───────────────────────────────────

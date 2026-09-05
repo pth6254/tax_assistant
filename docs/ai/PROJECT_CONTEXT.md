@@ -53,6 +53,9 @@ React + Nginx
 
 `tax_llama_chat`·`tax_llama_embedding`은 선택형 overlay를 실행할 때만 생성되며 현재는 없다.
 
+생성 provider는 `LLMProvider` 규약을 구현하며 Ollama도 `ChatOllama` 없이 직접 HTTP로 연결한다.
+`langchain-ollama`는 사용하지 않는다. `langchain-core`는 provider 위의 프롬프트·Runnable·Pydantic 출력 검증에 사용한다. 일반 생성·구조화 응답·스트리밍은 공통 facade를 통해 호출하며 생성 길이는 `max_tokens`로 전달한다.
+
 ## 4. 코드 책임
 
 ```text
@@ -64,6 +67,12 @@ app/routers/
 
 app/schemas/
   Pydantic 및 서비스 데이터 모델
+
+app/schemas/ai_output.py
+  LLM의 세목 분류·인용·계산기 선택 결과 스키마 (법적 사실 검증과 구분)
+
+app/services/ai_pipeline.py
+  ChatPromptTemplate, Runnable, PydanticOutputParser를 연결하는 provider 중립 계층
 
 app/services/law/reference_parser.py
   사용자 입력의 법령명·조·항·호·목 참조 파싱과 표준화

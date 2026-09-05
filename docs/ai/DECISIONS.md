@@ -1,5 +1,21 @@
 # 주요 설계 결정
 
+## ADR-019 — LangChain은 provider 위의 조합·검증 계층에 적용
+
+- 결정: `langchain-core`의 ChatPromptTemplate·Runnable·PydanticOutputParser를 사용하고 자체 HTTP provider는 유지한다. `ChatOllama`는 재도입하지 않는다.
+- 적용: 최종 답변 생성·스트리밍, 세목 분류, 계산기 입력 추출, 인용 목록 추출. 시스템 프롬프트 내용은 유지하고 사용자·검색 텍스트를 템플릿 변수로만 삽입한다.
+- 검증: 완전한 JSON인지 먼저 검사하고 타입·필수 필드·인용 형식 및 계산기 입력을 검증한다. 오류 시 기존 fallback을 유지하며 자동 LLM 재호출은 추가하지 않는다.
+- 추적: 단계별 실행 이름과 프롬프트 버전 메타데이터를 부여한다. LangSmith SDK는 간접 의존성으로 설치되지만 원격 추적·평가 연결은 후속 작업이다.
+- 영향: ADR-018의 HTTP 어댑터 결정은 유지한다. 미사용으로 제거했던 `langchain-core`는 실제 용도가 생겨 재도입한다.
+
+## ADR-018 — Ollama 생성도 직접 HTTP 어댑터 사용
+
+- 결정: `ChatOllama` 대신 `httpx`로 Ollama `/api/chat`을 호출한다. `LLMProvider` 규약과 서비스 공통 호출 함수는 유지한다.
+- 이유: provider 연결을 자체 어댑터에 모으고 `langchain-ollama`에 대한 실행 의존성을 없앤다. 후속 코드 정리에서 사용처가 없는 `langchain-core`도 제거했다.
+- 공통 호출 인자는 `max_tokens`로 통일한다. provider는 프로세스 단위로 재사용하고 종료 시 닫으며 설정 변경은 재시작으로 적용한다. 테스트용 HTTP 주입 전역 변수와 불완전한 설정 캐시 키를 제거했다.
+- 구현: 일반 생성, JSON Schema, NDJSON 스트리밍을 지원하며 기존 `options`·`think`·`keep_alive`를 보존한다. HTTP timeout·연결 종료·스트림 오류 및 불완전 종료를 처리한다.
+- 범위: 실행 엔진과 모델은 교체하지 않는다. 임베딩은 기존 HTTP 어댑터를 유지한다.
+
 이 문서는 이미 해결한 문제를 다음 세션에서 되돌리거나 같은 논의를 반복하지 않기 위한 기록이다.
 
 ## ADR-001 — n8n 프로토타입에서 코드 기반 구조로 전환

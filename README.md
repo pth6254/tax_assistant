@@ -391,7 +391,7 @@ tax-assistant/
     │   │   ├── income_tax.py / capital_gains.py / inheritance.py / gift_tax.py / vat.py / penalty_tax.py  # 세목별 계산 로직
     │   │   ├── engine.py         # 챗봇 tool calling — 계산 의도 감지·파라미터 추출·실행
     │   │   ├── repository.py    # tax_brackets/tax_deductions 조회
-    │   │   └── updater.py       # 법령 개정 감지 시 세율표 자동 갱신 (LLM 추출)
+    │   │   └── brackets.py      # 계산기 공통 세율 구간 적용 (DB 세율표 기반)
     │   ├── search/
     │   │   ├── hybrid_search_service.py  # law_articles + documents 하이브리드 검색, 조문 원문 조회
     │   │   └── web_search.py     # Tavily 웹검색 클라이언트
@@ -946,11 +946,29 @@ LLM은 법조문 번호나 계산 수치를 프롬프트 지시만으로 완벽�
 
 **인용이 아예 없는 답변 자동 보정**: `temperature` 샘플링에 따라 모델이 가끔 인용 브래킷 자체를 생략하는데(정규식 검증만으로는 잡을 수 없는 사각지대), 검색 컨텍스트에 법령 자료가 실제로 있었는데도 답변에 인용이 0건이면 `call_llm_structured()`로 "근거 조문만 JSON Schema로 뽑아내는" 짧은 보정 호출을 1회 추가 실행합니다. 스키마의 `pattern` 제약(`^제[0-9]{1,4}조(의[0-9]{1,3})?$`)이 디코딩 단계에서 조문번호 표기를 강제해, 프롬프트 지시로는 못 막던 형식 이탈(공백 변형·마크다운·URL 혼입)을 원천 차단합니다. 추출된 조문도 검색 컨텍스트에 실존하는 것만 채택해(환각 인용 차단) 답변 끝에 "근거 출처 목록" 섹션으로 덧붙입니다. 인용이 이미 있는 답변(대다수)에는 이 보정 호출이 아예 실행되지 않아 지연 비용이 없습니다.
 
-### LLM provider 추상화 (LangChain)
+### LLM provider 추상화 (HTTP 어댑터)
 
 `chat_service.py`는 특정 추론 서버의 요청 스키마를 직접 알지 못합니다. `app/services/llm_client.py`가 llama.cpp OpenAI 호환 API와 Ollama fallback을 감싸 `call_llm()`/`stream_llm()`/`call_llm_structured()`라는 provider 중립 인터페이스를 노출합니다.
-`num_ctx`/`num_predict`가 top-level이 아닌 `options` 안으로, `think`/`keep_alive`가 top-level로 가는 배치(과거 실측으로 확인된 버그 지점)를 LangChain 내부 소스로 직접 검증한 뒤 적용했습니다.
-향후 다른 OpenAI 호환 서버나 모델로 전환할 때는 `llm_client.py`의 클라이언트 생성 부분만 교체하면 되고, RAG·계산기·citation_guard 등 나머지 로직은 변경이 필요 없습니다.
+`inference/llm/base.py`의 `LLMProvider` 규약을 Ollama HTTP 어댑터와 OpenAI 호환 어댑터가 구현합니다. Ollama도 `ChatOllama` 없이 `httpx`로 `/api/chat`을 호출합니다. `num_ctx`/`num_predict`는 `options` 안에, `think`/`keep_alive`는 요청 최상위에 배치하며 테스트로 검증합니다.
+일반 답변·JSON Schema 요청·NDJSON 스트리밍을 지원하고, thinking 필드는 사용자 답변에서 제외합니다. `LLM_TIMEOUT_SEC`를 적용하고 종료 시 HTTP 연결을 닫습니다. 새 provider는 어댑터와 factory에 추가하며 RAG·계산기·citation_guard 호출부는 유지합니다.
+
+공통 호출의 생성 길이 인자는 `max_tokens`이며 Ollama 어댑터에서만 `options.num_predict`로 변환합니다. provider는 프로세스에서 한 번 생성해 재사용하고 종료 시 닫습니다. 환경설정 변경은 재시작으로 반영합니다. `langchain-ollama`는 사용하지 않으며, `langchain-core`는 아래 프롬프트·파이프라인·출력 검증에만 사용합니다.
+
+후속 정리 검증: 최신 Docker 전체 테스트 296개 통과, 실제 Ollama 일반 생성·스트리밍·구조화 응답과 dependency `ready` 확인.
+
+### LangChain 적용 범위와 provider 중립성
+
+`app/services/ai_pipeline.py`는 모델 SDK를 가져오지 않고 기존 `call_llm`·`call_llm_structured`·`stream_llm` 함수를 받아 처리 단계를 연결합니다.
+
+- **ChatPromptTemplate**: 최종 답변, 세목 분류, 계산기 입력 추출, 인용 추출에 적용합니다. 대화 이력은 `MessagesPlaceholder`로 넣고 시스템 프롬프트의 JSON 예시는 리터럴로 보존합니다.
+- **Runnable**: 프롬프트 → provider 메시지 변환 → 생성 → 구조 검증을 이름 있는 단계로 실행합니다. 스트리밍은 `RunnableGenerator`로 토큰을 즉시 전달하고 기존 인용 guard와 대화 저장 동작을 유지합니다.
+- **PydanticOutputParser**: `app/schemas/ai_output.py`의 분류·인용·계산기 선택 스키마를 검증합니다. 파서에 전달하기 전 완전한 JSON인지 검사하여 잘린 JSON의 자동 복구를 막습니다. 계산기별 필수 입력·타입·알 수 없는 필드도 실행 전에 검사합니다.
+
+검증 실패 시 분류는 원본 질문 검색으로, 인용 추출은 보정 생략으로, 계산기 추출은 미실행으로 돌아갑니다. 자동 LLM 재시도는 추가하지 않습니다. 스키마 검증은 법적 결론이나 금액의 사실 정확성을 보장하지 않습니다.
+
+`tax_answer`, `query_classification`, `calculator_extraction`, `citation_extraction` 실행 이름과 `prompt_version` 메타데이터를 사용합니다. 로컬 callback으로 단계 관찰이 가능하며 LangSmith는 후속 연결 대상입니다. SDK는 `langchain-core`의 간접 의존성으로 설치되지만 현재 프로젝트에 원격 추적·평가 업로드 설정을 추가하지 않습니다. 추후 연결 전 골든셋·평가 기준과 전송할 데이터 범위를 정해야 합니다.
+
+적용 검증: 최신 Docker 전체 테스트 **317개 통과**. 실제 Ollama 생성·스트리밍, 인용 JSON과 계산기 입력 추출의 Pydantic 검증, dependency `ready`를 확인했습니다. 답변 정확도 평가 점수와는 별개의 실행·회귀 검증입니다.
 
 ### 법령 개정 자동 동기화
 
@@ -1305,15 +1323,17 @@ python scripts/eval_rag.py --eval --with-answer --repeat 3
 어떤 게 `options` 안인지 등, 과거 `think`/`keep_alive` 배치 버그의 원인이기도 했다)에
 비즈니스 로직이 그대로 결합돼 있었다.
 
-**해결**: `app/services/llm_client.py`를 신설해 LangChain의 `ChatOllama`로 감쌌다.
-`chat_service.py`는 이제 `call_llm(messages, temperature, num_predict)` /
-`stream_llm(...)`만 호출하고 provider 세부사항을 전혀 모른다 — 향후 vLLM(OpenAI 호환
-서버)이나 다른 모델로 바꿀 때 `llm_client.py`의 `_build_client()` 한 곳만 교체하면 된다.
-마이그레이션 전 LangChain 내부 소스(`ChatOllama._chat_params`)를 직접 확인해
-`think`/`keep_alive`가 여전히 top-level, `num_ctx`/`num_predict`가 `options` 안으로
-가는 것을 검증한 뒤 적용했다 — 과거 버그를 재도입하지 않기 위함.
+**해결**: `app/services/llm_client.py`의 공통 인터페이스와 `inference/llm/`의
+provider 어댑터를 분리했다. 초기에는 `ChatOllama`로 감쌌으나 2026-09-05에
+Ollama도 `httpx` 기반 HTTP 어댑터로 교체하고 `langchain-ollama` 의존성을 제거했다.
+`chat_service.py`는 `call_llm(...)` / `stream_llm(...)`만 호출한다.
+`think`/`keep_alive`의 최상위 배치, `options` 내부 생성 설정, JSON Schema와
+스트리밍 오류 처리를 `tests/test_ollama_llm_provider.py`에서 검증한다.
 
-적용 결과: 218개 전체 테스트 통과, 실제 Ollama 서버 대상 스모크 테스트(비스트리밍/
+2026-09-05 HTTP 어댑터 전환 검증: 최신 Docker backend 전체 테스트 294개 통과.
+`langchain_ollama`가 없는 이미지에서 실제 Ollama 일반 생성·스트리밍·JSON 구조화 응답을 확인했다.
+
+초기 ChatOllama 도입 당시 결과: 218개 전체 테스트 통과, 실제 Ollama 서버 대상 스모크 테스트(비스트리밍/
 스트리밍) 정상 동작, hit_rate@5·MRR·분류정확도(전부 검색 단계에서 결정되는 값이라
 LLM 생성과 무관) 회귀 없음. 답변 품질 자체의 변화를 노린 작업이 아니라, provider
 전환 비용을 낮추기 위한 내부 구조 개선이다.

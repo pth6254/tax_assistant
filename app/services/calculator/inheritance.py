@@ -1,16 +1,9 @@
 import logging
 
 from app.schemas.calculator import CalculationResult, TaxStep
+from app.services.calculator.brackets import apply_progressive_tax
 from app.services.calculator.repository import get_brackets, get_deduction, get_source_articles
 
-
-def _apply_progressive_tax(taxable: int, brackets: list[dict]) -> tuple[int, str]:
-    """상속세 누진세율 적용 (과세표준 × 세율 - 누진공제). (세액, 적용세율) 반환."""
-    for b in sorted(brackets, key=lambda x: x['bracket_from'], reverse=True):
-        if taxable > b['bracket_from']:
-            tax = int(taxable * float(b['rate'])) - b['progressive_deduction']
-            return max(0, tax), f"{int(float(b['rate']) * 100)}%"
-    return 0, "0%"
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +44,7 @@ async def calculate(
 
     brackets = await get_brackets('상속세', 'default')
     if brackets:
-        calculated_tax, rate_desc = _apply_progressive_tax(taxable, brackets)
+        calculated_tax, rate_desc = apply_progressive_tax(taxable, brackets)
     else:
         calculated_tax, rate_desc = 0, "0%"
         logger.warning("상속세 세율 구간 조회 실패 — 세액 0 처리")

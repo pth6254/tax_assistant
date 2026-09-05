@@ -1,6 +1,6 @@
 """
 services/chat_service.py — RAG 채팅 비즈니스 로직
-질문 세목 분류 → 벡터 검색 → 메모리 조회 → Ollama 답변 → 메모리 저장.
+질문 세목 분류 → 벡터 검색 → 메모리 조회 → provider 중립 답변 → 메모리 저장.
 """
 import asyncio
 import json
@@ -19,6 +19,8 @@ from config import (
 from app.services.calculator.engine import CalcRun, run_calculation_for_query
 from app.services.citation_guard import apply_citation_guard, build_citation_footer, extract_citations
 from app.services.llm_client import call_llm, call_llm_structured, stream_llm
+from app.schemas.ai_output import CitationList, QueryClassification
+from app.services.ai_pipeline import chat_prompt, streaming_chain, structured_chain, text_chain
 from app.services.search.web_search import tavily_search
 from app.database import get_pool
 from app.services.search.hybrid_search_service import (
@@ -232,35 +234,28 @@ _COMBINED_CLASSIFY_PROMPT = (
 # 분류/멀티쿼리 호출만 짧게 제한 — 답변 생성은 llm_client 기본값(-1, 무제한)을 쓴다.
 # (과거 num_predict=500으로 답변이 ~900자에서 잘려 "근거 출처 목록" 섹션이 통째로
 #  사라진 사례가 있어, 답변 경로에는 길이 제한을 두지 않는다)
-_NUM_PREDICT_MULTI_QUERY = 150
+_MAX_TOKENS_MULTI_QUERY = 150
 
 # ── 인용 누락 답변 보정: structured output으로 근거 출처 목록 생성 ──
 # temperature 샘플링에 따라 모델이 가끔 출력 형식을 이탈해 인용을 아예 달지 않는데
 # (실측: citation_accuracy 73.7~81.6% 변동), 그 경우에만 JSON Schema 강제 디코딩으로
 # 인용 목록을 재추출해 답변 끝에 덧붙인다. pattern 제약이 '제 55 조'류 표기 변형과
 # 마크다운/URL 혼입을 디코딩 단계에서 차단한다.
-_CITATION_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "citations": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "label":      {"type": "string", "enum": ["법률", "시행령", "시행규칙"]},
-                    "law_name":   {"type": "string", "maxLength": 30},
-                    "article_no": {"type": "string", "pattern": "^제[0-9]{1,4}조(의[0-9]{1,3})?$"},
-                },
-                "required": ["label", "law_name", "article_no"],
-            },
-        },
-    },
-    "required": ["citations"],
-}
+_CITATION_SCHEMA = CitationList.model_json_schema()
 
 _CITATION_EXTRACT_PROMPT = (
     "답변이 근거로 삼은 법령 조문을 검색 자료와 대조하여 전부 나열하라.\n"
     "답변과 검색 자료에 실제로 등장하는 조문만 포함하고, 없는 조문을 지어내지 말라."
+)
+
+_FINAL_PROMPT_TEMPLATE = chat_prompt(
+    _COMBINED_PROMPT,
+    "{prefix}[검색된 세무 법령 자료]\n{context}{web_section}{calc_section}\n\n[사용자 질문]\n{query}",
+    history=True,
+)
+_CLASSIFY_PROMPT_TEMPLATE = chat_prompt(_COMBINED_CLASSIFY_PROMPT, "{query}")
+_CITATION_PROMPT_TEMPLATE = chat_prompt(
+    _CITATION_EXTRACT_PROMPT, "[답변]\n{answer}\n\n[검색 자료]\n{context}",
 )
 
 # Qwen3 계열 모델에서만 /no_think 접두사 사용 (다른 모델에는 노이즈)
@@ -332,24 +327,24 @@ async def _build_source_list_via_structured_output(answer: str, context: str) ->
     실패하거나 검증된 인용이 없으면 빈 문자열을 반환한다.
     """
     try:
-        data = await call_llm_structured(
-            [
-                {"role": "system", "content": _CITATION_EXTRACT_PROMPT},
-                {"role": "user",   "content": f"[답변]\n{answer}\n\n[검색 자료]\n{context}"},
-            ],
-            _CITATION_SCHEMA,
+        async def generate(messages):
+            return await call_llm_structured(messages, _CITATION_SCHEMA)
+
+        chain = structured_chain(
+            _CITATION_PROMPT_TEMPLATE, generate, CitationList, name="citation_extraction",
         )
+        data = await chain.ainvoke({"answer": answer, "context": context})
     except Exception as e:
-        logger.warning("[CITATION] structured 인용 추출 실패 — 보정 생략: %s", e)
+        logger.warning("[CITATION] structured 인용 추출 실패 — 보정 생략: %s", type(e).__name__)
         return ""
 
     norm_context = re.sub(r"\s+", "", context)
     lines: list[str] = []
     seen: set[tuple[str, str, str]] = set()
-    for c in data.get("citations", []):
-        law_name   = str(c.get("law_name", "")).strip()
-        article_no = str(c.get("article_no", ""))
-        label      = str(c.get("label", ""))
+    for c in data.citations:
+        law_name   = c.law_name
+        article_no = c.article_no
+        label      = c.label
         key = (label, re.sub(r"\s+", "", law_name), article_no)
         if not law_name or key in seen:
             continue
@@ -409,33 +404,20 @@ async def _classify_and_generate_queries(
         user_content = "[이전 대화 맥락]\n" + "\n".join(parts) + f"\n\n[현재 질문]\n{query}"
 
     try:
-        raw = await call_llm(
-            [
-                {"role": "system", "content": _COMBINED_CLASSIFY_PROMPT},
-                {"role": "user",   "content": user_content},
-            ],
-            temperature=0.0,
-            num_predict=_NUM_PREDICT_MULTI_QUERY,
+        async def generate(messages):
+            return await call_llm(messages, temperature=0.0, max_tokens=_MAX_TOKENS_MULTI_QUERY)
+
+        chain = structured_chain(
+            _CLASSIFY_PROMPT_TEMPLATE, generate, QueryClassification, name="query_classification",
         )
-        text = raw.split("</think>")[-1].strip()
-        fence = re.search(r"```(?:json)?\s*\n?([\s\S]*?)\n?```", text)
-        candidate = fence.group(1).strip() if fence else text
-        match = re.search(r"\{[\s\S]*?\}", candidate)
-        if match:
-            data = json.loads(match.group(0))
-            llm_law = data.get("law", "ALL")
-            # 키워드로 확정된 세목 우선, 없으면 LLM 판단 사용
-            final_law = keyword_law if keyword_law != "ALL" else (
-                llm_law if (llm_law in _LAW_KW or llm_law == "ALL") else "ALL"
-            )
-            queries = data.get("queries", [])
-            if isinstance(queries, list):
-                clean = [q for q in queries if isinstance(q, str) and q.strip()][:3]
-                if clean:
-                    logger.info("[CLASSIFY] 세목=%s | 쿼리=%d개: %s", final_law, len(clean), clean)
-                    return final_law, clean
+        data = await chain.ainvoke({"query": user_content})
+        final_law = keyword_law if keyword_law != "ALL" else (
+            data.law if data.law in _LAW_KW else "ALL"
+        )
+        logger.info("[CLASSIFY] 세목=%s | 쿼리=%d개", final_law, len(data.queries))
+        return final_law, data.queries
     except Exception as e:
-        logger.warning("[CLASSIFY] 통합 분류 실패 — 키워드+원본 사용: %s", e)
+        logger.warning("[CLASSIFY] 통합 분류 실패 — 키워드+원본 사용: %s", type(e).__name__)
 
     return keyword_law, [query]
 
@@ -485,29 +467,32 @@ async def _fetch_rag_and_web_context(
     return context, web_results, history, calc_run
 
 
-def _build_final_messages(
+def _final_prompt_values(
     query: str,
     context: str,
     web_results: str,
     history: list[dict],
     calc_run: CalcRun | None = None,
-) -> list[dict]:
-    """최종 답변용 메시지 목록을 생성한다."""
-    messages = [{"role": "system", "content": _COMBINED_PROMPT}]
-    messages.extend(history)
-    user_content = _QWEN3_NO_THINK_PREFIX
-    user_content += f"[검색된 세무 법령 자료]\n{context}"
+) -> dict:
+    """Build optional context sections without interpreting user text as templates."""
+    web_section = ""
     if web_results and web_results != "웹 검색 생략":
-        user_content += f"\n\n[웹 검색 결과]\n{web_results}"
+        web_section = f"\n\n[웹 검색 결과]\n{web_results}"
+    calc_section = ""
     if calc_run:
-        user_content += (
+        calc_section = (
             f"\n\n[세금 계산기 결과 — DB 세율표 기반 정확한 계산]\n{calc_run.context}\n"
             "위 계산 결과를 결론에 반영하고, 상세 설명에 계산 단계를 표(| 항목 | 금액 |)로 제시하라. "
             "계산 수치를 임의로 바꾸지 말 것. 근거 조문은 법적 근거 섹션에 포함하라."
         )
-    user_content += f"\n\n[사용자 질문]\n{query}"
-    messages.append({"role": "user", "content": user_content})
-    return messages
+    return {
+        "query": query, "context": context, "history": history,
+        "prefix": _QWEN3_NO_THINK_PREFIX, "web_section": web_section, "calc_section": calc_section,
+    }
+
+
+async def _generate_answer(messages):
+    return await call_llm(messages, temperature=0.3)
 
 
 def _calc_meta(calc_run: CalcRun | None) -> dict | None:
@@ -523,8 +508,8 @@ async def process_chat(query: str, conversation_id: str, user_id: str) -> tuple[
     conv_id = _uuid.UUID(conversation_id)
     context, web_results, history, calc_run = await _fetch_rag_and_web_context(query, conv_id, user_id)
 
-    messages = _build_final_messages(query, context, web_results, history, calc_run)
-    answer   = await call_llm(messages, temperature=0.3)
+    chain = text_chain(_FINAL_PROMPT_TEMPLATE, _generate_answer, name="tax_answer")
+    answer = await chain.ainvoke(_final_prompt_values(query, context, web_results, history, calc_run))
     answer   = await _append_source_list_if_missing(answer, context)
     answer   = apply_citation_guard(answer, context, calc_run.context if calc_run else None)
 
@@ -549,12 +534,13 @@ async def stream_chat_response(
     conv_id = _uuid.UUID(conversation_id)
     context, web_results, history, calc_run = await _fetch_rag_and_web_context(query, conv_id, user_id)
 
-    messages     = _build_final_messages(query, context, web_results, history, calc_run)
+    values = _final_prompt_values(query, context, web_results, history, calc_run)
+    chain = streaming_chain(_FINAL_PROMPT_TEMPLATE, _stream_llm_skip_think, name="tax_answer")
     full_answer: list[str] = []
     is_first = len(history) == 0
 
     logger.info("[STREAM] 최종 답변 스트리밍 시작")
-    async for chunk in _stream_llm_skip_think(messages, temperature=0.3):
+    async for chunk in chain.astream(values):
         full_answer.append(chunk)
         yield {"type": "chunk", "text": chunk}
 

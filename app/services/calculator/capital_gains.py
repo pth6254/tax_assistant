@@ -1,16 +1,9 @@
 import logging
 
 from app.schemas.calculator import CalculationResult, TaxStep
+from app.services.calculator.brackets import apply_progressive_tax
 from app.services.calculator.repository import get_brackets, get_deduction, get_source_articles
 
-
-def _apply_progressive_tax(taxable: int, brackets: list[dict]) -> tuple[int, str]:
-    """양도소득세 누진세율 적용. 단기 보유는 단일세율 구간(bracket_from=0)으로 처리. (세액, 적용세율) 반환."""
-    for b in sorted(brackets, key=lambda x: x['bracket_from'], reverse=True):
-        if taxable > b['bracket_from']:
-            tax = int(taxable * float(b['rate'])) - b['progressive_deduction']
-            return max(0, tax), f"{int(float(b['rate']) * 100)}%"
-    return 0, "0%"
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +57,7 @@ async def calculate(
 
     brackets = await get_brackets('양도소득세', category)
     if brackets:
-        calculated_tax, rate_desc = _apply_progressive_tax(taxable, brackets)
+        calculated_tax, rate_desc = apply_progressive_tax(taxable, brackets)
     else:
         calculated_tax, rate_desc = 0, "0%"
         logger.warning("양도소득세 세율 구간 조회 실패 category=%s — 세액 0 처리", category)

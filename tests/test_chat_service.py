@@ -5,9 +5,11 @@ import pytest
 from unittest.mock import AsyncMock, patch
 
 from app.services.calculator.engine import CalcRun
+from app.services.ai_pipeline import to_provider_messages
 from app.services.chat_service import (
     _append_source_list_if_missing,
-    _build_final_messages,
+    _FINAL_PROMPT_TEMPLATE,
+    _final_prompt_values,
     _calc_meta,
     _match_laws_by_keyword,
     _COMBINED_PROMPT,
@@ -52,49 +54,56 @@ def test_match_generic_deduction_word_not_special_law():
     assert _match_laws_by_keyword("종합소득세 기본공제 금액은 얼마인가요?") == ["소득세법"]
 
 
-# ── _build_final_messages ────────────────────────────────────────
+# ── 실제 최종 답변 템플릿 ────────────────────────────────────────
 
-def test_build_final_messages_first_is_system_prompt():
-    msgs = _build_final_messages("질문", "법령자료", "웹결과", [])
+@pytest.fixture
+def render_final_messages():
+    def render(query, context, web_results, history, calc_run=None):
+        values = _final_prompt_values(query, context, web_results, history, calc_run)
+        return to_provider_messages(_FINAL_PROMPT_TEMPLATE.invoke(values))
+    return render
+
+def test_final_prompt_first_is_system_prompt(render_final_messages):
+    msgs = render_final_messages("질문", "법령자료", "웹결과", [])
     assert msgs[0]["role"] == "system"
     assert msgs[0]["content"] == _COMBINED_PROMPT
 
 
-def test_build_final_messages_last_is_user_with_query():
-    msgs = _build_final_messages("소득세 신고 방법", "법령자료", "웹결과", [])
+def test_final_prompt_last_is_user_with_query(render_final_messages):
+    msgs = render_final_messages("소득세 신고 방법", "법령자료", "웹결과", [])
     assert msgs[-1]["role"] == "user"
     assert "소득세 신고 방법" in msgs[-1]["content"]
 
 
-def test_build_final_messages_contains_rag_context():
-    msgs = _build_final_messages("질문", "제55조 [세율] 조문 내용", "웹결과", [])
+def test_final_prompt_contains_rag_context(render_final_messages):
+    msgs = render_final_messages("질문", "제55조 [세율] 조문 내용", "웹결과", [])
     assert "제55조 [세율] 조문 내용" in msgs[-1]["content"]
 
 
-def test_build_final_messages_contains_web_results():
-    msgs = _build_final_messages("질문", "법령자료", "Tavily 웹 검색 결과", [])
+def test_final_prompt_contains_web_results(render_final_messages):
+    msgs = render_final_messages("질문", "법령자료", "Tavily 웹 검색 결과", [])
     assert "Tavily 웹 검색 결과" in msgs[-1]["content"]
 
 
-def test_build_final_messages_skips_web_placeholder():
+def test_final_prompt_skips_web_placeholder(render_final_messages):
     """웹검색이 생략된 경우 '웹 검색 생략' 플레이스홀더는 프롬프트에 넣지 않는다."""
-    msgs = _build_final_messages("질문", "법령자료", "웹 검색 생략", [])
+    msgs = render_final_messages("질문", "법령자료", "웹 검색 생략", [])
     assert "웹 검색 생략" not in msgs[-1]["content"]
 
 
-def test_build_final_messages_includes_calc_context():
+def test_final_prompt_includes_calc_context(render_final_messages):
     calc = CalcRun(context="세목: 소득세\n- 결정세액: 5,895,000원", tool="income_tax", params={"income": 50000000})
-    msgs = _build_final_messages("질문", "법령자료", "웹 검색 생략", [], calc)
+    msgs = render_final_messages("질문", "법령자료", "웹 검색 생략", [], calc)
     assert "결정세액: 5,895,000원" in msgs[-1]["content"]
     assert "세금 계산기 결과" in msgs[-1]["content"]
 
 
-def test_build_final_messages_history_inserted_between():
+def test_final_prompt_history_inserted_between(render_final_messages):
     history = [
         {"role": "user",      "content": "이전 질문"},
         {"role": "assistant", "content": "이전 답변"},
     ]
-    msgs = _build_final_messages("새 질문", "법령자료", "웹결과", history)
+    msgs = render_final_messages("새 질문", "법령자료", "웹결과", history)
     contents = [m["content"] for m in msgs]
     assert "이전 질문" in contents
     assert "이전 답변" in contents
@@ -102,8 +111,8 @@ def test_build_final_messages_history_inserted_between():
     assert msgs[-1]["role"] == "user"
 
 
-def test_build_final_messages_empty_history_two_messages():
-    msgs = _build_final_messages("질문", "법령자료", "웹 검색 생략", [])
+def test_final_prompt_empty_history_two_messages(render_final_messages):
+    msgs = render_final_messages("질문", "법령자료", "웹 검색 생략", [])
     assert len(msgs) == 2  # system + user
 
 

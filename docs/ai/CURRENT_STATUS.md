@@ -1,5 +1,47 @@
 # 현재 구현 상태
 
+## 2026-09-05 app 미사용 코드·계산기 중복 정리
+
+- 저장소 내부 호출이 없는 `search.hybrid_search_service.fetch_hybrid_context`와 미사용 `re` import를 제거했다.
+- 운영에 연결되지 않은 `calculator/updater.py`를 제거했다. 실제 DB 세율표 조회·계산 경로는 유지하며 데이터는 삭제하지 않았다.
+- 네 계산기의 동일한 누진세율 함수를 `calculator/brackets.py`로 통합했다. 기존 구간 경계(`>`), float 변환·정수 절사·음수 세액 제한을 그대로 유지한다.
+- 합성 구간 회귀 테스트 12개 추가. WSL 가상환경 활성화 후 `dev/docker-up-wsl.sh backend`로 재빌드하고 Docker 전체 pytest **329 passed**(기존 경고 24개)를 확인했다.
+- 기동 직후 health 요청은 일시적으로 연결이 거절됐으나 준비 완료 후 live·ready·dependencies 모두 HTTP 200, DB·Ollama 생성·임베딩 정상. 최신 이미지에서도 updater 파일이 없음을 확인했다.
+- 큰 chat/upload 서비스의 역할 분리는 이번 범위에서 제외했다. 실제 모델 답변 품질 평가는 별도 후속 작업이다.
+
+## 2026-09-05 LangChain 전환 후 미사용 코드 정리
+
+- 운영 호출이 없고 이전 테스트에서만 사용하던 `_build_final_messages`와 `_parse_extraction_json` 및 관련 import를 제거했다.
+- 메시지 구성 테스트는 실제 최종 답변 템플릿을, JSON 처리 테스트는 실제 `extract_calculation_request` Runnable 경로를 검증하도록 변경했다.
+- 기존 회귀 케이스를 유지했으며 Docker 재빌드 후 전체 테스트 317 passed. 모델 호출·검색·인용 guard 동작은 변경하지 않았다.
+
+## 2026-09-05 LangChain 프롬프트·Runnable·출력 검증 적용
+
+- `langchain-core==1.4.9`를 실제 사용 목적으로 재도입했다. `ChatOllama` 없이 기존 HTTP provider를 유지한다.
+- 최종 답변·세목 분류·계산기 입력 추출·인용 추출에 ChatPromptTemplate을 적용하고 Runnable로 프롬프트→메시지→생성→검증을 연결했다. 스트리밍은 RunnableGenerator로 즉시 전달한다.
+- PydanticOutputParser로 응답 필드와 타입을 검증한다. 불완전 JSON은 자동 복구하지 않으며 계산기별 입력도 실행 전에 엄격 검증한다. 오류 시 기존 fallback을 사용한다.
+- 단계 이름·prompt_version 메타데이터·로컬 callback을 지원한다. LangSmith SDK는 간접 의존성이지만 원격 추적·평가 연결은 후속 작업이다.
+- WSL 관련 테스트 61 passed, 최신 Docker 전체 테스트 317 passed. 실제 Ollama 생성·스트리밍·인용 JSON 추출·계산기 입력 추출 및 dependency ready 확인 완료.
+- LangChain의 역할은 처리 구성과 형식 검증이며 세무 답변의 사실 정확도 검수는 별도 골든셋 작업으로 남는다.
+
+## 2026-09-05 LLM 연결 코드 후속 정리
+
+- 미사용 `langchain-core`를 requirements에서 제거했다. 최신 backend 이미지에 `langchain_core`·`langchain_ollama`가 모두 없음을 확인했다.
+- 공통 함수의 `num_predict`를 `max_tokens`로 바꾸고 채팅·계산기·업로드 호출부를 함께 갱신했다. Ollama HTTP payload에서만 `num_predict`를 사용한다.
+- factory의 임의 `**settings`를 명시적인 타입·키워드 인자로 변경하고 endpoint를 `base_url`로 통일했다.
+- 운영 facade의 테스트 전용 `_http_client`와 불완전한 `_provider_key`를 제거했다. provider는 프로세스 단위 재사용·종료하며 환경설정 변경 시 재시작한다.
+- WSL 가상환경 관련 테스트 15 passed, Docker 재빌드 후 전체 테스트 296 passed. 실제 일반 생성·스트리밍·구조화 응답 및 dependency ready 확인 완료.
+
+## 2026-09-05 Ollama 생성 HTTP 어댑터
+
+- Ollama 생성 경로에서 `ChatOllama`를 제거하고 `httpx` 기반 `/api/chat` 어댑터를 적용했다.
+- 서비스의 공통 `call_llm`·`call_llm_structured`·`stream_llm` 인터페이스와 기존 모델 설정은 유지한다.
+- 초기 교체에서 `langchain-ollama`를 제거했고 후속 정리에서 미사용 `langchain-core`도 제거했다.
+- JSON Schema, NDJSON 스트리밍, thinking 분리, HTTP 오류·불완전 스트림, timeout과 연결 종료를 처리한다.
+- WSL 가상환경 관련 테스트: 13 passed. `dev/docker-up-wsl.sh backend`로 재빌드한 Docker 이미지 전체 테스트: 294 passed.
+- 새 이미지에 `langchain_ollama`가 없는 상태에서 실제 Ollama 일반 생성·스트리밍·JSON 구조화 응답을 확인했다. 구조화 응답은 세션 재개 후 약 6.4초에 `{"ok": true}`를 반환했다.
+- dependency health는 DB·Ollama LLM·Ollama 임베딩 모두 정상이며, 이번 검증은 통신 경로 스모크 테스트다. 세무 답변 정확도 평가는 별도 후속 작업이다.
+
 ## 2026-08-23 Ollama 두 모델 GPU 동시 적재 실험
 
 - RTX 5070 Ti Laptop 12,227MiB에서 `qwen3.5:9b`와 `qwen3-embedding:4b`를

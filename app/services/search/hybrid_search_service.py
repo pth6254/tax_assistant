@@ -19,7 +19,6 @@ law_articles(공식 법령 조문)와 documents(PDF 업로드) 두 테이블을
 """
 import asyncio
 import logging
-import re
 import time
 import uuid as _uuid
 
@@ -367,17 +366,6 @@ def format_hybrid_context(results: list[HybridSearchResult]) -> str:
         f"{r.content}"
         for r in results
     )
-
-
-async def fetch_hybrid_context(
-    query: str,
-    law_filter: str = "ALL",
-    user_id: str = "",
-    original_query: str = "",
-) -> str:
-    """단일 쿼리 하이브리드 검색 진입점."""
-    results = await hybrid_search([query], law_filter=law_filter, user_id=user_id, original_query=original_query)
-    return format_hybrid_context(results)
 
 
 async def _lookup_referenced_article(

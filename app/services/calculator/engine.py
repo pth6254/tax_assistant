@@ -9,7 +9,6 @@ services/calculator/engine.py — 채팅 질문 → 세금 계산기 자동 연�
   extract_calculation_request(query) LLM으로 {"tool": ..., "params": {...}} 추출
   run_calculation_for_query(query)   위 두 단계 + 계산 실행 + 컨텍스트 포맷 (공개 진입점)
 """
-import json
 import logging
 import re
 from dataclasses import dataclass
@@ -28,6 +27,8 @@ from app.schemas.calculator import (
 )
 from app.services.calculator import capital_gains, gift_tax, income_tax, inheritance, penalty_tax, vat
 from app.services.llm_client import call_llm
+from app.schemas.ai_output import CalculationExtraction
+from app.services.ai_pipeline import chat_prompt, structured_chain
 
 logger = logging.getLogger(__name__)
 
@@ -84,52 +85,33 @@ _EXTRACT_PROMPT = (
     "- <think> 태그 내용은 출력하지 말 것\n"
 )
 
+_EXTRACT_PROMPT_TEMPLATE = chat_prompt(_EXTRACT_PROMPT, "{prefix}{query}")
+
 
 def has_calculation_intent(query: str) -> bool:
     """금액 표현 + 계산 의도 키워드가 모두 있을 때만 True (LLM 호출 게이트)."""
     return bool(_AMOUNT_RE.search(query)) and bool(_INTENT_RE.search(query))
 
 
-def _parse_extraction_json(raw: str) -> dict | None:
-    """LLM 응답에서 JSON 오브젝트를 추출한다."""
-    text = raw.split("</think>")[-1].strip()
-    fence = re.search(r"```(?:json)?\s*\n?([\s\S]*?)\n?```", text)
-    candidate = fence.group(1).strip() if fence else text
-    match = re.search(r"\{[\s\S]*\}", candidate)
-    if not match:
-        return None
-    try:
-        data = json.loads(match.group(0))
-        return data if isinstance(data, dict) else None
-    except json.JSONDecodeError:
-        return None
-
-
 async def extract_calculation_request(query: str) -> tuple[str, dict] | None:
     """LLM으로 계산기 종류와 입력값을 추출한다. 대상 아님/실패 시 None."""
     try:
-        raw = await call_llm(
-            [
-                {"role": "system", "content": _EXTRACT_PROMPT},
-                {"role": "user", "content": _NO_THINK_PREFIX + query},
-            ],
-            temperature=0.0,
-            num_predict=400,
+        async def generate(messages):
+            return await call_llm(messages, temperature=0.0, max_tokens=400)
+
+        chain = structured_chain(
+            _EXTRACT_PROMPT_TEMPLATE, generate, CalculationExtraction, name="calculator_extraction",
         )
+        data = await chain.ainvoke({"prefix": _NO_THINK_PREFIX, "query": query})
+        if data.tool == "none":
+            return None
+        request_model, _ = _TOOLS[data.tool]
+        # Check tool-specific required fields, types and unknown parameters before execution.
+        request_model.model_validate(data.params, strict=True, extra="forbid")
+        return data.tool, data.params
     except Exception as e:
-        logger.warning("[CALC] 파라미터 추출 LLM 호출 실패: %s", e)
+        logger.warning("[CALC] 파라미터 추출 또는 검증 실패: %s", type(e).__name__)
         return None
-
-    data = _parse_extraction_json(raw)
-    if not data:
-        logger.warning("[CALC] 추출 응답 JSON 파싱 실패: %.100s", raw)
-        return None
-
-    tool = data.get("tool", "none")
-    if tool not in _TOOLS:
-        return None
-    params = data.get("params", {})
-    return (tool, params) if isinstance(params, dict) else None
 
 
 @dataclass

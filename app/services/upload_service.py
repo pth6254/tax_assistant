@@ -70,7 +70,7 @@ async def classify_document(source: str, preview: str) -> dict:
         content = await call_llm(
             [{"role": "user", "content": prompt}],
             temperature=0.0,
-            num_predict=100,
+            max_tokens=100,
         )
         result = json.loads(content)
             
