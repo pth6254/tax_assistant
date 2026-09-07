@@ -89,7 +89,8 @@ async def get_messages(conv_id: str, user: dict = Depends(verify_token)):
         msg = r["message"]
         if isinstance(msg, str):
             msg = json.loads(msg)
-        result.append({"role": msg["role"], "content": msg["content"]})
+        result.append({"role": msg["role"], "content": msg["content"],
+                       "tools": msg.get("tools", [])})
     return result
 
 

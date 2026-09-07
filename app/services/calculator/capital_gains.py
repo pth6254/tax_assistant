@@ -1,11 +1,7 @@
-import logging
-
+from app.services.calculator.errors import CalculationError, require_value
 from app.schemas.calculator import CalculationResult, TaxStep
 from app.services.calculator.brackets import apply_progressive_tax
 from app.services.calculator.repository import get_brackets, get_deduction, get_source_articles
-
-
-logger = logging.getLogger(__name__)
 
 _LONG_TERM_DEDUCTION_MAP = [
     (15, True,  '장기보유특별공제_15년이상_1주택'),
@@ -24,6 +20,8 @@ async def calculate(
     asset_type: str = '부동산',
     is_one_home: bool = False,
 ) -> CalculationResult:
+    if asset_type != '부동산':
+        raise CalculationError('unsupported_condition')
     steps: list[TaxStep] = []
 
     gain = transfer_price - acquisition_price - expenses
@@ -35,16 +33,15 @@ async def calculate(
         for min_years, need_one_home, deduction_name in _LONG_TERM_DEDUCTION_MAP:
             if holding_years >= min_years and (not need_one_home or is_one_home):
                 row = await get_deduction('양도소득세', deduction_name)
-                if row and row.get('rate'):
-                    long_term_deduction = int(gain * float(row['rate']))
-                    steps.append(TaxStep(label=f"장기보유특별공제({deduction_name})", amount=long_term_deduction))
+                long_term_deduction = int(gain * float(require_value(row, 'rate')))
+                steps.append(TaxStep(label=f"장기보유특별공제({deduction_name})", amount=long_term_deduction))
                 break
 
     income_after_ltdc = gain - long_term_deduction
     steps.append(TaxStep(label="양도소득금액", amount=income_after_ltdc))
 
     basic_deduction_row = await get_deduction('소득세', '양도소득기본공제')
-    basic_deduction = basic_deduction_row['amount'] if basic_deduction_row and basic_deduction_row.get('amount') else 2500000
+    basic_deduction = require_value(basic_deduction_row, 'amount')
     taxable = max(0, income_after_ltdc - basic_deduction)
     steps.append(TaxStep(label="과세표준(기본공제 250만 차감)", amount=taxable))
 
@@ -56,11 +53,7 @@ async def calculate(
         category = '기본'
 
     brackets = await get_brackets('양도소득세', category)
-    if brackets:
-        calculated_tax, rate_desc = apply_progressive_tax(taxable, brackets)
-    else:
-        calculated_tax, rate_desc = 0, "0%"
-        logger.warning("양도소득세 세율 구간 조회 실패 category=%s — 세액 0 처리", category)
+    calculated_tax, rate_desc = apply_progressive_tax(taxable, brackets)
 
     steps.append(TaxStep(label=f"산출세액({rate_desc})", amount=calculated_tax))
 

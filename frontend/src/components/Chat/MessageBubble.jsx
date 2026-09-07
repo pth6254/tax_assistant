@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
+import ToolCallCard from './ToolCallCard'
 
 // _COMBINED_PROMPT의 "근거 출처 목록" 형식과 동일한 패턴 — [법률] 법령명 제N조
 // 조문번호는 공백 변형 허용 (모델이 "제 50 조"처럼 출력하는 경우가 많음, citation_guard.py와 동일)
@@ -77,6 +78,9 @@ export default function MessageBubble({ message, userInitial, onCitationClick, o
 
       {/* 말풍선 + 계산기 연결 버튼 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: '70%', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
+        {!isUser && message.tools?.map(tool => (
+          <ToolCallCard key={tool.id} tool={tool} onCitationClick={onCitationClick} onOpenCalculator={onOpenCalculator} />
+        ))}
         <div
           ref={isUser ? undefined : bubbleRef}
           className={isUser ? undefined : 'markdown-bubble'}
@@ -102,7 +106,7 @@ export default function MessageBubble({ message, userInitial, onCitationClick, o
           {isUser && message.content}
         </div>
 
-        {!isUser && message.calc && onOpenCalculator && (
+        {!isUser && message.calc && !message.tools?.some(t => t.tool === message.calc.tool && t.status === 'ok') && onOpenCalculator && (
           <button
             onClick={() => onOpenCalculator(message.calc.tool, message.calc.params)}
             style={{

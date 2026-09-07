@@ -91,11 +91,13 @@ Agentic RAG 파이프라인 (검색 → 계산 → 합성 → 인용 검증)
 - **세금 계산기 tool calling**: 질문에서 계산 의도를 감지하면 LLM이 계산기 종류·입력값을 추출해 DB 세율표 기반 계산기를 실행, 계산 과정과 근거 조문을 답변에 반영
 - **인용 검증(citation guard)**: 답변 생성 후 인용된 조문이 실제 검색 근거에 존재하는지, 계산기 결과 금액과 서술이 일치하는지 자동 대조해 근거 없는 인용에는 경고 각주 추가
 - **인용 누락 자동 보정(structured output)**: 답변에 법령 인용이 하나도 없는 경우(temperature 샘플링에 따른 형식 이탈)에만 JSON Schema로 출력을 강제하는 별도 LLM 호출을 실행해 근거 조문을 추출·검증 후 답변에 덧붙임 — 정상 답변(대다수)에는 추가 지연 없음
-- **SSE 스트리밍**: llama.cpp OpenAI 호환 API의 토큰 단위 실시간 응답, DB 저장은 백그라운드 처리
+- **SSE 스트리밍**: provider 중립 토큰 응답과 도구 실행 상태 전달, 대화·도구 결과 저장 후 완료 처리
 - **대화 메모리**: 최근 3턴 컨텍스트 유지, 대화별 독립 세션(conversations 테이블)
 - **Tavily 웹검색**: 국세청·법제처·기획재정부 도메인 중심 최신 자료 보완 (DB 상위 3개 평균 유사도 0.55 미만인 경우에만 실행)
 
 ### 세금 계산기
+
+- **실패와 0원 결과 분리**: 필수 세율·공제 데이터가 없거나 DB 연결이 실패하면 계산을 중단한다. 입력 오류·미지원 조건·일시 장애를 구분해 화면과 채팅 도구 카드에 안내하며, 실패한 계산을 LLM이 임의로 보완하지 않도록 최종 생성을 우회한다. 정상적인 0원 및 부가세 환급 결과는 유지한다.
 
 - 종합소득세·양도소득세·상속세·증여세·부가가치세·가산세(무신고·과소신고·납부지연) 6종, DB 세율표(`tax_brackets`/`tax_deductions`) 기반 계산
 - 계산 단계·근거 조문을 함께 반환, 프론트 계산기 화면과 챗봇 tool calling 양쪽에서 재사용
@@ -654,7 +656,7 @@ pytest tests/test_api_service.py -v         # 국가법령정보 API XML 파싱 
 pytest tests/test_interpretation_service.py -v  # 유권해석 수집 파이프라인
 pytest tests/test_hybrid_search_priority.py -v  # 법령 위계 우선순위 분류
 pytest tests/test_calculator.py -v          # 세금 계산기 6종 (소득세·양도세·상속세·증여세·부가세·가산세)
-pytest tests/test_calculator_engine.py -v   # 계산기 tool calling 엔진
+pytest tests/test_calculator_engine.py tests/test_tools.py -v   # 계산기·공통 도구 호출
 pytest tests/test_citation_guard.py -v      # 답변 인용·수치 검증 후처리
 pytest tests/test_tax_schedule.py -v        # 세무 일정 계산
 pytest tests/test_jwt.py -v                 # JWT 토큰
@@ -682,7 +684,7 @@ pytest --lf
 | `test_interpretation_service.py` | 유권해석 수집·세목 추론·본문 조합 | DB·외부 의존 없음 (API/DB mock) |
 | `test_hybrid_search_priority.py` | law_type → (우선순위, source_type) 분류 | DB·외부 의존 없음 |
 | `test_calculator.py` | 세금 계산기 6종 세율 구간·공제 로직 | 시드 데이터 mock |
-| `test_calculator_engine.py` | 계산 의도 게이트, LLM 추출 파싱, 도구 디스패치 | LLM mock |
+| `test_calculator_engine.py`, `test_tools.py` | 공통 도구 선택·계산 실행·사용자 격리·실패 경계 | LLM/DB mock |
 | `test_citation_guard.py` | 조문 인용 실존 검증, 계산 금액 일치 검증 | DB·외부 의존 없음 |
 | `test_tax_schedule.py` | 사업자 유형별 신고 기한 계산 | DB·외부 의존 없음 |
 | `test_jwt.py` | JWT 토큰 생성 및 클레임 검증 | DB·외부 의존 없음 |
@@ -772,7 +774,7 @@ python scripts/eval_rag.py --eval --with-answer --repeat 3
 | GET | `/api/documents` | 내가 업로드한 파일 목록 | ✅ 필요 |
 | DELETE | `/api/documents/{filename}` | 파일 삭제 (전체 청크 제거) | ✅ 필요 |
 | POST | `/api/chat` | 채팅 질문 (일반 응답, 계산기 메타데이터 포함) | ✅ 필요 |
-| POST | `/api/chat/stream` | 채팅 질문 (SSE 스트리밍, `chunk`/`calc` 이벤트) | ✅ 필요 |
+| POST | `/api/chat/stream` | 채팅 질문 (SSE 스트리밍, `tool`/`chunk`/`calc` 이벤트) | ✅ 필요 |
 | POST | `/api/calculator/income-tax` | 종합소득세 계산 | ✅ 필요 |
 | POST | `/api/calculator/capital-gains` | 양도소득세 계산 | ✅ 필요 |
 | POST | `/api/calculator/inheritance` | 상속세 계산 | ✅ 필요 |
@@ -927,15 +929,22 @@ Tavily 다중 쿼리도 병렬로 처리하여 대기 시간을 줄입니다.
 
 ### SSE 스트리밍
 
-최종 답변은 provider 중립 `stream_llm()`을 통해 llama.cpp OpenAI 호환 SSE 토큰을 실시간 전송합니다.
+최종 답변은 provider 중립 `stream_llm()`을 통해 현재 설정된 생성 엔진의 토큰을 실시간 전송합니다.
 `<think>` 태그는 스트리밍 중 버퍼 최소화 방식으로 실시간 필터링합니다(TTFT 개선).
 스트리밍 이벤트는 `{"type": "chunk", "text": ...}` / `{"type": "calc", "tool": ..., "params": ...}` 형태로 구분되어, 텍스트와 계산기 메타데이터(프론트 프리필용)를 함께 전달합니다.
-스트리밍 완료 후 DB 저장(`_save_history`)은 `asyncio.create_task`로 백그라운드 처리하여 클라이언트 연결을 즉시 종료합니다.
+추가 `tool` 이벤트는 `id`, `tool`, `status`를 전달하며 완료 이벤트에는 검증된 `params`와 제한된 `context`가 포함됩니다.
+선택 중(`selecting`) → 실행 중(`running`) → 완료(`ok`)/자료 없음(`not_found`)/실패 상태를 실제 실행 순서대로 전달합니다.
+대화와 최종 도구 메타데이터를 기존 `chat_logs.message` JSON에 저장한 뒤 `[DONE]`을 전송합니다. 새 DB 컬럼은 필요하지 않습니다.
+일반 `POST /api/chat`에도 최종 `tools` 배열을 반환하며, 대화 재조회 시 카드가 복원됩니다. LLM 대화 메모리에는 메타데이터를 다시 주입하지 않습니다.
+
+프런트엔드의 `ToolCallCard`는 법령 원문 뷰어·문서 발췌문·계산기 조건 변경을 연결합니다. 도구 본문은 HTML로 해석하지 않습니다.
+대화 전환 시 요청을 취소하고, 완료 신호 없이 연결이 끊기면 실행 중 카드는 '연결 중단'으로 표시합니다.
+프런트 검증: `cd frontend` 후 `npm test`, `npm run build`. 선택적 Edge headless UI 검증은 preview 서버를 실행한 뒤 `node tests/tools.browser.cjs`로 수행합니다(Playwright 필요, 별도 설치 위치는 `PLAYWRIGHT_MODULE`, 테스트 URL은 `UI_TEST_URL`).
 
 ### 세금 계산기 tool calling
 
 질문에서 계산 의도를 감지(금액 표현 + "얼마"/"계산" 등 키워드 게이트, LLM 호출 없음)하면 LLM 1회 호출로 계산기 종류와 입력값을 JSON으로 추출합니다.
-pydantic 스키마로 검증 후 DB 세율표 기반 계산기를 실행하며, RAG 검색과 병렬로 처리되어 지연시간을 추가하지 않습니다.
+공통 도구 계층에서 Pydantic 스키마로 검증 후 DB 세율표 기반 계산기를 실행하고 RAG 결과와 결합합니다.
 계산 결과(단계별 금액, 근거 조문)는 최종 답변 프롬프트에 병합되고, 프론트에는 계산기 화면 프리필용 메타데이터가 별도로 전달됩니다.
 
 ### 인용 검증(citation guard) 후처리
@@ -956,7 +965,23 @@ LLM은 법조문 번호나 계산 수치를 프롬프트 지시만으로 완벽�
 
 후속 정리 검증: 최신 Docker 전체 테스트 296개 통과, 실제 Ollama 일반 생성·스트리밍·구조화 응답과 dependency `ready` 확인.
 
-### LangChain 적용 범위와 provider 중립성
+### 공통 도구 호출 계층
+
+`app/services/tools/`에서 법령 원문 조회(`law_lookup`), 로그인 사용자 PDF 검색(`document_search`), 기존 계산기 6종을 선택·실행합니다.
+이는 provider 고유 native `tool_calls`가 아니라 JSON 선택 결과를 Pydantic으로 검증하는 애플리케이션 수준 tool calling입니다. 기존 HTTP provider와 Runnable을 그대로 사용합니다.
+
+- `planner.py`: 의도 게이트 → 최근 대화 최대 4개 메시지와 질문으로 도구 하나 선택. 선택 제한 30초, 자동 재시도 없음.
+- `registry.py` / `executor.py`: 허용 목록·엄격한 인자 검증·실행 제한 30초. 사용자 ID는 모델 인자가 아닌 인증된 서버 컨텍스트에서 주입합니다.
+- `law_lookup.py`: `law/lookup_service.py`의 API·검색 공용 조회를 사용합니다. 요청한 항·호·목이 없으면 확인 불가를 반환하며 임의 원문을 만들지 않습니다.
+- `document_search.py`: 기존 사용자 격리 검색 SQL을 재사용해 PDF만 검색합니다. 문서명과 본문을 반환하고 저장되지 않은 페이지 번호는 만들지 않습니다.
+- `calculator/engine.py`: LLM 입력 추출을 제거하고 계산 실행·결과 포맷만 유지합니다. 계산기 API는 기존 도메인 함수를 직접 사용합니다.
+
+명시적 법령·문서 도구 실행 후에는 일반 RAG·웹 검색을 다시 하지 않습니다. 계산 도구는 기존 RAG와 최종 답변을 결합하며 계산기 프리필 메타데이터를 유지합니다. 일반·SSE 채팅 모두 같은 준비 경로를 사용합니다.
+조회 결과는 길이를 제한하고 생략 여부를 표시합니다. 문서 본문의 지시는 실행 명령으로 취급하지 않습니다.
+
+현재 한 질문에서 여러 도구를 연쇄 실행하지 않습니다. 계산기의 기존 기본값·세율표 정확성 검증 및 문서 페이지 추적은 별도 과제입니다. 테스트와 실행 스모크는 답변의 법적 정확도 평가를 대체하지 않습니다.
+
+### LangChain 파이프라인 상세
 
 `app/services/ai_pipeline.py`는 모델 SDK를 가져오지 않고 기존 `call_llm`·`call_llm_structured`·`stream_llm` 함수를 받아 처리 단계를 연결합니다.
 

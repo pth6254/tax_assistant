@@ -1,5 +1,31 @@
 # 세션 인수인계
 
+## 2026-09-07 계산 실패 정책 반영
+
+- 계산 실패를 0원/기본 공제로 반환하지 않는다. errors.py의 안전한 오류 계약을 API와 도구가 공유하며 실패 답변은 최종 LLM을 우회한다. 변경된 기대값(빈 세율표는 오류, 잘못된 도구 인자는 입력 오류)에 맞춰 테스트를 수정했다.
+- 백엔드 372개·프런트 6개와 Docker 프런트 build, 합성 API 브라우저 검증 통과. 기존 DB를 변조하지 않고 mock으로 장애를 주입했다. 이번 변경은 법정 세율·수식 정확성 인증이 아니다.
+- 다음 검증: 세목별 실제 적용 범위·시행연도·공제 한도·Decimal 반올림 및 부분적으로 손상된 세율표 검증을 통합 평가기에 포함할 것. 데이터 보정 필요 여부는 별도 감사 후 결정한다.
+- 양도소득세의 주식/기타 선택지는 화면에 남아 있으나 실행하면 미지원 안내한다. 별도 계산식 구현 전 부동산 공식을 재사용하지 않는다.
+- 실행 시 현재 Ollama 구성은 dev/docker-up-wsl.sh를 사용한다. 직접 docker compose 호출 시 자동 탐지 환경변수 OLLAMA_WINDOWS_IP가 없어 실패할 수 있다.
+
+
+## 2026-09-05 도구 카드·SSE·대화 복원 완료
+
+- ToolCallCard.jsx와 toolState.js가 도구 진행/결과를 표시한다. 문서 본문은 React 텍스트 노드로만 렌더링한다. 법령 성공은 원문 뷰어, 계산 성공은 프리필 화면으로 연결한다.
+- 공통 planner의 on_event callback → chat_service 준비 태스크/큐 → SSE 경로다. 연결 종료 시 준비 태스크를 취소한다. 최종 결과만 저장하고 LLM history에는 role/content만 전달한다.
+- backend 352 tests, frontend 5 tests/build, 합성 API 브라우저 smoke, 실제 Ollama 스트리밍 이벤트 확인 완료. 브라우저 검증은 로컬 preview에서 진행했으며 실제 계정·문서 데이터는 수정하지 않았다.
+- 브라우저 테스트는 tests/tools.browser.cjs(프런트 디렉터리 기준)이며 Playwright·Edge가 필요하다. 의존성은 제품 런타임에 추가하지 않았다.
+- 남은 별도 과제: Docker frontend npm install 출력에서 취약점 2건(moderate 1, high 1)이 보고됐다. 이번 기능 작업에서는 의존성 강제 업그레이드를 하지 않았다. 통합 품질 평가기와 실제 소유 PDF 성공 경로 골든셋도 후속 과제다.
+
+## 2026-09-05 공통 도구 계층 도입
+
+- 선택은 tools/planner.py, 입력 허용 목록은 registry.py, 제한 실행은 executor.py에 있다. calculator/engine.py의 이전 extract_calculation_request/run_calculation_for_query는 제거했으며 테스트는 실제 공통 경로로 이동했다.
+- 법령 조회는 law/lookup_service.py가 단일 구현이다. 사용자 PDF는 search_user_documents → 기존 _search_documents의 user_id SQL 필터로 조회한다.
+- Docker 전체 테스트 346 passed. 실제 Ollama의 법령·문서·계산기 선택과 법령 조회·계산 실행, 문서 없는 사용자 not_found 확인.
+- 후속: 통합 평가기 구축, 다중 도구 연쇄 실행 여부 결정, 실제 소유 PDF 성공 경로 골든셋 추가. 문서 페이지 번호는 현재 반환하지 않는다.
+- DB/모델/사용자 대화 데이터 삭제·추가 없음. 기존 테스트는 유지·이관했으며 새 도구 보안·실패 경계 테스트를 추가했다.
+- 최종 답변 생성·인용 guard까지 실제 호출 성공(대화 조회·저장만 mock). 인용은 단순 문자열 대신 운영 extract_citations로 정규화해서 비교해야 한다. dependency ready 확인, git diff --check 통과.
+
 ## 2026-09-05 app 정리 완료
 
 - 미사용 검색 wrapper와 `calculator/updater.py` 제거, 네 계산기의 누진세율 적용은 `calculator/brackets.py`로 통합. README 구조도도 갱신했다.

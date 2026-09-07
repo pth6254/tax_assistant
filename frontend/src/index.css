@@ -145,3 +145,14 @@ select:focus {
 .btn-primary:hover:not(:disabled) { opacity: .88; }
 .btn-primary:active:not(:disabled) { transform: scale(.98); }
 .btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+/* 도구 결과는 HTML 해석 없이 React 텍스트로 표시한다. */
+.tool-action {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--accent2);
+  cursor: pointer;
+}
+.tool-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

@@ -5,7 +5,7 @@ GET /api/law-articles/lookup?law_name=...&article_no=...  조문 원문 뷰어�
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.schemas.law import LawArticleDetail
-from app.services.search.hybrid_search_service import get_law_article
+from app.services.law.lookup_service import get_law_article
 from app.core.security import verify_token
 
 router = APIRouter(prefix="/api/law-articles", tags=["law"])

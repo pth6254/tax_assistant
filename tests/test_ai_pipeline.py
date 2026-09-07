@@ -12,6 +12,7 @@ from app.schemas.ai_output import CitationList, QueryClassification
 from app.services import chat_service
 from app.services.ai_pipeline import chat_prompt, output_parser, streaming_chain, text_chain, to_provider_messages
 from app.services.calculator import engine
+from app.services.tools import planner
 
 
 def test_prompt_preserves_json_braces_and_history_roles():
@@ -117,18 +118,20 @@ async def test_keyword_classification_still_skips_llm(monkeypatch):
     {}, {"income": "50000000"}, {"income": 50000000, "invented": 1},
 ])
 async def test_invalid_tool_inputs_never_reach_calculator(monkeypatch, params):
-    monkeypatch.setattr(engine, "call_llm", AsyncMock(return_value=json.dumps({"tool": "income_tax", "params": params})))
+    monkeypatch.setattr(planner, "call_llm", AsyncMock(return_value=json.dumps({"tool": "income_tax", "params": params})))
     calculate = AsyncMock()
     monkeypatch.setattr(engine.income_tax, "calculate", calculate)
-    assert await engine.run_calculation_for_query("소득 5000만원 세금 계산해줘") is None
+    result = await planner.run_tools_for_query("소득 5000만원 세금 계산해줘", user_id=str(uuid4()))
+    assert result.calculation is None
+    assert result.status == ("needs_input" if not params else "invalid_arguments")
     calculate.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_valid_tool_extraction_preserves_params(monkeypatch):
     call = AsyncMock(return_value='{"tool":"income_tax","params":{"income":50000000}}')
-    monkeypatch.setattr(engine, "call_llm", call)
-    assert await engine.extract_calculation_request("소득 5000만원") == ("income_tax", {"income": 50000000})
+    monkeypatch.setattr(planner, "call_llm", call)
+    assert await planner.select_tool("소득 5000만원") == ("income_tax", {"income": 50000000})
     assert call.call_args.kwargs == {"temperature": 0.0, "max_tokens": 400}
 
 
@@ -160,7 +163,6 @@ async def test_streaming_chat_keeps_footer_events_and_saved_answer(monkeypatch):
     monkeypatch.setattr(chat_service, "_save_history", save)
     conv_id = uuid4()
     events = [e async for e in chat_service.stream_chat_response("질문", str(conv_id), "test-user")]
-    await asyncio.gather(*list(chat_service._bg_tasks))
     assert events == [
         {"type": "chunk", "text": "hello "}, {"type": "chunk", "text": "world"},
         {"type": "chunk", "text": " footer"},

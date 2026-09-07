@@ -2,6 +2,7 @@ import logging
 from datetime import date
 
 from app.database import get_pool
+from app.services.calculator.errors import CalculationError, classify_error
 
 logger = logging.getLogger(__name__)
 
@@ -20,12 +21,11 @@ async def get_brackets(tax_type: str, category: str = 'default', as_of: date | N
                 LIMIT 20
             """, tax_type, category, as_of)
         if not rows:
-            return []
+            raise CalculationError("missing_tax_data")
         latest_date = rows[0]['effective_date']
         return [dict(r) for r in rows if r['effective_date'] == latest_date]
-    except Exception as e:
-        logger.warning("get_brackets 실패 tax_type=%s category=%s: %s", tax_type, category, e)
-        return []
+    except Exception as exc:
+        raise classify_error(exc, operation="tax_repository") from exc
 
 
 async def get_deduction(tax_type: str, deduction_name: str, as_of: date | None = None) -> dict | None:
@@ -41,10 +41,11 @@ async def get_deduction(tax_type: str, deduction_name: str, as_of: date | None =
                 ORDER BY effective_date DESC
                 LIMIT 1
             """, tax_type, deduction_name, as_of)
-        return dict(row) if row else None
-    except Exception as e:
-        logger.warning("get_deduction 실패 tax_type=%s name=%s: %s", tax_type, deduction_name, e)
-        return None
+        if row is None:
+            raise CalculationError("missing_tax_data")
+        return dict(row)
+    except Exception as exc:
+        raise classify_error(exc, operation="tax_repository") from exc
 
 
 async def get_source_articles(tax_type: str) -> list[str]:
@@ -60,6 +61,5 @@ async def get_source_articles(tax_type: str) -> list[str]:
                 ) t
             """, tax_type)
         return [r['source_article'] for r in rows]
-    except Exception as e:
-        logger.warning("get_source_articles 실패 tax_type=%s: %s", tax_type, e)
-        return []
+    except Exception as exc:
+        raise classify_error(exc, operation="tax_repository") from exc

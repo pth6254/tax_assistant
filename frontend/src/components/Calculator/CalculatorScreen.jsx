@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { calcIncomeTax, calcCapitalGains, calcInheritance, calcGiftTax, calcVat, calcPenaltyTax } from '../../api/calculatorApi'
 import ResultCard from './ResultCard'
 
@@ -175,11 +175,15 @@ export default function CalculatorScreen({ initial, onInitialConsumed, onAskAbou
   const [form, setForm] = useState({ ...FORMS.income.defaults })
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(null)
+  const revision = useRef(0)
+  const invalidate = () => { revision.current += 1; setResult(null); setError(null); setLoading(false) }
+  useEffect(() => () => { revision.current += 1 }, [])
 
   // 챗봇에서 "계산기에서 조건 바꿔보기"로 넘어온 경우 해당 탭 + 입력값 프리필
   useEffect(() => {
     if (!initial) return
+    invalidate()
     const tabKey = TOOL_TO_TAB[initial.tool]
     if (tabKey) {
       setTab(tabKey)
@@ -192,6 +196,7 @@ export default function CalculatorScreen({ initial, onInitialConsumed, onAskAbou
   }, [initial])
 
   const handleTabChange = (key) => {
+    invalidate()
     setTab(key)
     setForm({ ...FORMS[key].defaults })
     setResult(null)
@@ -199,16 +204,20 @@ export default function CalculatorScreen({ initial, onInitialConsumed, onAskAbou
   }
 
   const handleChange = (key, value) => {
+    invalidate()
     setForm(prev => ({ ...prev, [key]: value }))
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    const requestRevision = ++revision.current
+    setResult(null)
+    setError(null)
     const { apiFn, fields, toPayload } = FORMS[tab]
 
-    const missing = fields.filter(f => f.required && !form[f.key])
+    const missing = fields.filter(f => f.required && (form[f.key] === '' || form[f.key] == null))
     if (missing.length) {
-      setError(`필수 항목을 입력하세요: ${missing.map(f => f.label).join(', ')}`)
+      setError({ message: `필수 항목을 입력하세요: ${missing.map(f => f.label).join(', ')}`, retryable: false })
       return
     }
 
@@ -217,11 +226,11 @@ export default function CalculatorScreen({ initial, onInitialConsumed, onAskAbou
     setResult(null)
     try {
       const data = await apiFn(toPayload(form))
-      setResult(data)
+      if (requestRevision === revision.current) setResult(data)
     } catch (err) {
-      setError(err.message)
+      if (requestRevision === revision.current) setError({ message: err.message, retryable: err.retryable === true })
     } finally {
-      setLoading(false)
+      if (requestRevision === revision.current) setLoading(false)
     }
   }
 
@@ -321,7 +330,8 @@ export default function CalculatorScreen({ initial, onInitialConsumed, onAskAbou
                   border: '1px solid rgba(255,92,92,.15)',
                   borderRadius: 8,
                 }}>
-                  {error}
+                  <span role="alert">{error.message}</span>
+                  <div>세액을 산출하지 않았습니다. 0원이라는 뜻이 아닙니다.</div>
                 </div>
               )}
 
@@ -348,7 +358,7 @@ export default function CalculatorScreen({ initial, onInitialConsumed, onAskAbou
                     display: 'inline-block',
                   }} />
                 )}
-                {loading ? '계산 중…' : '계산하기'}
+                {loading ? '계산 중…' : error?.retryable ? '다시 계산하기' : '계산하기'}
               </button>
             </div>
           </form>
@@ -364,7 +374,7 @@ export default function CalculatorScreen({ initial, onInitialConsumed, onAskAbou
                 borderRadius: 'var(--radius)',
               }}>
                 <div style={{ fontSize: 28, marginBottom: 10, opacity: .3 }}>📊</div>
-                금액을 입력하고 계산하기를 누르세요.
+                {error ? '계산을 완료하지 못했습니다. 입력란의 안내를 확인해 주세요.' : '금액을 입력하고 계산하기를 누르세요.'}
               </div>
             )}
             {result && (

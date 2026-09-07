@@ -1,4 +1,7 @@
-from pydantic import BaseModel
+from typing import Annotated
+from pydantic import BaseModel, Field
+
+NonNegativeInt = Annotated[int, Field(ge=0, strict=True)]
 
 
 # ── 응답 스키마 ──────────────────────────────────────────────────────
@@ -21,45 +24,45 @@ class CalculationResult(BaseModel):
 # ── 요청 스키마 ──────────────────────────────────────────────────────
 
 class IncomeTaxRequest(BaseModel):
-    income: int
-    expense: int = 0
-    personal_deduction_count: int = 1
-    other_deductions: int = 0
+    income: NonNegativeInt
+    expense: NonNegativeInt = 0
+    personal_deduction_count: NonNegativeInt = 1
+    other_deductions: NonNegativeInt = 0
 
 
 class CapitalGainsRequest(BaseModel):
-    transfer_price: int
-    acquisition_price: int
-    expenses: int = 0
-    holding_years: int = 0
+    transfer_price: NonNegativeInt
+    acquisition_price: NonNegativeInt
+    expenses: NonNegativeInt = 0
+    holding_years: NonNegativeInt = 0
     asset_type: str = "부동산"
     is_one_home: bool = False
 
 
 class InheritanceRequest(BaseModel):
-    estate_value: int
-    debts: int = 0
-    spouse_inheritance: int = 0
-    children_count: int = 0
+    estate_value: NonNegativeInt
+    debts: NonNegativeInt = 0
+    spouse_inheritance: NonNegativeInt = 0
+    children_count: NonNegativeInt = 0
 
 
 class GiftTaxRequest(BaseModel):
-    gift_amount: int
+    gift_amount: NonNegativeInt
     relation: str = "기타"
     is_minor: bool = False
-    prior_gifts_10y: int = 0
+    prior_gifts_10y: NonNegativeInt = 0
 
 
 class VatRequest(BaseModel):
-    sales: int
-    purchases: int = 0
-    exempt_sales: int = 0
+    sales: NonNegativeInt
+    purchases: NonNegativeInt = 0
+    exempt_sales: NonNegativeInt = 0
     is_simplified: bool = False
     business_type: str = "소매업"
 
 
 class PenaltyTaxRequest(BaseModel):
-    unpaid_tax: int
+    unpaid_tax: NonNegativeInt
     penalty_type: str = "무신고"       # 무신고 | 과소신고 | 납부지연
     is_negligent: bool = False        # 부정행위(사기·기타 부정한 방법) 여부 — 무신고/과소신고에만 적용
-    days_late: int = 0                # 납부지연에만 적용
+    days_late: NonNegativeInt = 0                # 납부지연에만 적용

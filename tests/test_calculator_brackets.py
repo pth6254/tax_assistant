@@ -33,7 +33,9 @@ def test_progressive_boundaries_and_input_order(taxable, expected):
 
 
 def test_empty_brackets():
-    assert apply_progressive_tax(100, []) == (0, "0%")
+    from app.services.calculator.errors import CalculationError
+    with pytest.raises(CalculationError):
+        apply_progressive_tax(100, [])
 
 
 def test_single_rate():

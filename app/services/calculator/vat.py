@@ -1,9 +1,8 @@
-import logging
+from app.services.calculator.errors import CalculationError, require_value
 
 from app.schemas.calculator import CalculationResult, TaxStep
 from app.services.calculator.repository import get_brackets, get_source_articles
 
-logger = logging.getLogger(__name__)
 
 # 간이과세자 업종별 부가가치율 (부가가치세법 시행령 제109조 별표) — 실무 빈출 업종만 지원
 _SIMPLIFIED_VALUE_ADDED_RATE = {
@@ -15,7 +14,6 @@ _SIMPLIFIED_VALUE_ADDED_RATE = {
     "서비스업":   0.30,
     "부동산임대업": 0.40,
 }
-_DEFAULT_SIMPLIFIED_RATE = 0.15
 
 
 async def calculate(
@@ -25,18 +23,20 @@ async def calculate(
     is_simplified: bool = False,
     business_type: str = "소매업",
 ) -> CalculationResult:
+    if is_simplified and business_type not in _SIMPLIFIED_VALUE_ADDED_RATE:
+        raise CalculationError('unsupported_condition')
     steps: list[TaxStep] = []
 
     taxable_sales = max(0, sales - exempt_sales)
     steps.append(TaxStep(label="과세매출(영세율·면세 제외)", amount=taxable_sales))
 
-    vat_rate = 0.10
     brackets = await get_brackets("부가가치세", "default")
-    if brackets:
-        vat_rate = float(brackets[0]["rate"])
+    if not brackets:
+        raise CalculationError("missing_tax_data")
+    vat_rate = float(require_value(brackets[0], "rate"))
 
     if is_simplified:
-        value_added_rate = _SIMPLIFIED_VALUE_ADDED_RATE.get(business_type, _DEFAULT_SIMPLIFIED_RATE)
+        value_added_rate = _SIMPLIFIED_VALUE_ADDED_RATE[business_type]
         output_tax = int(taxable_sales * value_added_rate * vat_rate)
         steps.append(TaxStep(
             label=f"납부세액({business_type} 부가가치율{int(value_added_rate * 100)}%×{int(vat_rate * 100)}%)",

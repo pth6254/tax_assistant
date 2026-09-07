@@ -1,11 +1,7 @@
-import logging
-
+from app.services.calculator.errors import CalculationError, require_value
 from app.schemas.calculator import CalculationResult, TaxStep
 from app.services.calculator.brackets import apply_progressive_tax
 from app.services.calculator.repository import get_brackets, get_deduction, get_source_articles
-
-
-logger = logging.getLogger(__name__)
 
 
 async def calculate(
@@ -20,12 +16,12 @@ async def calculate(
     steps.append(TaxStep(label="순상속재산(재산-채무)", amount=net_estate))
 
     basic_deduction_row = await get_deduction('상속세', '기초공제')
-    basic_deduction = basic_deduction_row['amount'] if basic_deduction_row and basic_deduction_row.get('amount') else 200000000
+    basic_deduction = require_value(basic_deduction_row, 'amount')
 
     personal_deduction = 50000000 * children_count
 
     lump_sum_row = await get_deduction('상속세', '일괄공제')
-    lump_sum = lump_sum_row['amount'] if lump_sum_row and lump_sum_row.get('amount') else 500000000
+    lump_sum = require_value(lump_sum_row, 'amount')
 
     itemized_deduction = basic_deduction + personal_deduction
     applied_deduction = max(lump_sum, itemized_deduction)
@@ -34,7 +30,7 @@ async def calculate(
     spouse_deduction = 0
     if spouse_inheritance > 0:
         min_spouse_row = await get_deduction('상속세', '배우자상속공제_최소')
-        min_spouse = min_spouse_row['amount'] if min_spouse_row and min_spouse_row.get('amount') else 500000000
+        min_spouse = require_value(min_spouse_row, 'amount')
         spouse_deduction = max(min_spouse, spouse_inheritance)
         steps.append(TaxStep(label="배우자공제", amount=spouse_deduction))
 
@@ -43,11 +39,7 @@ async def calculate(
     steps.append(TaxStep(label="과세표준", amount=taxable))
 
     brackets = await get_brackets('상속세', 'default')
-    if brackets:
-        calculated_tax, rate_desc = apply_progressive_tax(taxable, brackets)
-    else:
-        calculated_tax, rate_desc = 0, "0%"
-        logger.warning("상속세 세율 구간 조회 실패 — 세액 0 처리")
+    calculated_tax, rate_desc = apply_progressive_tax(taxable, brackets)
 
     steps.append(TaxStep(label=f"산출세액({rate_desc})", amount=calculated_tax))
 

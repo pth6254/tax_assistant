@@ -1,11 +1,7 @@
-import logging
-
+from app.services.calculator.errors import CalculationError, require_value
 from app.schemas.calculator import CalculationResult, TaxStep
 from app.services.calculator.brackets import apply_progressive_tax
 from app.services.calculator.repository import get_brackets, get_deduction, get_source_articles
-
-
-logger = logging.getLogger(__name__)
 
 _DEDUCTION_NAME_MAP = {
     '배우자':   '증여재산공제_배우자',
@@ -21,6 +17,8 @@ async def calculate(
     is_minor: bool = False,
     prior_gifts_10y: int = 0,
 ) -> CalculationResult:
+    if relation not in {*_DEDUCTION_NAME_MAP, '기타'}:
+        raise CalculationError('unsupported_condition')
     steps: list[TaxStep] = []
 
     taxable_base = gift_amount + prior_gifts_10y
@@ -35,8 +33,7 @@ async def calculate(
 
     if deduction_name:
         row = await get_deduction('증여세', deduction_name)
-        if row and row.get('amount'):
-            deduction = row['amount']
+        deduction = require_value(row, 'amount')
 
     steps.append(TaxStep(label=f"증여재산공제({relation})", amount=deduction))
 
@@ -44,11 +41,7 @@ async def calculate(
     steps.append(TaxStep(label="과세표준", amount=taxable))
 
     brackets = await get_brackets('증여세', 'default')
-    if brackets:
-        calculated_tax, rate_desc = apply_progressive_tax(taxable, brackets)
-    else:
-        calculated_tax, rate_desc = 0, "0%"
-        logger.warning("증여세 세율 구간 조회 실패 — 세액 0 처리")
+    calculated_tax, rate_desc = apply_progressive_tax(taxable, brackets)
 
     steps.append(TaxStep(label=f"산출세액({rate_desc})", amount=calculated_tax))
 

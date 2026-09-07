@@ -28,12 +28,15 @@ async def chat(
             conn, body.conversation_id, user["id"],
         )
 
+    tool_events = []
     answer, calculator = await chat_service.process_chat(
         query=body.query,
         conversation_id=str(conversation_id),
         user_id=user["id"],
+        tool_events=tool_events,
     )
-    return {"output": answer, "calculator": calculator}
+    return {"output": answer, "calculator": calculator,
+            "tools": [e for e in tool_events if e["status"] not in {"selecting", "running"}]}
 
 
 @router.post("/chat/stream")
@@ -41,7 +44,7 @@ async def chat_stream(
     body: ChatRequest,
     user: dict = Depends(verify_token),
 ):
-    """SSE 스트리밍 응답. {"type": "chunk"|"calc", ...} 이벤트를 전송한다."""
+    """SSE 스트리밍 응답. tool/chunk/calc 이벤트와 저장 후 DONE을 전송한다."""
     # StreamingResponse가 헤더를 전송하기 전에 소유권을 확인해야 오류를
     # 정상적인 HTTP 404로 반환할 수 있다.
     pool = await get_pool()

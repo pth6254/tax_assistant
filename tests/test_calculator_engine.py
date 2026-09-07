@@ -8,11 +8,16 @@ from unittest.mock import AsyncMock, patch
 
 from app.schemas.calculator import CalculationResult, TaxStep
 from app.services.calculator.engine import (
-    extract_calculation_request,
     format_calculation_context,
-    has_calculation_intent,
-    run_calculation_for_query,
 )
+
+
+from app.services.tools.planner import has_calculation_intent, select_tool as extract_calculation_request
+from app.services.tools.planner import run_tools_for_query
+
+async def run_calculation_for_query(query):
+    result = await run_tools_for_query(query, user_id="00000000-0000-0000-0000-000000000001")
+    return result.calculation if result else None
 
 
 # ── has_calculation_intent (키워드 게이트) ───────────────────────
@@ -41,28 +46,29 @@ def test_calculation_intent_not_detected(query):
 @pytest.mark.asyncio
 async def test_extraction_plain_json():
     raw = '{"tool": "income_tax", "params": {"income": 50000000}}'
-    with patch("app.services.calculator.engine.call_llm", AsyncMock(return_value=raw)):
+    with patch("app.services.tools.planner.call_llm", AsyncMock(return_value=raw)):
         assert await extract_calculation_request("소득 5천만원") == ("income_tax", {"income": 50000000})
 
 
 @pytest.mark.asyncio
 async def test_extraction_json_in_code_fence():
     raw = '```json\n{"tool": "gift", "params": {"gift_amount": 300000000}}\n```'
-    with patch("app.services.calculator.engine.call_llm", AsyncMock(return_value=raw)):
+    with patch("app.services.tools.planner.call_llm", AsyncMock(return_value=raw)):
         assert await extract_calculation_request("증여 3억") == ("gift", {"gift_amount": 300000000})
 
 
 @pytest.mark.asyncio
 async def test_extraction_json_after_think_block():
     raw = '<think>어떤 계산기...</think>{"tool": "none"}'
-    with patch("app.services.calculator.engine.call_llm", AsyncMock(return_value=raw)):
+    with patch("app.services.tools.planner.call_llm", AsyncMock(return_value=raw)):
         assert await extract_calculation_request("안녕하세요") is None
 
 
 @pytest.mark.asyncio
 async def test_extraction_invalid_returns_none():
-    with patch("app.services.calculator.engine.call_llm", AsyncMock(return_value="죄송합니다, 판단할 수 없습니다.")):
-        assert await extract_calculation_request("계산해줘") is None
+    with patch("app.services.tools.planner.call_llm", AsyncMock(return_value="죄송합니다, 판단할 수 없습니다.")):
+        with pytest.raises(Exception):
+            await extract_calculation_request("계산해줘")
 
 
 # ── format_calculation_context ───────────────────────────────────
@@ -98,7 +104,7 @@ def _dummy_result() -> CalculationResult:
 async def test_run_calculation_full_flow():
     with (
         patch(
-            "app.services.calculator.engine.extract_calculation_request",
+            "app.services.tools.planner.select_tool",
             AsyncMock(return_value=("income_tax", {"income": 50000000})),
         ),
         patch(
@@ -123,7 +129,7 @@ async def test_run_calculation_full_flow():
 async def test_run_calculation_skips_without_intent():
     """게이트 불통과 시 LLM 추출 자체를 호출하지 않는다."""
     with patch(
-        "app.services.calculator.engine.extract_calculation_request", AsyncMock()
+        "app.services.tools.planner.select_tool", AsyncMock()
     ) as mock_extract:
         text = await run_calculation_for_query("경정청구 기한은 얼마나 되나요?")
     assert text is None
@@ -134,7 +140,7 @@ async def test_run_calculation_skips_without_intent():
 async def test_run_calculation_invalid_params_returns_none():
     """스키마 검증 실패(income 누락) 시 None — 채팅은 RAG로 정상 진행."""
     with patch(
-        "app.services.calculator.engine.extract_calculation_request",
+        "app.services.tools.planner.select_tool",
         AsyncMock(return_value=("income_tax", {"expense": 1000})),
     ):
         text = await run_calculation_for_query("세금 5천만원 얼마 계산해줘")
@@ -144,7 +150,7 @@ async def test_run_calculation_invalid_params_returns_none():
 @pytest.mark.asyncio
 async def test_run_calculation_extraction_none_returns_none():
     with patch(
-        "app.services.calculator.engine.extract_calculation_request",
+        "app.services.tools.planner.select_tool",
         AsyncMock(return_value=None),
     ):
         text = await run_calculation_for_query("세금 5천만원 얼마 계산해줘")
@@ -165,7 +171,7 @@ def _dummy_vat_result() -> CalculationResult:
 async def test_run_calculation_routes_to_vat():
     with (
         patch(
-            "app.services.calculator.engine.extract_calculation_request",
+            "app.services.tools.planner.select_tool",
             AsyncMock(return_value=("vat", {"sales": 100000000, "purchases": 60000000})),
         ),
         patch(
@@ -194,7 +200,7 @@ def _dummy_penalty_result() -> CalculationResult:
 async def test_run_calculation_routes_to_penalty_tax():
     with (
         patch(
-            "app.services.calculator.engine.extract_calculation_request",
+            "app.services.tools.planner.select_tool",
             AsyncMock(return_value=("penalty_tax", {"unpaid_tax": 10000000, "penalty_type": "무신고"})),
         ),
         patch(

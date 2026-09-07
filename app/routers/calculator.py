@@ -1,4 +1,6 @@
+import asyncio
 import logging
+from app.services.calculator.errors import classify_error
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -24,16 +26,7 @@ async def calc_income_tax(
     req: IncomeTaxRequest,
     user: dict = Depends(verify_token),
 ):
-    try:
-        return await income_tax.calculate(
-            income=req.income,
-            expense=req.expense,
-            personal_deduction_count=req.personal_deduction_count,
-            other_deductions=req.other_deductions,
-        )
-    except Exception as e:
-        logger.warning("소득세 계산 오류: %s", e)
-        raise HTTPException(status_code=400, detail=str(e))
+    return await _calculate(income_tax.calculate, req)
 
 
 @router.post("/capital-gains", response_model=CalculationResult)
@@ -41,18 +34,7 @@ async def calc_capital_gains(
     req: CapitalGainsRequest,
     user: dict = Depends(verify_token),
 ):
-    try:
-        return await capital_gains.calculate(
-            transfer_price=req.transfer_price,
-            acquisition_price=req.acquisition_price,
-            expenses=req.expenses,
-            holding_years=req.holding_years,
-            asset_type=req.asset_type,
-            is_one_home=req.is_one_home,
-        )
-    except Exception as e:
-        logger.warning("양도소득세 계산 오류: %s", e)
-        raise HTTPException(status_code=400, detail=str(e))
+    return await _calculate(capital_gains.calculate, req)
 
 
 @router.post("/inheritance", response_model=CalculationResult)
@@ -60,16 +42,7 @@ async def calc_inheritance(
     req: InheritanceRequest,
     user: dict = Depends(verify_token),
 ):
-    try:
-        return await inheritance.calculate(
-            estate_value=req.estate_value,
-            debts=req.debts,
-            spouse_inheritance=req.spouse_inheritance,
-            children_count=req.children_count,
-        )
-    except Exception as e:
-        logger.warning("상속세 계산 오류: %s", e)
-        raise HTTPException(status_code=400, detail=str(e))
+    return await _calculate(inheritance.calculate, req)
 
 
 @router.post("/gift", response_model=CalculationResult)
@@ -77,16 +50,7 @@ async def calc_gift_tax(
     req: GiftTaxRequest,
     user: dict = Depends(verify_token),
 ):
-    try:
-        return await gift_tax.calculate(
-            gift_amount=req.gift_amount,
-            relation=req.relation,
-            is_minor=req.is_minor,
-            prior_gifts_10y=req.prior_gifts_10y,
-        )
-    except Exception as e:
-        logger.warning("증여세 계산 오류: %s", e)
-        raise HTTPException(status_code=400, detail=str(e))
+    return await _calculate(gift_tax.calculate, req)
 
 
 @router.post("/vat", response_model=CalculationResult)
@@ -94,17 +58,7 @@ async def calc_vat(
     req: VatRequest,
     user: dict = Depends(verify_token),
 ):
-    try:
-        return await vat.calculate(
-            sales=req.sales,
-            purchases=req.purchases,
-            exempt_sales=req.exempt_sales,
-            is_simplified=req.is_simplified,
-            business_type=req.business_type,
-        )
-    except Exception as e:
-        logger.warning("부가가치세 계산 오류: %s", e)
-        raise HTTPException(status_code=400, detail=str(e))
+    return await _calculate(vat.calculate, req)
 
 
 @router.post("/penalty-tax", response_model=CalculationResult)
@@ -112,13 +66,13 @@ async def calc_penalty_tax(
     req: PenaltyTaxRequest,
     user: dict = Depends(verify_token),
 ):
+    return await _calculate(penalty_tax.calculate, req)
+
+
+async def _calculate(calculate, request):
     try:
-        return await penalty_tax.calculate(
-            unpaid_tax=req.unpaid_tax,
-            penalty_type=req.penalty_type,
-            is_negligent=req.is_negligent,
-            days_late=req.days_late,
-        )
-    except Exception as e:
-        logger.warning("가산세 계산 오류: %s", e)
-        raise HTTPException(status_code=400, detail=str(e))
+        async with asyncio.timeout(30):
+            return await calculate(**request.model_dump())
+    except Exception as exc:
+        error = classify_error(exc, operation=calculate.__module__)
+        raise HTTPException(status_code=error.http_status, detail=error.detail()) from exc

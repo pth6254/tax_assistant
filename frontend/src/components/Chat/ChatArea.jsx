@@ -6,9 +6,9 @@ import ArticleViewer from './ArticleViewer'
 import AiServiceStatus from './AiServiceStatus'
 
 const QUICK_QUESTIONS = [
-  '양도소득세 계산 방법을 알려주세요',
-  '1세대 1주택 비과세 요건이 무엇인가요?',
-  '증여세 공제 한도가 얼마인가요?',
+  '소득세법 제55조 원문을 보여주세요',
+  '내가 업로드한 계약서에서 지급 조건을 찾아주세요',
+  '연소득 5천만원인 프리랜서의 소득세를 계산해주세요',
 ]
 
 function TypingIndicator() {
@@ -186,7 +186,7 @@ export default function ChatArea({ user, conversationId, conversationTitle, onMe
           />
         ))}
 
-        {loading && <TypingIndicator />}
+        {loading && !messages.at(-1)?.tools?.some(t => ['selecting', 'running'].includes(t.status)) && <TypingIndicator />}
         <div ref={bottomRef} />
       </div>
 

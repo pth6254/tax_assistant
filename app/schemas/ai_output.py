@@ -24,8 +24,3 @@ class Citation(AIOutput):
 
 class CitationList(AIOutput):
     citations: list[Citation]
-
-
-class CalculationExtraction(AIOutput):
-    tool: Literal["none", "income_tax", "capital_gains", "inheritance", "gift", "vat", "penalty_tax"]
-    params: dict = Field(default_factory=dict)

@@ -1,5 +1,34 @@
 # 현재 구현 상태
 
+## 2026-09-07 계산 실패 원인 분리
+
+- calculator/errors.py에서 데이터 누락·DB 연결·시간 초과·미지원 조건·내부 오류를 분류한다. API는 안전한 detail(code/message/retryable), 도구 이벤트는 error_code/retryable을 전달한다. 입력 누락과 잘못된 타입·음수도 분리한다.
+- 세율 조회 실패의 0원 처리와 DB 공제·세율 기본값 fallback 제거. 정상 0원·부가세 음수 환급은 유지한다. 납부지연 일일 세율 등 명시적 업무 상수는 변경하지 않았다.
+- 계산 실패는 RAG/웹 검색과 최종 생성 LLM을 우회해 서버 고정 안내를 저장·반환한다. 실패 시 calculator 메타데이터·calc 성공 이벤트가 없다. 도구 선택 실패도 결과를 추측하지 않고 재질문한다.
+- 계산기 입력 변경·재제출·탭 전환 시 이전 결과를 제거하고 늦은 응답을 무시한다. 오류는 기존 화면 및 펼쳐진 도구 카드로 표시하며 일시 장애는 재계산을 안내한다. 자동 재시도 없음.
+- 주식·기타 자산, 알 수 없는 증여 관계·가산세 종류·간이 업종은 기본 공식으로 대체하지 않고 미지원 처리한다.
+- WSL venv + dev/docker-up-wsl.sh로 Docker backend/frontend 재빌드. backend 372 passed(기존 경고 26), frontend 6 tests/build 통과. 합성 API Edge 브라우저에서 정상 0원·입력 누락·이전 결과 제거·데이터 누락 실패 확인. DB 삭제·세율 보정·모델 변경 없음.
+
+
+## 2026-09-05 도구 호출 프런트엔드 연결
+
+- 서버 실제 선택·실행 단계의 tool 이벤트를 SSE로 전달하고 일반 API에도 tools 배열을 반환한다. 도구 조회 원문/발췌문·계산기 조건 변경 카드, 법령 뷰어 연결을 추가했다.
+- 최종 도구 결과는 기존 chat_logs.message JSON에 저장하며 대화 재조회 시 복원한다. DB 스키마 변경은 없으며 LLM 대화 이력에서는 UI 메타데이터를 제외한다.
+- SSE 완료 신호는 저장 이후 전송한다. 프런트는 대화 전환 시 이전 fetch를 취소하고 늦게 도착한 응답을 차단한다. 비정상 EOF는 성공이 아닌 연결 중단으로 표시한다.
+- WSL venv 활성화 후 backend/frontend Docker 재빌드 완료. 최신 backend pytest 352 passed(기존 계열 경고 26개), 프런트 npm test 5개·npm run build 통과.
+- Edge headless + 합성 API로 카드 복원·법령 뷰어·문서 HTML 이스케이프·SSE not_found·계산기 프리필 확인. 실제 Ollama 스트리밍 selecting→running→ok 및 답변 생성 확인(대화 조회/저장만 mock).
+
+## 2026-09-05 법령·사용자 문서·계산기 공통 도구 호출
+
+- tools/planner.py·registry.py·executor.py 및 법령·문서 어댑터 추가. JSON 선택 기반 provider 중립 도구 호출이며 native tool_calls는 아니다.
+- calculator/engine.py에서 LLM 선택·추출을 제거하고 계산 실행·포맷을 유지했다. 미사용 CalculationExtraction 스키마도 제거했다.
+- 검색 서비스 안의 법령 조회를 law/lookup_service.py로 추출, 라우터와 도구가 공유한다. PDF 검색은 기존 사용자 격리 SQL을 공유하는 공개 진입점을 추가했다.
+- 일반/SSE 채팅에 연결했으며 명시적 원문·문서 조회는 중복 RAG·웹 호출을 생략한다. 계산기 프리필 메타데이터는 유지한다.
+- WSL venv 활성화 후 dev/docker-up-wsl.sh backend 재빌드, 최신 Docker 전체 pytest 346 passed(기존 경고 24개).
+- 실제 Ollama 선택 + DB 법령 원문 조회 성공, 임시 사용자 문서 검색 not_found, 소득세 계산 실행 성공. 사용자 문서 내용 및 DB 데이터를 수정하지 않았다.
+- 한 질문당 도구 하나만 지원한다. 문서 성공 반환·권한 주입·오류·취소·본문 생략은 자동 테스트로 검증했으며 실제 사용자 PDF 내용 검수는 하지 않았다.
+- 실제 최종 답변까지 호출해 운영 인용 파서 기준 소득세법 제55조 인용을 확인했다. 최초 단순 문자열 검사는 '제 55 조' 공백 표기를 놓쳐 실패했으므로 정규화 비교로 재검증했다. 대화 조회·저장만 mock하여 사용자 대화는 생성하지 않았다. dependency health HTTP 200 ready, git diff --check 통과.
+
 ## 2026-09-05 app 미사용 코드·계산기 중복 정리
 
 - 저장소 내부 호출이 없는 `search.hybrid_search_service.fetch_hybrid_context`와 미사용 `re` import를 제거했다.

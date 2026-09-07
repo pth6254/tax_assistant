@@ -74,6 +74,20 @@ app/schemas/ai_output.py
 app/services/ai_pipeline.py
   ChatPromptTemplate, Runnable, PydanticOutputParser를 연결하는 provider 중립 계층
 
+app/services/tools/
+  provider 중립 JSON 도구 선택, 허용 목록·인자 검증·시간 제한·서버 사용자 ID 주입
+  법령 원문 조회·사용자 문서 검색·계산기 6종을 한 질문당 하나 실행
+  SSE tool 이벤트와 일반 응답 tools 배열로 UI 상태 전달, 최종 결과는 chat_logs.message JSON 저장
+
+frontend/src/components/Chat/ToolCallCard.jsx
+  도구 상태·결과 발췌문·법령 뷰어·계산기 프리필 연결 (본문은 텍스트 렌더링)
+
+app/services/calculator/engine.py
+  계산 실행·결과 포맷만 담당 (LLM 입력 추출은 tools/planner.py)
+
+app/services/law/lookup_service.py
+  API·검색·도구 공용 조문 조회와 항·호·목 본문 대조
+
 app/services/law/reference_parser.py
   사용자 입력의 법령명·조·항·호·목 참조 파싱과 표준화
 

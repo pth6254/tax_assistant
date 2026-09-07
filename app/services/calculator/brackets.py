@@ -1,4 +1,5 @@
 """계산기별 DB 세율 구간에 공통으로 적용하는 산술 로직."""
+from app.services.calculator.errors import CalculationError
 
 
 def apply_progressive_tax(taxable: int, brackets: list[dict]) -> tuple[int, str]:
@@ -6,6 +7,8 @@ def apply_progressive_tax(taxable: int, brackets: list[dict]) -> tuple[int, str]
 
     단일세율은 bracket_from=0인 구간 하나로 처리한다.
     """
+    if not brackets:
+        raise CalculationError("missing_tax_data")
     for b in sorted(brackets, key=lambda x: x['bracket_from'], reverse=True):
         if taxable > b['bracket_from']:
             tax = int(taxable * float(b['rate'])) - b['progressive_deduction']
