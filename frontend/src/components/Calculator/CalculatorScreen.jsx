@@ -1,479 +1,71 @@
-import { useEffect, useState, useRef } from 'react'
-import { calcIncomeTax, calcCapitalGains, calcInheritance, calcGiftTax, calcVat, calcPenaltyTax } from '../../api/calculatorApi'
+import { useEffect, useRef, useState } from 'react'
+import { TOOL_TO_TAB, TABS, FORMS, buildFormFromParams, QUESTION_BUILDERS } from './forms'
 import ResultCard from './ResultCard'
-
-// 챗봇 계산기 엔진(app/services/calculator/engine.py _TOOLS)의 도구명 → 화면 탭 키
-const TOOL_TO_TAB = {
-  income_tax:    'income',
-  capital_gains: 'capital',
-  inheritance:   'inheritance',
-  gift:          'gift',
-  vat:           'vat',
-  penalty_tax:   'penalty',
-}
-
-const TABS = [
-  { key: 'income',      label: '소득세',    icon: '💼' },
-  { key: 'capital',     label: '양도소득세', icon: '🏠' },
-  { key: 'inheritance', label: '상속세',    icon: '📜' },
-  { key: 'gift',        label: '증여세',    icon: '🎁' },
-  { key: 'vat',         label: '부가가치세', icon: '🧾' },
-  { key: 'penalty',     label: '가산세',    icon: '⏰' },
-]
-
-const FORMS = {
-  income: {
-    apiFn: calcIncomeTax,
-    fields: [
-      { key: 'income',                   label: '총소득금액',    unit: '만원', required: true,  hint: '근로·사업·기타소득 합계' },
-      { key: 'expense',                  label: '필요경비',      unit: '만원', required: false, hint: '사업자만 해당' },
-      { key: 'personal_deduction_count', label: '기본공제 인원', unit: '명',   required: false, hint: '본인 포함 (기본 1명)' },
-      { key: 'other_deductions',         label: '기타공제 합계', unit: '만원', required: false, hint: '의료비·교육비 등' },
-    ],
-    defaults: { personal_deduction_count: '1' },
-    toPayload: (f) => ({
-      income:                   toWon(f.income),
-      expense:                  toWon(f.expense),
-      personal_deduction_count: toInt(f.personal_deduction_count, 1),
-      other_deductions:         toWon(f.other_deductions),
-    }),
-  },
-  capital: {
-    apiFn: calcCapitalGains,
-    fields: [
-      { key: 'transfer_price',    label: '양도가액',    unit: '만원', required: true },
-      { key: 'acquisition_price', label: '취득가액',    unit: '만원', required: true },
-      { key: 'expenses',          label: '필요경비',    unit: '만원', required: false, hint: '취득세·중개수수료 등' },
-      { key: 'holding_years',     label: '보유기간',    unit: '년',   required: false },
-      { key: 'asset_type',        label: '자산유형',    type: 'select', options: ['부동산', '주식', '기타'] },
-      { key: 'is_one_home',       label: '1세대 1주택', type: 'checkbox', hint: '비과세 적용 여부' },
-    ],
-    defaults: { asset_type: '부동산' },
-    toPayload: (f) => ({
-      transfer_price:    toWon(f.transfer_price),
-      acquisition_price: toWon(f.acquisition_price),
-      expenses:          toWon(f.expenses),
-      holding_years:     toInt(f.holding_years),
-      asset_type:        f.asset_type || '부동산',
-      is_one_home:       !!f.is_one_home,
-    }),
-  },
-  inheritance: {
-    apiFn: calcInheritance,
-    fields: [
-      { key: 'estate_value',       label: '상속재산가액', unit: '만원', required: true },
-      { key: 'debts',              label: '채무·공과금',  unit: '만원', required: false },
-      { key: 'spouse_inheritance', label: '배우자 상속액', unit: '만원', required: false },
-      { key: 'children_count',     label: '자녀 수',      unit: '명',   required: false },
-    ],
-    defaults: {},
-    toPayload: (f) => ({
-      estate_value:       toWon(f.estate_value),
-      debts:              toWon(f.debts),
-      spouse_inheritance: toWon(f.spouse_inheritance),
-      children_count:     toInt(f.children_count),
-    }),
-  },
-  gift: {
-    apiFn: calcGiftTax,
-    fields: [
-      { key: 'gift_amount',     label: '증여재산가액',       unit: '만원', required: true },
-      { key: 'relation',        label: '증여자와의 관계',     type: 'select', options: ['직계존비속', '배우자', '기타친족', '기타'] },
-      { key: 'is_minor',        label: '수증자 미성년자',     type: 'checkbox' },
-      { key: 'prior_gifts_10y', label: '10년 내 사전증여액', unit: '만원', required: false, hint: '동일인으로부터' },
-    ],
-    defaults: { relation: '기타' },
-    toPayload: (f) => ({
-      gift_amount:     toWon(f.gift_amount),
-      relation:        f.relation || '기타',
-      is_minor:        !!f.is_minor,
-      prior_gifts_10y: toWon(f.prior_gifts_10y),
-    }),
-  },
-  vat: {
-    apiFn: calcVat,
-    fields: [
-      { key: 'sales',         label: '매출액',        unit: '만원', required: true },
-      { key: 'purchases',     label: '매입액',        unit: '만원', required: false },
-      { key: 'exempt_sales',  label: '영세율·면세 매출', unit: '만원', required: false, hint: '과세매출에서 제외' },
-      { key: 'is_simplified', label: '간이과세자',      type: 'checkbox' },
-      { key: 'business_type', label: '업종',           type: 'select',
-        options: ['소매업', '음식점업', '제조업', '숙박업', '건설업', '서비스업', '부동산임대업'],
-        hint: '간이과세자만 해당' },
-    ],
-    defaults: { business_type: '소매업' },
-    toPayload: (f) => ({
-      sales:         toWon(f.sales),
-      purchases:     toWon(f.purchases),
-      exempt_sales:  toWon(f.exempt_sales),
-      is_simplified: !!f.is_simplified,
-      business_type: f.business_type || '소매업',
-    }),
-  },
-  penalty: {
-    apiFn: calcPenaltyTax,
-    fields: [
-      { key: 'unpaid_tax',    label: '무신고·과소신고·미납 세액', unit: '만원', required: true },
-      { key: 'penalty_type',  label: '가산세 종류', type: 'select', options: ['무신고', '과소신고', '납부지연'] },
-      { key: 'is_negligent',  label: '부정행위(사기·기타 부정한 방법)', type: 'checkbox', hint: '무신고·과소신고만 해당' },
-      { key: 'days_late',     label: '연체일수', unit: '일', required: false, hint: '납부지연만 해당' },
-    ],
-    defaults: { penalty_type: '무신고' },
-    toPayload: (f) => ({
-      unpaid_tax:   toWon(f.unpaid_tax),
-      penalty_type: f.penalty_type || '무신고',
-      is_negligent: !!f.is_negligent,
-      days_late:    toInt(f.days_late),
-    }),
-  },
-}
-
-const toWon   = (v) => (parseInt(v) || 0) * 10_000
-const toInt   = (v, def = 0) => parseInt(v) || def
-const fromWon = (v) => String(Math.round((v || 0) / 10_000))
-const fmtWon  = (v) => (v || 0).toLocaleString('ko-KR') + '원'
-
-// 챗봇 계산기 엔진이 전달한 원(₩) 단위 params → 화면 폼(만원 단위) 값으로 역변환
-const buildFormFromParams = (tabKey, params) => {
-  const { fields, defaults } = FORMS[tabKey]
-  const form = { ...defaults }
-  for (const field of fields) {
-    if (!(field.key in params)) continue
-    const raw = params[field.key]
-    if (field.type === 'checkbox') form[field.key] = !!raw
-    else if (field.type === 'select') form[field.key] = raw
-    else if (field.unit === '만원') form[field.key] = fromWon(raw)
-    else form[field.key] = String(raw)
-  }
-  return form
-}
-
-// 계산 결과를 챗봇에 질문하기 위한 자연어 문장 구성
-const QUESTION_BUILDERS = {
-  income: (f, r) =>
-    `총수입 ${f.income || 0}만원, 필요경비 ${f.expense || 0}만원, 부양가족 ${f.personal_deduction_count || 1}명 기준으로 ` +
-    `계산한 종합소득세 결정세액이 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인하고, 추가로 절세 방법이 있으면 알려주세요.`,
-  capital: (f, r) =>
-    `양도가액 ${f.transfer_price || 0}만원, 취득가액 ${f.acquisition_price || 0}만원, 보유기간 ${f.holding_years || 0}년 기준으로 ` +
-    `계산한 양도소득세가 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인하고, 추가로 절세 방법이 있으면 알려주세요.`,
-  inheritance: (f, r) =>
-    `상속재산 ${f.estate_value || 0}만원, 배우자 상속액 ${f.spouse_inheritance || 0}만원, 자녀 ${f.children_count || 0}명 기준으로 ` +
-    `계산한 상속세가 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인하고, 추가로 공제받을 수 있는 항목이 있으면 알려주세요.`,
-  gift: (f, r) =>
-    `증여재산 ${f.gift_amount || 0}만원을 ${f.relation || '기타'} 관계에서 증여받는 경우로 ` +
-    `계산한 증여세가 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인하고, 추가로 절세 방법이 있으면 알려주세요.`,
-  vat: (f, r) =>
-    `매출 ${f.sales || 0}만원, 매입 ${f.purchases || 0}만원${f.is_simplified ? ` (간이과세자, ${f.business_type} 업종)` : ' (일반과세자)'} 기준으로 ` +
-    `계산한 부가가치세 ${r.final_tax < 0 ? '환급세액' : '납부세액'}이 ${fmtWon(Math.abs(r.final_tax))}로 나왔습니다. 이 계산이 맞는지 확인해주세요.`,
-  penalty: (f, r) =>
-    `${f.penalty_type || '무신고'} 세액 ${f.unpaid_tax || 0}만원${f.penalty_type === '납부지연' ? ` (연체 ${f.days_late || 0}일)` : (f.is_negligent ? ' (부정행위)' : '')} 기준으로 ` +
-    `계산한 가산세 포함 납부할 총액이 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인해주세요.`,
-}
-
+import Notice from '../ui/Notice'
+import Icon from '../ui/Icon'
 export default function CalculatorScreen({ initial, onInitialConsumed, onAskAboutResult }) {
-  const [tab, setTab] = useState('income')
-  const [form, setForm] = useState({ ...FORMS.income.defaults })
-  const [result, setResult] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const revision = useRef(0)
-  const invalidate = () => { revision.current += 1; setResult(null); setError(null); setLoading(false) }
-  useEffect(() => () => { revision.current += 1 }, [])
-
-  // 챗봇에서 "계산기에서 조건 바꿔보기"로 넘어온 경우 해당 탭 + 입력값 프리필
+  const [tab, setTab] = useState('income'), [form, setForm] = useState({ ...FORMS.income.defaults })
+  const [result, setResult] = useState(null), [snapshot, setSnapshot] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState(null)
+  const revision = useRef(0), firstInput = useRef(), formElement = useRef()
+  const invalidate = () => { ++revision.current; setResult(null); setSnapshot(null); setError(null); setLoading(false) }
+  useEffect(() => () => { ++revision.current }, [])
   useEffect(() => {
     if (!initial) return
-    invalidate()
-    const tabKey = TOOL_TO_TAB[initial.tool]
-    if (tabKey) {
-      setTab(tabKey)
-      setForm(buildFormFromParams(tabKey, initial.params || {}))
-      setResult(null)
-      setError('')
+    const key = TOOL_TO_TAB[initial.tool]
+    if (key) {
+      invalidate(); setTab(key); setForm(buildFormFromParams(key, initial.params || {}))
+      if (key === 'capital' && initial.params?.asset_type && initial.params.asset_type !== '부동산') setError({ message: '현재 양도소득세는 부동산만 지원합니다. 조건을 다시 확인하세요.' })
     }
     onInitialConsumed?.()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial])
-
-  const handleTabChange = (key) => {
-    invalidate()
-    setTab(key)
-    setForm({ ...FORMS[key].defaults })
-    setResult(null)
-    setError('')
-  }
-
-  const handleChange = (key, value) => {
-    invalidate()
-    setForm(prev => ({ ...prev, [key]: value }))
-  }
-
-  const handleSubmit = async (e) => {
+  const change = (key, value) => { invalidate(); setForm(previous => ({ ...previous, [key]: value })) }
+  const submit = async e => {
     e.preventDefault()
-    const requestRevision = ++revision.current
-    setResult(null)
-    setError(null)
+    const version = ++revision.current
+    setResult(null); setError(null)
     const { apiFn, fields, toPayload } = FORMS[tab]
-
     const missing = fields.filter(f => f.required && (form[f.key] === '' || form[f.key] == null))
-    if (missing.length) {
-      setError({ message: `필수 항목을 입력하세요: ${missing.map(f => f.label).join(', ')}`, retryable: false })
-      return
+    if (missing.length) { setError({ message: '필수 항목을 입력하세요: ' + missing.map(f => f.label).join(', ') }); firstInput.current?.focus(); return }
+    if (!formElement.current.reportValidity()) return
+    const payload = toPayload(form)
+    if (Object.values(payload).some(v => typeof v === 'number' && (!Number.isSafeInteger(v) || v < 0))) {
+      setError({ message: '금액은 원 단위로 환산 가능한 범위, 인원·기간은 0 이상의 정수로 입력해 주세요.' }); return
     }
-
+    if (tab === 'capital' && payload.asset_type !== '부동산') { setError({ message: '현재 부동산만 지원합니다.' }); return }
     setLoading(true)
-    setError('')
-    setResult(null)
     try {
-      const data = await apiFn(toPayload(form))
-      if (requestRevision === revision.current) setResult(data)
-    } catch (err) {
-      if (requestRevision === revision.current) setError({ message: err.message, retryable: err.retryable === true })
-    } finally {
-      if (requestRevision === revision.current) setLoading(false)
-    }
+      const data = await apiFn(payload)
+      if (version === revision.current) { setResult(data); setSnapshot({ ...form }) }
+    } catch (e) { if (version === revision.current) setError({ message: e.message, retryable: e.retryable }) }
+    finally { if (version === revision.current) setLoading(false) }
   }
-
-  const { fields } = FORMS[tab]
-  const currentTab = TABS.find(t => t.key === tab)
-
-  return (
-    <main style={{
-      flex: 1, display: 'flex', flexDirection: 'column',
-      background: 'var(--bg)', minWidth: 0, overflow: 'hidden',
-    }}>
-      {/* 헤더 */}
-      <header style={{
-        padding: '18px 32px',
-        borderBottom: '1px solid var(--border)',
-        display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
-        background: 'rgba(24,28,39,.8)',
-        backdropFilter: 'blur(8px)',
-      }}>
-        <span style={{ fontSize: 20 }}>{currentTab.icon}</span>
-        <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: 17, fontWeight: 400, letterSpacing: '-0.3px' }}>
-          세금 계산기
-        </h1>
-        <span style={{
-          fontSize: 11, color: 'var(--text-muted)',
-          background: 'var(--surface2)',
-          border: '1px solid var(--border)',
-          borderRadius: 6, padding: '2px 8px',
-        }}>
-          2024년 세법 기준
-        </span>
-      </header>
-
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-        {/* 세목 탭 */}
-        <div style={{ display: 'flex', gap: 6 }}>
-          {TABS.map(({ key, label, icon }) => (
-            <button
-              key={key}
-              onClick={() => handleTabChange(key)}
-              style={{
-                padding: '8px 16px',
-                borderRadius: 9,
-                border: '1px solid ' + (tab === key ? 'transparent' : 'var(--border)'),
-                background: tab === key
-                  ? 'linear-gradient(135deg, var(--accent), rgba(79,124,255,.7))'
-                  : 'var(--surface)',
-                color: tab === key ? '#fff' : 'var(--text-muted)',
-                fontSize: 13, cursor: 'pointer',
-                transition: 'all .15s',
-                display: 'flex', alignItems: 'center', gap: 6,
-                boxShadow: tab === key ? '0 3px 10px rgba(79,124,255,.3)' : 'none',
-              }}
-            >
-              <span>{icon}</span>
-              {label}
-            </button>
-          ))}
+  const fields = FORMS[tab].fields
+  const visible = fields.filter(f => !(f.key === 'business_type' && !form.is_simplified) && !(f.key === 'days_late' && form.penalty_type !== '납부지연') && !(f.key === 'is_negligent' && form.penalty_type === '납부지연'))
+  return <main className="workspace-page">
+    <header className="page-header"><div><p className="eyebrow">CALCULATION WORKSPACE</p><h1>세금 계산기</h1></div><span className="small muted">참고용 · 세율 및 적용 조건 확인 필요</span></header>
+    <div className="page-scroll">
+      <div className="calculator-tabs" aria-label="계산할 세목">{TABS.map(t => <button key={t.key} aria-pressed={tab === t.key} onClick={() => { invalidate(); setTab(t.key); setForm({ ...FORMS[t.key].defaults }) }}>{t.label}</button>)}</div>
+      <div className="calculator-layout">
+        <form className="calculation-form" ref={formElement} onSubmit={submit} noValidate>
+          <div className="section-heading"><h2>계산 조건</h2><span className="unit-label">금액 입력: 만원</span></div>
+          {tab === 'capital' && <p className="small muted">부동산만 지원합니다. 주식·기타 자산과 비과세 판정은 지원하지 않습니다.</p>}
+          {visible.map((field, i) => <div className="field" key={field.key}>
+            {field.type === 'checkbox' ? <label className="checkbox-field"><input type="checkbox" checked={!!form[field.key]} onChange={e => change(field.key, e.target.checked)} />{field.label}{field.hint && <span className="field-hint">{field.hint}</span>}</label>
+              : <><label htmlFor={'calc-' + field.key}>{field.label}{field.required && <span className="required"> *</span>}</label>
+                <div className="input-with-unit">{field.type === 'select'
+                  ? <select id={'calc-' + field.key} value={form[field.key] || field.options[0]} onChange={e => change(field.key, e.target.value)}>{!field.options.includes(form[field.key]) && form[field.key] && <option value={form[field.key]} disabled>미지원 조건 — 변경 필요</option>}{field.options.map(v => <option key={v}>{v}</option>)}</select>
+                  : <input ref={i === 0 ? firstInput : undefined} id={'calc-' + field.key} type="number" min="0" step={field.unit === '만원' ? '0.0001' : '1'} value={form[field.key] ?? ''} onChange={e => change(field.key, e.target.value)} placeholder={field.required ? '필수 입력' : '0'} required={field.required} aria-describedby={field.hint ? field.key + '-hint' : undefined} />}
+                  {field.unit && <span>{field.unit}</span>}</div>{field.hint && <p className="field-hint" id={field.key + '-hint'}>{field.hint}</p>}</>}
+          </div>)}
+          <Notice>{error && <><span>{error.message}</span><br />세액을 산출하지 않았습니다. 0원이라는 뜻이 아닙니다.</>}</Notice>
+          <button className="button calculate-submit" disabled={loading}>{loading ? <><span className="spinner" />계산 중…</> : error?.retryable ? '다시 계산하기' : '계산하기'}</button>
+        </form>
+        <div className="calculation-output">
+          {result ? <><section className="condition-summary"><h2>이 결과의 입력 조건</h2><dl>{fields.filter(f => snapshot[f.key] !== undefined && snapshot[f.key] !== '').map(f => <div key={f.key}><dt>{f.label}</dt><dd>{f.type === 'checkbox' ? (snapshot[f.key] ? '예' : '아니오') : snapshot[f.key]} {f.unit || ''}</dd></div>)}</dl><button className="button secondary" onClick={() => firstInput.current?.focus()}>조건 수정</button></section>
+            <ResultCard result={result} onAskAboutResult={onAskAboutResult ? () => onAskAboutResult(QUESTION_BUILDERS[tab](snapshot, result)) : undefined} /></>
+            : <div className="empty-state" role="status"><Icon name="calculator" size={38} /><h2>{loading ? '계산 중입니다.' : error ? '계산을 완료하지 못했습니다.' : '조건을 입력하면 계산 과정을 보여드립니다.'}</h2><p>{error ? '입력 영역의 안내를 확인해 주세요.' : '산출 과정과 최종 금액을 함께 확인할 수 있습니다.'}</p></div>}
         </div>
-
-        {/* 폼 + 결과 */}
-        <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-
-          {/* 폼 */}
-          <form onSubmit={handleSubmit} style={{
-            flex: '0 0 360px',
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-            overflow: 'hidden',
-          }}>
-            <div style={{
-              padding: '14px 20px',
-              borderBottom: '1px solid var(--border)',
-              display: 'flex', alignItems: 'center', gap: 8,
-              background: 'rgba(255,255,255,.02)',
-            }}>
-              <span>{currentTab.icon}</span>
-              <span style={{ fontSize: 13, fontWeight: 500 }}>{currentTab.label} 계산</span>
-            </div>
-            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {fields.map(field => (
-                <FormField
-                  key={field.key}
-                  field={field}
-                  value={form[field.key]}
-                  onChange={handleChange}
-                />
-              ))}
-
-              {error && (
-                <div style={{
-                  fontSize: 12, color: 'var(--danger)',
-                  padding: '8px 12px',
-                  background: 'rgba(255,92,92,.08)',
-                  border: '1px solid rgba(255,92,92,.15)',
-                  borderRadius: 8,
-                }}>
-                  <span role="alert">{error.message}</span>
-                  <div>세액을 산출하지 않았습니다. 0원이라는 뜻이 아닙니다.</div>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading}
-                style={{
-                  padding: '12px',
-                  background: loading ? 'rgba(79,124,255,.4)' : 'var(--accent)',
-                  color: '#fff',
-                  border: 'none', borderRadius: 9,
-                  fontSize: 14, fontWeight: 500,
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  transition: 'background .15s',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                }}
-              >
-                {loading && (
-                  <span style={{
-                    width: 14, height: 14,
-                    border: '2px solid rgba(255,255,255,.3)',
-                    borderTopColor: '#fff', borderRadius: '50%',
-                    animation: 'spin .7s linear infinite',
-                    display: 'inline-block',
-                  }} />
-                )}
-                {loading ? '계산 중…' : error?.retryable ? '다시 계산하기' : '계산하기'}
-              </button>
-            </div>
-          </form>
-
-          {/* 결과 */}
-          <div style={{ flex: 1, minWidth: 280 }}>
-            {!result && !loading && (
-              <div style={{
-                color: 'var(--text-muted)', fontSize: 13,
-                padding: '48px 20px', textAlign: 'center',
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)',
-              }}>
-                <div style={{ fontSize: 28, marginBottom: 10, opacity: .3 }}>📊</div>
-                {error ? '계산을 완료하지 못했습니다. 입력란의 안내를 확인해 주세요.' : '금액을 입력하고 계산하기를 누르세요.'}
-              </div>
-            )}
-            {result && (
-              <ResultCard
-                result={result}
-                onAskAboutResult={
-                  onAskAboutResult
-                    ? () => onAskAboutResult(QUESTION_BUILDERS[tab](form, result))
-                    : undefined
-                }
-              />
-            )}
-          </div>
-        </div>
-
-        <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6, padding: '4px 0' }}>
-          * 이 계산기는 참고용이며 법적 효력이 없습니다. 실제 세금은 개인 상황에 따라 다를 수 있으므로 세무사 상담을 권장합니다.
-        </p>
-      </div>
-    </main>
-  )
-}
-
-function FormField({ field, value, onChange }) {
-  const labelStyle = {
-    fontSize: 12, color: 'var(--text-muted)',
-    marginBottom: 6, display: 'block', fontWeight: 500,
-  }
-  const inputStyle = {
-    flex: 1,
-    background: 'var(--surface2)',
-    border: '1px solid var(--border)',
-    borderRadius: 8,
-    padding: '9px 12px',
-    color: 'var(--text)',
-    fontSize: 14,
-    outline: 'none',
-    width: '100%',
-    transition: 'border-color .15s, box-shadow .15s',
-  }
-
-  if (field.type === 'select') {
-    return (
-      <div>
-        <label style={labelStyle}>{field.label}</label>
-        <select
-          value={value || field.options[0]}
-          onChange={e => onChange(field.key, e.target.value)}
-          style={{ ...inputStyle, cursor: 'pointer' }}
-        >
-          {field.options.map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
-      </div>
-    )
-  }
-
-  if (field.type === 'checkbox') {
-    return (
-      <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '4px 0' }}>
-        <input
-          type="checkbox"
-          checked={!!value}
-          onChange={e => onChange(field.key, e.target.checked)}
-          style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--accent)' }}
-        />
-        <span style={{ fontSize: 13 }}>{field.label}</span>
-        {field.hint && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{field.hint}</span>}
-      </label>
-    )
-  }
-
-  return (
-    <div>
-      <label style={labelStyle}>
-        {field.label}
-        {field.required && <span style={{ color: 'var(--accent2)', marginLeft: 3 }}>*</span>}
-        {field.hint && <span style={{ marginLeft: 6, fontWeight: 400, color: 'var(--text-muted)', fontSize: 11 }}>({field.hint})</span>}
-      </label>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <input
-          type="number"
-          min={0}
-          value={value ?? ''}
-          onChange={e => onChange(field.key, e.target.value)}
-          placeholder={field.required ? '필수' : '0'}
-          style={inputStyle}
-        />
-        {field.unit && (
-          <span style={{
-            fontSize: 12, color: 'var(--text-muted)',
-            whiteSpace: 'nowrap', flexShrink: 0,
-            background: 'var(--surface2)',
-            border: '1px solid var(--border)',
-            borderRadius: 6, padding: '9px 10px',
-          }}>
-            {field.unit}
-          </span>
-        )}
-      </div>
+      </div><p className="small muted">DB 세율·공제와 구현된 상수를 사용하는 단순 계산입니다. 최신 세법 준수 및 모든 예외 적용을 보장하지 않습니다.</p>
     </div>
-  )
+  </main>
 }

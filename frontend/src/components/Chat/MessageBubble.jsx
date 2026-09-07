@@ -2,129 +2,46 @@ import { useEffect, useRef } from 'react'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import ToolCallCard from './ToolCallCard'
-
-// _COMBINED_PROMPT의 "근거 출처 목록" 형식과 동일한 패턴 — [법률] 법령명 제N조
-// 조문번호는 공백 변형 허용 (모델이 "제 50 조"처럼 출력하는 경우가 많음, citation_guard.py와 동일)
-const CITATION_RE = /\[(법률|시행령|시행규칙)\]\s*([^\n[]+?)\s*(제\s*\d+\s*조(?:\s*의\s*\d+)?)/g
-
-function linkifyCitations(content) {
-  return content.replace(CITATION_RE, (match, label, lawName, articleNo) => {
-    const law = lawName.trim().replace(/"/g, '&quot;')
-    const article = articleNo.replace(/\s+/g, '')  // DB 조회용 표준형('제50조')으로 정규화
-    return `<span class="citation-link" data-law="${law}" data-article="${article}">${match}</span>`
-  })
-}
-
-const CALC_TAB_LABELS = {
-  income_tax:    { icon: '💼', label: '소득세' },
-  capital_gains: { icon: '🏠', label: '양도소득세' },
-  inheritance:   { icon: '📜', label: '상속세' },
-  gift:          { icon: '🎁', label: '증여세' },
-}
-
-export default function MessageBubble({ message, userInitial, onCitationClick, onOpenCalculator }) {
-  const isUser = message.role === 'user'
-  const bubbleRef = useRef()
-
+import Notice from '../ui/Notice'
+import Icon from '../ui/Icon'
+const CITATION_RE = /\[(법률|시행령|시행규칙)\]\s*([^\n\[]+?)\s*(제\s*\d+\s*조(?:\s*의\s*\d+)?(?:\s*제\s*\d+\s*항)?(?:\s*제\s*\d+\s*호(?:\s*의\s*\d+)?)?(?:\s*[가-힣]\s*목)?)/g
+export default function MessageBubble({ message, onCitationClick, onOpenCalculator, onRetry }) {
+  const isUser = message.role === 'user', body = useRef()
   useEffect(() => {
-    if (!isUser && bubbleRef.current) {
-      const rendered = marked.parse(linkifyCitations(message.content))
-      bubbleRef.current.innerHTML = DOMPurify.sanitize(rendered, {
-        ALLOW_DATA_ATTR: true,
-      })
+    if (isUser || !body.current) return
+    body.current.innerHTML = DOMPurify.sanitize(marked.parse(message.content || ''), {
+      ALLOW_DATA_ATTR: false,
+      FORBID_TAGS: ['img', 'video', 'audio', 'iframe', 'form', 'input', 'button', 'textarea', 'select', 'style'],
+    })
+    // Link only text nodes after sanitization; model-generated attributes cannot become actions.
+    const walker = document.createTreeWalker(body.current, NodeFilter.SHOW_TEXT)
+    const nodes = []
+    while (walker.nextNode()) if (!walker.currentNode.parentElement.closest('a,code,pre,button')) nodes.push(walker.currentNode)
+    for (const node of nodes) {
+      const text = node.textContent, matches = [...text.matchAll(CITATION_RE)]
+      if (!matches.length) continue
+      const fragment = document.createDocumentFragment()
+      let start = 0
+      for (const match of matches) {
+        fragment.append(text.slice(start, match.index))
+        const button = document.createElement('button')
+        button.type = 'button'; button.className = 'citation-link'; button.textContent = match[0]
+        button.dataset.law = match[2].trim(); button.dataset.article = match[3].replace(/\s+/g, '')
+        button.setAttribute('aria-label', match[0] + ' 원문 열기')
+        fragment.append(button); start = match.index + match[0].length
+      }
+      fragment.append(text.slice(start)); node.replaceWith(fragment)
     }
   }, [message.content, isUser])
-
-  useEffect(() => {
-    if (isUser || !bubbleRef.current || !onCitationClick) return
-    const el = bubbleRef.current
-    const handleClick = (e) => {
-      const target = e.target.closest('.citation-link')
-      if (!target) return
-      onCitationClick(target.dataset.law, target.dataset.article)
-    }
-    el.addEventListener('click', handleClick)
-    return () => el.removeEventListener('click', handleClick)
-  }, [isUser, onCitationClick])
-
-  return (
-    <div style={{
-      display: 'flex',
-      gap: 12,
-      flexDirection: isUser ? 'row-reverse' : 'row',
-      animation: 'slideUp .25s ease',
-    }}>
-      {/* 아바타 */}
-      <div style={{
-        width: 34, height: 34, borderRadius: '50%',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 13, flexShrink: 0, marginTop: 2,
-        fontWeight: 600,
-        ...(isUser
-          ? {
-              background: 'var(--surface2)',
-              border: '1px solid rgba(255,255,255,.1)',
-              color: 'var(--text-muted)',
-            }
-          : {
-              background: 'linear-gradient(135deg, var(--accent) 0%, #7c4fff 100%)',
-              color: '#fff',
-              boxShadow: '0 3px 10px rgba(79,124,255,.3)',
-            }
-        )
-      }}>
-        {isUser ? userInitial : '⚖'}
-      </div>
-
-      {/* 말풍선 + 계산기 연결 버튼 */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: '70%', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
-        {!isUser && message.tools?.map(tool => (
-          <ToolCallCard key={tool.id} tool={tool} onCitationClick={onCitationClick} onOpenCalculator={onOpenCalculator} />
-        ))}
-        <div
-          ref={isUser ? undefined : bubbleRef}
-          className={isUser ? undefined : 'markdown-bubble'}
-          style={{
-            padding: '13px 17px',
-            fontSize: 14, lineHeight: 1.75,
-            ...(isUser
-              ? {
-                  background: 'linear-gradient(135deg, var(--accent) 0%, rgba(79,124,255,.85) 100%)',
-                  color: '#fff',
-                  borderRadius: '16px 4px 16px 16px',
-                  boxShadow: '0 2px 12px rgba(79,124,255,.25)',
-                }
-              : {
-                  background: 'var(--surface)',
-                  border: '1px solid var(--border)',
-                  borderLeft: '3px solid rgba(79,124,255,.35)',
-                  borderRadius: '4px 16px 16px 16px',
-                }
-            )
-          }}
-        >
-          {isUser && message.content}
-        </div>
-
-        {!isUser && message.calc && !message.tools?.some(t => t.tool === message.calc.tool && t.status === 'ok') && onOpenCalculator && (
-          <button
-            onClick={() => onOpenCalculator(message.calc.tool, message.calc.params)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              background: 'rgba(79,124,255,.08)',
-              border: '1px solid rgba(79,124,255,.25)',
-              borderRadius: 9, padding: '7px 13px',
-              color: 'var(--accent2)', fontSize: 12.5, cursor: 'pointer',
-              transition: 'background .15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(79,124,255,.16)' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(79,124,255,.08)' }}
-          >
-            <span>{CALC_TAB_LABELS[message.calc.tool]?.icon ?? '🧮'}</span>
-            계산기 화면에서 {CALC_TAB_LABELS[message.calc.tool]?.label ?? ''} 조건 바꿔보기 →
-          </button>
-        )}
-      </div>
-    </div>
-  )
+  return <article className={'message ' + (isUser ? 'user-message' : 'assistant-message')}>
+    {isUser ? <div className="question-bubble">{message.content}</div> : <>
+      <div className="answer-label"><Icon name="book" size={18} /><span>세무 AI</span><span className="muted small">근거와 적용 조건을 함께 확인하세요</span></div>
+      {message.tools?.map(t => <ToolCallCard key={t.id} tool={t} onCitationClick={onCitationClick} onOpenCalculator={onOpenCalculator} onRetry={onRetry} />)}
+      <div ref={body} className="markdown-bubble" onClick={e => { const target = e.target.closest('button.citation-link'); if (target && body.current.contains(target)) onCitationClick?.(target.dataset.law, target.dataset.article) }} />
+      {message.status === 'stopped' && <Notice tone="info">생성을 중지했습니다. 표시된 내용은 미완성이고 저장되지 않았을 수 있습니다.</Notice>}
+      {message.status === 'error' && <Notice onRetry={onRetry}>{message.error}</Notice>}
+      {message.status === 'stopped' && onRetry && <button className="button secondary" onClick={onRetry}>같은 질문 다시 보내기</button>}
+      {message.calc && !message.tools?.some(t => t.tool === message.calc.tool && t.status === 'ok') && <button className="button secondary" onClick={() => onOpenCalculator?.(message.calc.tool, message.calc.params)}>계산기에서 조건 바꾸기 →</button>}
+    </>}
+  </article>
 }

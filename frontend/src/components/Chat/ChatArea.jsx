@@ -4,201 +4,41 @@ import MessageBubble from './MessageBubble'
 import ChatInput from './ChatInput'
 import ArticleViewer from './ArticleViewer'
 import AiServiceStatus from './AiServiceStatus'
-
-const QUICK_QUESTIONS = [
-  '소득세법 제55조 원문을 보여주세요',
-  '내가 업로드한 계약서에서 지급 조건을 찾아주세요',
-  '연소득 5천만원인 프리랜서의 소득세를 계산해주세요',
-]
-
-function TypingIndicator() {
-  return (
-    <div style={{ display: 'flex', gap: 14, animation: 'slideUp .3s ease' }}>
-      <div style={{
-        width: 34, height: 34, borderRadius: '50%',
-        background: 'linear-gradient(135deg, var(--accent), #7c4fff)',
-        color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 14, flexShrink: 0,
-      }}>⚖</div>
-      <div style={{
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderLeft: '3px solid rgba(79,124,255,.4)',
-        borderRadius: '4px 16px 16px 16px',
-        padding: '14px 18px',
-      }}>
-        <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-          {[0, 0.2, 0.4].map((delay, i) => (
-            <span key={i} style={{
-              width: 7, height: 7, background: 'var(--text-muted)',
-              borderRadius: '50%',
-              animation: `blink 1.2s infinite ${delay}s`,
-              display: 'inline-block',
-            }} />
-          ))}
+import Icon from '../ui/Icon'
+import Notice from '../ui/Notice'
+const QUESTIONS = ['소득세법 제55조 원문을 보여주세요', '내가 업로드한 계약서에서 지급 조건을 찾아주세요', '연소득 5천만원인 프리랜서의 소득세를 계산해주세요']
+export default function ChatArea({ user, conversationId, conversationTitle, onMessageSent, onOpenCalculator, pendingQuestion, onPendingQuestionConsumed, onCreateConversation, library }) {
+  const { messages, loading, historyLoading, historyError, retryHistory, sendMessage, stop } = useChat(conversationId)
+  const [selected, setSelected] = useState(null), [unseen, setUnseen] = useState(false)
+  const scroller = useRef(), follow = useRef(true), opener = useRef(null)
+  useEffect(() => { setSelected(null); follow.current = true; setUnseen(false) }, [conversationId])
+  const bottom = () => { if (scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight; follow.current = true; setUnseen(false) }
+  useEffect(() => { if (follow.current) bottom(); else setUnseen(true) }, [messages])
+  const send = query => { follow.current = true; sendMessage(query, onMessageSent) }
+  useEffect(() => {
+    if (pendingQuestion && conversationId && !historyLoading && !historyError) { send(pendingQuestion); onPendingQuestionConsumed?.() }
+  }, [pendingQuestion, conversationId, historyLoading, historyError])
+  const open = (lawName, articleNo) => { opener.current = document.activeElement; setSelected({ lawName, articleNo }) }
+  const close = () => { setSelected(null); opener.current?.focus?.() }
+  return <div className={'chat-layout ' + (selected ? 'with-source' : '')}>
+    <main className="chat-main">
+      <header className="page-header"><div><p className="eyebrow">TAX WORKSPACE</p><h1>{conversationTitle || '세무 상담'}</h1></div><AiServiceStatus /></header>
+      <div className="messages-scroll" ref={scroller} onScroll={() => { const el = scroller.current; follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 90; if (follow.current) setUnseen(false) }}>
+        <div className="messages-content">
+          <Notice onRetry={retryHistory}>{historyError}</Notice>
+          {historyLoading && <p className="muted" role="status">대화 이력을 불러오고 있습니다…</p>}
+          {!historyLoading && !historyError && !messages.length && <div className="chat-welcome">
+            <span className="welcome-symbol"><Icon name="book" size={30} /></span><p className="eyebrow">근거부터 확인하는 세무 상담</p>
+            <h2>복잡한 세무 질문,<br />근거와 함께 살펴보세요.</h2><p className="muted">법령 원문을 찾고, 내 문서를 검색하고,<br />계산 조건을 검토할 수 있습니다.</p>
+            <div className="quick-questions">{QUESTIONS.map((q, i) => <button key={q} onClick={() => conversationId ? send(q) : onCreateConversation(q)}><Icon name={['book','file','calculator'][i]} /><span>{q}</span><Icon name="chevron" size={16} /></button>)}</div>
+          </div>}
+          {messages.map((m, i) => <MessageBubble key={m.id || i} message={m} userInitial={user.email?.[0]?.toUpperCase() || 'U'} onCitationClick={open} onOpenCalculator={onOpenCalculator} onRetry={loading || !m.query ? undefined : () => send(m.query)} />)}
+          {loading && <div className="generation-status" role="status"><span className="spinner" />답변을 준비하고 있습니다. 필요하면 생성을 중지할 수 있습니다.</div>}
         </div>
       </div>
-    </div>
-  )
-}
-
-export default function ChatArea({ user, conversationId, conversationTitle, onMessageSent, onOpenCalculator, pendingQuestion, onPendingQuestionConsumed }) {
-  const { messages, loading, sendMessage } = useChat(conversationId)
-  const bottomRef = useRef()
-  const [selectedArticle, setSelectedArticle] = useState(null)
-
-  const handleCitationClick = (lawName, articleNo) => {
-    setSelectedArticle({ lawName, articleNo })
-  }
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, loading])
-
-  const handleSend = (query) => {
-    sendMessage(query, onMessageSent)
-  }
-
-  // 계산기 화면의 "이 결과에 대해 질문하기" → 채팅으로 넘어온 질문을 자동 전송
-  useEffect(() => {
-    if (!pendingQuestion || !conversationId) return
-    handleSend(pendingQuestion)
-    onPendingQuestionConsumed?.()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingQuestion, conversationId])
-
-  if (!conversationId) {
-    return (
-      <main style={{
-        flex: 1, display: 'flex', flexDirection: 'column',
-        background: 'var(--bg)', alignItems: 'center', justifyContent: 'center',
-        gap: 16, color: 'var(--text-muted)', textAlign: 'center',
-      }}>
-        <div style={{ fontSize: 48, opacity: .2 }}>⚖️</div>
-        <div style={{ fontFamily: 'var(--font-serif)', fontSize: 20, color: 'var(--text)' }}>
-          대화를 선택하거나 새 대화를 시작하세요
-        </div>
-        <div style={{ fontSize: 13 }}>좌측 사이드바의 + 버튼을 눌러주세요.</div>
-      </main>
-    )
-  }
-
-  return (
-    <div style={{ flex: 1, display: 'flex', minWidth: 0 }}>
-    <main style={{
-      flex: 1, display: 'flex', flexDirection: 'column',
-      background: 'var(--bg)', minWidth: 0,
-    }}>
-      {/* 헤더 */}
-      <header style={{
-        padding: '18px 32px',
-        borderBottom: '1px solid var(--border)',
-        display: 'flex', alignItems: 'center', gap: 12,
-        background: 'rgba(24,28,39,.8)',
-        backdropFilter: 'blur(8px)',
-      }}>
-        <div style={{
-          width: 8, height: 8, borderRadius: '50%',
-          background: 'var(--success)',
-          animation: 'pulse 2.5s infinite',
-        }} />
-        <h1 style={{
-          fontFamily: 'var(--font-serif)', fontSize: 17,
-          fontWeight: 400, letterSpacing: '-0.3px',
-          flex: 1,
-        }}>
-          {conversationTitle || '새 대화'}
-        </h1>
-        <AiServiceStatus />
-      </header>
-
-      {/* 메시지 목록 */}
-      <div style={{
-        flex: 1, overflowY: 'auto',
-        padding: '28px 32px',
-        display: 'flex', flexDirection: 'column', gap: 20,
-      }}>
-        {messages.length === 0 && !loading && (
-          <div style={{
-            flex: 1, display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center',
-            gap: 20, color: 'var(--text-muted)',
-            textAlign: 'center', padding: 40, margin: 'auto',
-          }}>
-            <div style={{
-              width: 72, height: 72, borderRadius: 20,
-              background: 'linear-gradient(135deg, rgba(79,124,255,.15), rgba(124,79,255,.15))',
-              border: '1px solid rgba(79,124,255,.2)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 34,
-            }}>
-              ⚖️
-            </div>
-            <div>
-              <div style={{ fontFamily: 'var(--font-serif)', fontSize: 22, color: 'var(--text)', fontWeight: 400, marginBottom: 8 }}>
-                무엇이든 물어보세요
-              </div>
-              <div style={{ fontSize: 13, lineHeight: 1.7, maxWidth: 340 }}>
-                세무 법령 문서를 기반으로<br />정확한 법적 근거와 함께 답변드립니다.
-              </div>
-            </div>
-            {/* 빠른 질문 칩 */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', maxWidth: 420 }}>
-              {QUICK_QUESTIONS.map((q, i) => (
-                <button
-                  key={i}
-                  onClick={() => handleSend(q)}
-                  style={{
-                    background: 'var(--surface)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 10,
-                    padding: '10px 16px',
-                    color: 'var(--text)',
-                    fontSize: 13, cursor: 'pointer',
-                    textAlign: 'left',
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-                    transition: 'border-color .15s, background .15s',
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.borderColor = 'rgba(79,124,255,.4)'
-                    e.currentTarget.style.background = 'rgba(79,124,255,.06)'
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.borderColor = 'var(--border)'
-                    e.currentTarget.style.background = 'var(--surface)'
-                  }}
-                >
-                  <span>{q}</span>
-                  <span style={{ color: 'var(--text-muted)', fontSize: 16, flexShrink: 0 }}>→</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {messages.map((msg, i) => (
-          <MessageBubble
-            key={i}
-            message={msg}
-            userInitial={(user.email[0] || 'U').toUpperCase()}
-            onCitationClick={handleCitationClick}
-            onOpenCalculator={onOpenCalculator}
-          />
-        ))}
-
-        {loading && !messages.at(-1)?.tools?.some(t => ['selecting', 'running'].includes(t.status)) && <TypingIndicator />}
-        <div ref={bottomRef} />
-      </div>
-
-      <ChatInput onSend={handleSend} disabled={loading} />
+      {unseen && <button className="new-answer button secondary" onClick={bottom}><Icon name="down" size={16} />새 답변 보기</button>}
+      {conversationId && <ChatInput onSend={send} disabled={loading || historyLoading || !!historyError} generating={loading} onStop={stop} library={library} />}
     </main>
-    {selectedArticle && (
-      <ArticleViewer
-        lawName={selectedArticle.lawName}
-        articleNo={selectedArticle.articleNo}
-        onClose={() => setSelectedArticle(null)}
-      />
-    )}
-    </div>
-  )
+    {selected && <ArticleViewer {...selected} onClose={close} />}
+  </div>
 }

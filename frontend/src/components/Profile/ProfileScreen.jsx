@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import Icon from '../ui/Icon'
+import Notice from '../ui/Notice'
 import { getMe, updateProfile, changePassword, deleteAccount } from '../../api/userApi'
 import { getTaxSchedule } from '../../api/taxScheduleApi'
 
@@ -11,10 +13,15 @@ const BUSINESS_TYPE_LABELS = {
 export default function ProfileScreen({ onLogout }) {
   const [profile, setProfile] = useState(null)
   const [fetching, setFetching] = useState(true)
+  const [error, setError] = useState('')
+  const [reload, setReload] = useState(0)
 
   useEffect(() => {
-    getMe().then(setProfile).catch(() => {}).finally(() => setFetching(false))
-  }, [])
+    let active = true
+    setFetching(true); setError('')
+    getMe().then(data => { if (active) setProfile(data) }).catch(() => { if (active) setError('내 정보를 불러오지 못했습니다.') }).finally(() => { if (active) setFetching(false) })
+    return () => { active = false }
+  }, [reload])
 
   if (fetching) {
     return (
@@ -43,16 +50,17 @@ export default function ProfileScreen({ onLogout }) {
         padding: '18px 32px',
         borderBottom: '1px solid var(--border)',
         display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
-        background: 'rgba(24,28,39,.8)',
+        background: 'var(--surface)',
         backdropFilter: 'blur(8px)',
       }}>
-        <span style={{ fontSize: 18 }}>👤</span>
+        <Icon name="user" />
         <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: 17, fontWeight: 400 }}>내 정보</h1>
       </header>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px', display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 540 }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: 18, width: '100%', maxWidth: 640 }}>
+        <Notice onRetry={() => setReload(v => v + 1)}>{error}</Notice>
         <TaxScheduleSection businessType={profile?.business_type} />
-        <ProfileSection profile={profile} onUpdated={setProfile} />
+        {profile && <ProfileSection profile={profile} onUpdated={setProfile} />}
         <PasswordSection />
         <DeleteSection onLogout={onLogout} />
       </div>
@@ -298,13 +306,13 @@ function Card({ title, icon, children, danger }) {
 
 function Field({ label, hint, children }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <label style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '.4px', fontWeight: 500 }}>
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '.4px', fontWeight: 500 }}>
         {label}
         {hint && <span style={{ marginLeft: 6, fontWeight: 400, opacity: .7 }}>({hint})</span>}
-      </label>
+      </span>
       {children}
-    </div>
+    </label>
   )
 }
 

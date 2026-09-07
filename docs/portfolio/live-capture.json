@@ -1,0 +1,17 @@
+{
+  "captured_at": "2026-09-07T15:04:59.757Z",
+  "mode": "live-local-service",
+  "query": "소득세법 제50조 제1항의 기본공제 대상이 누구인지, 저장된 조문을 근거로 3문장으로 설명해 주세요.",
+  "answer": "1. 💡 결론\n\n소득세법 제 50 조 제 1 항에 따른 기본공제 대상은 종합소득이 있는 거주자 (자연인) 에게 적용됩니다.\n\n2. 📖 상세 설명\n\n저장된 소득세법 제 50 조 제 1 항의 규정에 따르면, 해당 조항은 '종합소득이 있는 거주자'를 공제 대상자로 명시하고 있습니다. 또한 이 조항은 자연인만 해당함을 괄호 안에 직접 규정하여 법인 등 비자연인은 제외하고 있음을 보여줍니다. 따라서 기본공제의 요건은 종합소득을 얻고 있는 자연인 거주자가 충족되어야 합니다.\n\n3. ⚖️ 법적 근거\n\n[법률] 소득세법 제 50 조 - 기본공제\n\n4. ⚡ 실무 주의사항\n\n본 답변은 제공된 법령 텍스트에 기반하여 작성되었으며, 추가적인 해석이나 추정은 포함되지 않았습니다.\n\n📋 근거 출처 목록\n\n[법률] 소득세법 제 50 조",
+  "elapsed_ms": 5196,
+  "llm": "qwen3.5:9b",
+  "embedding": "qwen3-embedding:4b",
+  "ui_generation_completed": true,
+  "persisted_answer_verified": true,
+  "law": {
+    "name": "소득세법",
+    "article": "제50조",
+    "effective_date": "20260421"
+  },
+  "note": "Real service output, not a legal accuracy certification. Temporary account is deleted after capture."
+}

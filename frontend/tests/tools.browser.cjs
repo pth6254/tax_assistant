@@ -24,6 +24,7 @@ const assert = require('node:assert/strict')
           : { tax_type: '소득세', steps: [], taxable_income: 0, calculated_tax: 0, final_tax: 0, effective_rate: 0, source_articles: [] },
       })
       if (path === '/api/auth/login') body = { user: { id: 'test', email: 'portfolio@example.test' } }
+      else if (path === '/api/documents') body = []
       else if (path === '/api/conversations') body = [
         { id: 'one', title: '도구 UI 검증', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
         { id: 'two', title: '다른 대화', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },

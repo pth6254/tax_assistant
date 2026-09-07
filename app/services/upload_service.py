@@ -10,6 +10,7 @@ import uuid as _uuid
 from fastapi import HTTPException
 
 from app.database import get_pool
+from config import EMBEDDING_VERSION
 from app.services.document.pdf_processor import extract_text_from_pdf, split_into_chunks
 from app.services.embedding_service import embed_texts_for_storage
 from app.services.llm_client import call_llm
@@ -188,15 +189,18 @@ async def process_upload(
 async def list_documents(user_id: str) -> list[dict]:
     """사용자가 업로드한 파일 목록을 파일 단위로 반환한다 (청크 단위 아님)."""
     uid = _uuid.UUID(user_id)
+    # SQL identifier is selected from a fixed allowlist, never user input.
+    vector_column = "embedding_v2" if EMBEDDING_VERSION == "v2" else "embedding"
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            """
+            f"""
             SELECT
                 metadata->>'source'   AS filename,
                 metadata->>'law_name' AS law_name,
                 metadata->>'category' AS category,
                 COUNT(*)              AS chunk_count,
+                COUNT({vector_column}) AS embedded_count,
                 MIN(created_at)       AS uploaded_at
             FROM documents
             WHERE user_id = $1
@@ -214,6 +218,8 @@ async def list_documents(user_id: str) -> list[dict]:
             "law_name":    r["law_name"],
             "category":    r["category"],
             "chunk_count": r["chunk_count"],
+            "embedded_count": r["embedded_count"],
+            "search_ready": r["chunk_count"] > 0 and r["embedded_count"] == r["chunk_count"],
             "uploaded_at": r["uploaded_at"].isoformat() if r["uploaded_at"] else None,
         }
         for r in rows

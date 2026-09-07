@@ -1,85 +1,55 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from './hooks/useAuth'
 import { useConversations } from './hooks/useConversations'
+import { useDocumentLibrary } from './hooks/useDocumentLibrary'
 import AuthScreen from './components/Auth/AuthScreen'
 import Sidebar from './components/Sidebar/Sidebar'
 import ChatArea from './components/Chat/ChatArea'
 import CalculatorScreen from './components/Calculator/CalculatorScreen'
+import DocumentsScreen from './components/Documents/DocumentsScreen'
 import ProfileScreen from './components/Profile/ProfileScreen'
-
+import Icon from './components/ui/Icon'
+import Notice from './components/ui/Notice'
 export default function App() {
-  const { user, login, signup, logout } = useAuth()
-  const [view, setView] = useState('chat')
-  const { conversations, currentId, refresh, select, create, remove } = useConversations()
-  const [calculatorPrefill, setCalculatorPrefill] = useState(null)
-  const [pendingQuestion, setPendingQuestion] = useState(null)
-
-  // 로그인 후 대화 목록 로드 + 가장 최근 대화 자동 선택
-  useEffect(() => {
-    if (!user) return
-    refresh().then(list => {
-      if (list.length > 0 && !currentId) select(list[0].id)
-    })
-  }, [user])
-
-  // 메시지 전송 완료 후 대화 목록 갱신 (제목·타임스탬프 반영)
-  const handleMessageSent = () => refresh()
-
-  // 챗봇 답변의 "계산기에서 조건 바꿔보기" → 계산기 화면으로 이동 + 값 프리필
-  const handleOpenCalculator = (tool, params) => {
-    setCalculatorPrefill({ tool, params })
-    setView('calculator')
+  const auth = useAuth()
+  return auth.user ? <Workspace key={auth.user.id || auth.user.email} user={auth.user} onLogout={auth.logout} /> : <AuthScreen onLogin={auth.login} onSignup={auth.signup} />
+}
+function Workspace({ user, onLogout }) {
+  const [view, setView] = useState('chat'), [collapsed, setCollapsed] = useState(() => window.innerWidth <= 1100)
+  const { conversations, currentId, refresh, select, create, remove, error } = useConversations()
+  const [prefill, setPrefill] = useState(null), [pendingQuestion, setPendingQuestion] = useState(null), [actionError, setActionError] = useState('')
+  const creating = useRef(false)
+  const library = useDocumentLibrary()
+  useEffect(() => { let active = true; refresh().then(list => { if (active && list.length) select(list[0].id) }); return () => { active = false } }, [refresh, select])
+  const changeView = key => { setView(key); if (window.innerWidth <= 1100) setCollapsed(true) }
+  const newConversation = async query => {
+    if (creating.current) return
+    creating.current = true; setActionError('')
+    try { await create(); if (typeof query === 'string') setPendingQuestion(query); changeView('chat') }
+    catch { setActionError('대화를 만들지 못했습니다. 다시 시도해 주세요.') }
+    finally { creating.current = false }
   }
-
-  // 계산기 화면의 "이 결과에 대해 질문하기" → 대화 준비 후 챗봇으로 이동
-  const handleAskAboutResult = async (question) => {
-    let conversationId = currentId
-    if (!conversationId) {
-      const conv = await create()
-      conversationId = conv.id
-    }
-    setPendingQuestion(question)
-    setView('chat')
+  const ask = async question => {
+    if (!currentId) { await newConversation(question); return }
+    setPendingQuestion(question); changeView('chat')
   }
-
-  if (!user) {
-    return <AuthScreen onLogin={login} onSignup={signup} />
-  }
-
-  const currentConversation = conversations.find(c => c.id === currentId)
-
-  return (
-    <div style={{ display: 'flex', width: '100%', height: '100dvh' }}>
-      <Sidebar
-        user={user}
-        onLogout={logout}
-        view={view}
-        onViewChange={setView}
-        conversations={conversations}
-        currentConversationId={currentId}
-        onSelectConversation={select}
-        onCreateConversation={create}
-        onDeleteConversation={remove}
-      />
-      {view === 'calculator' ? (
-        <CalculatorScreen
-          initial={calculatorPrefill}
-          onInitialConsumed={() => setCalculatorPrefill(null)}
-          onAskAboutResult={handleAskAboutResult}
-        />
-      ) : view === 'profile' ? (
-        <ProfileScreen onLogout={logout} />
-      ) : (
-        <ChatArea
-          user={user}
-          conversationId={currentId}
-          conversationTitle={currentConversation?.title}
-          onMessageSent={handleMessageSent}
-          onOpenCalculator={handleOpenCalculator}
-          pendingQuestion={pendingQuestion}
-          onPendingQuestionConsumed={() => setPendingQuestion(null)}
-        />
-      )}
+  const current = conversations.find(c => c.id === currentId)
+  return <div className="app-shell">
+    {!collapsed && <button className="sidebar-scrim" aria-label="메뉴 닫기" onClick={() => setCollapsed(true)} />}
+    <Sidebar user={user} onLogout={onLogout} view={view} onViewChange={changeView} conversations={conversations} currentConversationId={currentId}
+      onSelectConversation={id => { select(id); changeView('chat') }} onCreateConversation={() => newConversation()} onDeleteConversation={remove}
+      collapsed={collapsed} onToggle={() => setCollapsed(c => !c)} error={error} onRetry={refresh} />
+    <div className="main-shell">
+      <div className="workspace-toolbar"><button className="icon-button" aria-label={collapsed ? '사이드바 펼치기' : '사이드바 접기'} aria-expanded={!collapsed} onClick={() => setCollapsed(c => !c)}><Icon name="menu" /></button><span>나의 세무 작업 공간</span></div>
+      <Notice>{actionError}</Notice>
+      <div className="view-host">
+        {view === 'documents' ? <DocumentsScreen library={library} onAsk={ask} />
+          : view === 'calculator' ? <CalculatorScreen initial={prefill} onInitialConsumed={() => setPrefill(null)} onAskAboutResult={ask} />
+          : view === 'profile' ? <ProfileScreen onLogout={onLogout} />
+          : <ChatArea user={user} conversationId={currentId} conversationTitle={current?.title} onMessageSent={refresh}
+              onOpenCalculator={(tool, params) => { setPrefill({ tool, params }); changeView('calculator') }}
+              pendingQuestion={pendingQuestion} onPendingQuestionConsumed={() => setPendingQuestion(null)} onCreateConversation={newConversation} library={library} />}
+      </div>
     </div>
-  )
+  </div>
 }
