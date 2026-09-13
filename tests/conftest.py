@@ -18,6 +18,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 
+def pytest_addoption(parser):
+    parser.addoption('--run-neo4j', action='store_true', help='Run isolated Docker Neo4j tests')
+    parser.addoption('--graph-real-sample', action='store_true', help='Also read public law sample from tax_backend; requires --run-neo4j')
+
+
 def _make_mock_pool() -> tuple:
     """asyncpg Pool 동작을 흉내내는 목 객체 생성."""
     conn = AsyncMock()

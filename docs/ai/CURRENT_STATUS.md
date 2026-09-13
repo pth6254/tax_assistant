@@ -1,5 +1,12 @@
 # 현재 구현 상태
 
+## 2026-09-13 Neo4j 통합 테스트 정리
+
+- dev/verify-graph-wsl.py를 제거하고 tests/integration/conftest.py 및 test_neo4j_graph.py로 전환했다. --run-neo4j 명시 시에만 격리 Docker DB를 생성하고 --graph-real-sample 추가 시 tax_backend 공개 법령 표본을 읽는다. 일반 실행은 두 테스트 skip.
+- WSL venv 실제 통합 2 passed, 기본 실행 2 skipped. 테스트 이름으로 만든 임시 컨테이너/익명 볼륨 정리 확인. 기존 서비스/DB/이미지는 보존.
+- 현재 로컬 전체 pytest: 414 passed, 10 failed, 2 skipped(26 warnings, 5 subtests). 기존 config의 GRAPH_RAG_ENABLED/NEO4J_DATABASE 누락 및 재정경제부 필터 미반영 등 작업 시작 시 상태와 그래프 테스트의 불일치가 확인됐다. 해당 애플리케이션 설정은 이번 범위에서 복원하지 않았다.
+- 현재 작업 트리의 Compose에도 Neo4j가 없어 실행 중인 서비스와 다르다. 이번 작업에서는 서비스 재빌드/재시작하지 않았다. 전체 테스트 성공이나 배포 가능 상태라고 해석하지 말 것.
+
 ## 2026-09-08 포트폴리오 실제 실행 캡처
 
 - WSL venv + dev/docker-up-wsl.sh backend frontend로 최신 이미지 실행. 실제 임시 계정으로 소득세법 제50조 제1항 기본공제 설명 질문 → Ollama 답변 → 대화 DB 저장 → 원문 패널 조회를 확인했다.

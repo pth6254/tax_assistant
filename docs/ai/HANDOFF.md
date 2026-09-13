@@ -1,5 +1,11 @@
 # 세션 인수인계
 
+## 2026-09-13 Neo4j 통합 테스트 인계
+
+- 기존 dev 검증 스크립트를 tests/integration으로 이전/제거. WSL venv에서 python -m pytest -q tests/integration --run-neo4j --graph-real-sample: 2 passed. 옵션 없으면 2 skipped. 임시 컨테이너 잔존 0.
+- 주의: 작업 시작 시 기존 tracked Graph 설정/Compose/수집 필터 변경이 사라지고 Graph 파일들만 untracked로 남아 있었다. 사용자 상태를 보존했으며 서비스 재빌드는 하지 않았다.
+- 전체 로컬 테스트 10개 실패(414 passed): tests/test_graph_rag.py 7, test_graph_temporal.py 2, test_law_coverage.py 1. 대표 원인은 GRAPH_RAG_ENABLED/NEO4J_DATABASE 없음과 재정경제부 필터 미반영. 서비스 설정/현재 브랜치 의도를 확인한 뒤 별도 복구해야 한다.
+
 ## 2026-09-08 실제 실행 이미지 교체
 
 - 발표 파일의 assets/chat.png·source.png는 이제 실제 Docker/Ollama 실행 결과다. 합성 캡처를 다시 실행해도 발표 이미지를 덮어쓰지 않도록 capture-ui.cjs는 OS 임시 폴더로 출력한다.
