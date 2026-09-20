@@ -47,6 +47,7 @@ function Workspace({ user, onLogout }) {
           : view === 'calculator' ? <CalculatorScreen initial={prefill} onInitialConsumed={() => setPrefill(null)} onAskAboutResult={ask} />
           : view === 'profile' ? <ProfileScreen onLogout={onLogout} />
           : <ChatArea user={user} conversationId={currentId} conversationTitle={current?.title} onMessageSent={refresh}
+              onRevisionCreated={fork => { select(fork.id); setPendingQuestion({ id: fork.id, query: fork.query }); refresh() }}
               onOpenCalculator={(tool, params) => { setPrefill({ tool, params }); changeView('calculator') }}
               pendingQuestion={pendingQuestion} onPendingQuestionConsumed={() => setPendingQuestion(null)} onCreateConversation={newConversation} library={library} />}
       </div>

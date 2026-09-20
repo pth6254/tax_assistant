@@ -1,0 +1,721 @@
+{
+  "date": "2026-09-19",
+  "purpose": "Paired retrieval regression, not tax answer accuracy",
+  "runtime": {
+    "llm_provider": "ollama",
+    "embedding_provider": "ollama",
+    "embedding_model": "qwen3-embedding:4b",
+    "graph_enabled_in_app": false,
+    "base_limit": 5,
+    "graph_add_limit": 2,
+    "graph_added_char_limit": 4000
+  },
+  "items": [
+    {
+      "id": "inc-01",
+      "query": "종합소득세 최고세율 구간의 세율과 누진공제액은 얼마인가요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 5,
+      "base_seconds": 1.024,
+      "expansion_seconds": 1.828,
+      "base_chars": 4241,
+      "graph_chars": 4241,
+      "additions": []
+    },
+    {
+      "id": "inc-02",
+      "query": "종합소득세 기본공제(인적공제) 금액은 얼마인가요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 7,
+      "base_seconds": 0.159,
+      "expansion_seconds": 0.087,
+      "base_chars": 4642,
+      "graph_chars": 7756,
+      "additions": [
+        {
+          "law": "소득세법 시행령",
+          "article": "제122조",
+          "evidence": "소득세법 제103조 → 이 조문이 시작 조문을 인용: 법 제103조"
+        },
+        {
+          "law": "소득세법 시행령",
+          "article": "제118조의5",
+          "evidence": "소득세법 제50조 → 이 조문이 시작 조문을 인용: 법 제50조제1항"
+        }
+      ]
+    },
+    {
+      "id": "inc-03",
+      "query": "사업소득자에게 적용되는 표준세액공제 금액은 얼마인가요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 5,
+      "base_seconds": 0.498,
+      "expansion_seconds": 0.092,
+      "base_chars": 5629,
+      "graph_chars": 5629,
+      "additions": []
+    },
+    {
+      "id": "cg-01",
+      "query": "양도소득세 기본공제 금액은 얼마인가요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 7,
+      "base_seconds": 0.762,
+      "expansion_seconds": 0.072,
+      "base_chars": 2034,
+      "graph_chars": 5148,
+      "additions": [
+        {
+          "law": "소득세법 시행령",
+          "article": "제122조",
+          "evidence": "소득세법 제103조 → 이 조문이 시작 조문을 인용: 법 제103조"
+        },
+        {
+          "law": "소득세법 시행령",
+          "article": "제118조의5",
+          "evidence": "소득세법 제50조 → 이 조문이 시작 조문을 인용: 법 제50조제1항"
+        }
+      ]
+    },
+    {
+      "id": "cg-02",
+      "query": "양도소득세 기본세율 구간은 어떻게 되나요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 6,
+      "base_seconds": 0.541,
+      "expansion_seconds": 0.081,
+      "base_chars": 2974,
+      "graph_chars": 3102,
+      "additions": [
+        {
+          "law": "소득세법 시행령",
+          "article": "제167조의9",
+          "evidence": "소득세법 제104조 → 이 조문이 시작 조문을 인용: 법 제104조제6항"
+        }
+      ]
+    },
+    {
+      "id": "cg-03",
+      "query": "부동산 장기보유특별공제에서 15년 이상 보유한 1주택자의 공제율은 얼마인가요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 5,
+      "base_seconds": 0.525,
+      "expansion_seconds": 0.092,
+      "base_chars": 20388,
+      "graph_chars": 20388,
+      "additions": []
+    },
+    {
+      "id": "inh-01",
+      "query": "상속세율 구간과 누진공제액은 어떻게 되나요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 5,
+      "base_seconds": 0.652,
+      "expansion_seconds": 0.07,
+      "base_chars": 2391,
+      "graph_chars": 2391,
+      "additions": []
+    },
+    {
+      "id": "inh-02",
+      "query": "상속세 기초공제 금액은 얼마인가요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 5,
+      "base_seconds": 0.569,
+      "expansion_seconds": 0.066,
+      "base_chars": 1683,
+      "graph_chars": 1683,
+      "additions": []
+    },
+    {
+      "id": "inh-03",
+      "query": "상속세 일괄공제 금액은 얼마인가요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 5,
+      "base_seconds": 0.318,
+      "expansion_seconds": 0.07,
+      "base_chars": 2130,
+      "graph_chars": 2130,
+      "additions": []
+    },
+    {
+      "id": "inh-04",
+      "query": "배우자상속공제의 최소 보장 금액은 얼마인가요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 5,
+      "base_seconds": 0.583,
+      "expansion_seconds": 0.064,
+      "base_chars": 1683,
+      "graph_chars": 1683,
+      "additions": []
+    },
+    {
+      "id": "gift-01",
+      "query": "배우자에게 증여할 때 증여재산공제 한도는 얼마인가요?",
+      "base_rank": 4,
+      "graph_rank": 4,
+      "base_count": 5,
+      "graph_count": 6,
+      "base_seconds": 0.368,
+      "expansion_seconds": 0.079,
+      "base_chars": 3476,
+      "graph_chars": 4297,
+      "additions": [
+        {
+          "law": "상속세 및 증여세법 시행령",
+          "article": "제46조",
+          "evidence": "상속세 및 증여세법 제53조의2 → 이 조문이 시작 조문을 인용: 법 제53조의2제5항"
+        }
+      ]
+    },
+    {
+      "id": "vat-01",
+      "query": "간이과세자의 부가가치세 신고 기준은 어떻게 되나요?",
+      "base_rank": 2,
+      "graph_rank": 2,
+      "base_count": 5,
+      "graph_count": 7,
+      "base_seconds": 0.467,
+      "expansion_seconds": 0.076,
+      "base_chars": 4232,
+      "graph_chars": 7195,
+      "additions": [
+        {
+          "law": "부가가치세법 시행령",
+          "article": "제114조",
+          "evidence": "부가가치세법 제67조 → 이 조문이 시작 조문을 인용: 법 제67조제1항"
+        },
+        {
+          "law": "부가가치세법 시행령",
+          "article": "제110조",
+          "evidence": "부가가치세법 제61조 → 이 조문이 시작 조문을 인용: 법 제61조"
+        }
+      ]
+    },
+    {
+      "id": "vat-02",
+      "query": "매입세액 불공제 대상을 알려주세요.",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 6,
+      "base_seconds": 0.426,
+      "expansion_seconds": 0.072,
+      "base_chars": 4615,
+      "graph_chars": 6928,
+      "additions": [
+        {
+          "law": "부가가치세법 시행령",
+          "article": "제71조의2",
+          "evidence": "부가가치세법 제34조의2 → 이 조문이 시작 조문을 인용: 법 제34조의2제1항"
+        }
+      ]
+    },
+    {
+      "id": "vat-03",
+      "query": "세금계산서 발급 의무가 없는 경우는 어떤 경우인가요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 6,
+      "base_seconds": 0.572,
+      "expansion_seconds": 0.061,
+      "base_chars": 2846,
+      "graph_chars": 5159,
+      "additions": [
+        {
+          "law": "부가가치세법 시행령",
+          "article": "제71조의2",
+          "evidence": "부가가치세법 제34조의2 → 이 조문이 시작 조문을 인용: 법 제34조의2제1항"
+        }
+      ]
+    },
+    {
+      "id": "vat-04",
+      "query": "의제매입세액공제는 어떤 사업자가 적용받을 수 있나요?",
+      "base_rank": 2,
+      "graph_rank": 2,
+      "base_count": 5,
+      "graph_count": 6,
+      "base_seconds": 0.185,
+      "expansion_seconds": 0.068,
+      "base_chars": 5412,
+      "graph_chars": 8947,
+      "additions": [
+        {
+          "law": "조세특례제한법",
+          "article": "제6조",
+          "evidence": "부가가치세법 제42조 → 시작 조문에서 인용: 「조세특례제한법」 제6조제1항"
+        }
+      ]
+    },
+    {
+      "id": "vat-05",
+      "query": "수출품에 영세율이 적용되는 요건은 무엇인가요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 5,
+      "base_seconds": 0.645,
+      "expansion_seconds": 0.068,
+      "base_chars": 10417,
+      "graph_chars": 10417,
+      "additions": []
+    },
+    {
+      "id": "corp-01",
+      "query": "법인의 접대비 한도는 어떻게 계산하나요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 7,
+      "base_seconds": 0.585,
+      "expansion_seconds": 0.073,
+      "base_chars": 9748,
+      "graph_chars": 12192,
+      "additions": [
+        {
+          "law": "법인세법 시행령",
+          "article": "제91조의3",
+          "evidence": "법인세법 제25조 → 이 조문이 시작 조문을 인용: 법 제25조제4항"
+        },
+        {
+          "law": "법인세법 시행령",
+          "article": "제120조의21",
+          "evidence": "법인세법 제25조 → 이 조문이 시작 조문을 인용: 법 제25조"
+        }
+      ]
+    },
+    {
+      "id": "corp-02",
+      "query": "법인 업무용승용차 관련 비용의 손금산입 한도는 얼마인가요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 7,
+      "base_seconds": 0.511,
+      "expansion_seconds": 0.071,
+      "base_chars": 8074,
+      "graph_chars": 10518,
+      "additions": [
+        {
+          "law": "법인세법 시행령",
+          "article": "제91조의3",
+          "evidence": "법인세법 제25조 → 이 조문이 시작 조문을 인용: 법 제25조제4항"
+        },
+        {
+          "law": "법인세법 시행령",
+          "article": "제120조의21",
+          "evidence": "법인세법 제25조 → 이 조문이 시작 조문을 인용: 법 제25조"
+        }
+      ]
+    },
+    {
+      "id": "corp-03",
+      "query": "결손금 소급공제 신청 방법을 알려주세요.",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 3,
+      "graph_count": 5,
+      "base_seconds": 0.41,
+      "expansion_seconds": 0.077,
+      "base_chars": 4240,
+      "graph_chars": 5741,
+      "additions": [
+        {
+          "law": "조세특례제한법",
+          "article": "제8조의4",
+          "evidence": "법인세법 시행령 제10조 → 시작 조문에서 인용: 「조세특례제한법」 제8조의4"
+        },
+        {
+          "law": "조세특례제한법",
+          "article": "제104조의31",
+          "evidence": "법인세법 시행령 제10조 → 시작 조문에서 인용: 「조세특례제한법」 제104조의31제1항"
+        }
+      ]
+    },
+    {
+      "id": "corp-04",
+      "query": "법인세법상 익금불산입 항목에는 어떤 것들이 있나요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 6,
+      "base_seconds": 0.69,
+      "expansion_seconds": 0.08,
+      "base_chars": 3461,
+      "graph_chars": 4169,
+      "additions": [
+        {
+          "law": "법인세법 시행령",
+          "article": "제120조의19",
+          "evidence": "법인세법 제18조의2 → 이 조문이 시작 조문을 인용: 법 제18조의2"
+        }
+      ]
+    },
+    {
+      "id": "basic-01",
+      "query": "경정청구 기한은 얼마나 되나요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 7,
+      "base_seconds": 0.685,
+      "expansion_seconds": 0.074,
+      "base_chars": 4824,
+      "graph_chars": 7758,
+      "additions": [
+        {
+          "law": "국세기본법 시행령",
+          "article": "제32조",
+          "evidence": "국세기본법 제45조의2 → 이 조문이 시작 조문을 인용: 법 제45조의2제5항"
+        },
+        {
+          "law": "국세기본법 시행령",
+          "article": "제48조의2",
+          "evidence": "국세기본법 제45조의2 → 이 조문이 시작 조문을 인용: 법 제45조의2"
+        }
+      ]
+    },
+    {
+      "id": "basic-02",
+      "query": "가산세를 감면받을 수 있는 경우는 어떤 경우인가요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 5,
+      "base_seconds": 0.52,
+      "expansion_seconds": 0.058,
+      "base_chars": 2008,
+      "graph_chars": 2008,
+      "additions": []
+    },
+    {
+      "id": "basic-03",
+      "query": "조세심판청구 기한은 언제까지인가요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 5,
+      "base_seconds": 0.2,
+      "expansion_seconds": 0.064,
+      "base_chars": 2101,
+      "graph_chars": 2101,
+      "additions": []
+    },
+    {
+      "id": "basic-04",
+      "query": "기한후신고를 하면 가산세는 어떻게 되나요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 7,
+      "base_seconds": 0.234,
+      "expansion_seconds": 0.061,
+      "base_chars": 4407,
+      "graph_chars": 5268,
+      "additions": [
+        {
+          "law": "법인세법",
+          "article": "제75조의3",
+          "evidence": "국세기본법 제47조의2 → 시작 조문에서 인용: 「법인세법」 제75조의3"
+        },
+        {
+          "law": "소득세법",
+          "article": "제81조의5",
+          "evidence": "국세기본법 제47조의2 → 시작 조문에서 인용: 「소득세법」 제81조의5"
+        }
+      ]
+    },
+    {
+      "id": "trc-01",
+      "query": "중소기업 특별세액감면 요건은 무엇인가요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 5,
+      "base_seconds": 0.367,
+      "expansion_seconds": 0.064,
+      "base_chars": 14562,
+      "graph_chars": 14562,
+      "additions": []
+    },
+    {
+      "id": "trc-02",
+      "query": "고용증대세액공제는 어떤 조건에서 적용되나요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 5,
+      "base_seconds": 0.583,
+      "expansion_seconds": 0.061,
+      "base_chars": 12536,
+      "graph_chars": 12536,
+      "additions": []
+    },
+    {
+      "id": "trc-03",
+      "query": "청년 창업 중소기업 세액감면 대상은 누구인가요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 7,
+      "base_seconds": 0.488,
+      "expansion_seconds": 0.072,
+      "base_chars": 20328,
+      "graph_chars": 23344,
+      "additions": [
+        {
+          "law": "조세특례제한법 시행규칙",
+          "article": "제4조의3",
+          "evidence": "조세특례제한법 시행령 제5조 → 이 조문이 시작 조문을 인용: 영 제5조제12항제7호"
+        },
+        {
+          "law": "조세특례제한법 시행령",
+          "article": "제17조",
+          "evidence": "조세특례제한법 제30조 → 이 조문이 시작 조문을 인용: 법 제30조제1항"
+        }
+      ]
+    },
+    {
+      "id": "local-01",
+      "query": "부동산 취득세 세율은 어떻게 되나요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 6,
+      "base_seconds": 0.622,
+      "expansion_seconds": 0.06,
+      "base_chars": 5332,
+      "graph_chars": 5441,
+      "additions": [
+        {
+          "law": "지방세법 시행령",
+          "article": "제31조",
+          "evidence": "지방세법 제16조 → 이 조문이 시작 조문을 인용: 법 제16조제4항"
+        }
+      ]
+    },
+    {
+      "id": "local-02",
+      "query": "재산세 과세기준일은 언제인가요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 6,
+      "base_seconds": 0.64,
+      "expansion_seconds": 0.066,
+      "base_chars": 1691,
+      "graph_chars": 2407,
+      "additions": [
+        {
+          "law": "지방세법 시행령",
+          "article": "제116조의4",
+          "evidence": "지방세법 제115조 → 이 조문이 시작 조문을 인용: 법 제115조"
+        }
+      ]
+    },
+    {
+      "id": "cust-01",
+      "query": "관세 환급을 받을 수 있는 요건은 무엇인가요?",
+      "base_rank": 2,
+      "graph_rank": 2,
+      "base_count": 5,
+      "graph_count": 7,
+      "base_seconds": 0.273,
+      "expansion_seconds": 0.065,
+      "base_chars": 2817,
+      "graph_chars": 4076,
+      "additions": [
+        {
+          "law": "관세법 시행령",
+          "article": "제122조",
+          "evidence": "관세법 제106조 → 이 조문이 시작 조문을 인용: 법 제106조제3항"
+        },
+        {
+          "law": "관세법 시행령",
+          "article": "제121조",
+          "evidence": "관세법 제106조 → 이 조문이 시작 조문을 인용: 법 제106조제1항"
+        }
+      ]
+    },
+    {
+      "id": "cmp-01",
+      "query": "법인 업무용승용차를 리스로 이용하는 것과 장기렌트로 이용하는 것 중 손금산입 측면에서 어느 쪽이 유리한가요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 7,
+      "base_seconds": 0.431,
+      "expansion_seconds": 0.068,
+      "base_chars": 7414,
+      "graph_chars": 11053,
+      "additions": [
+        {
+          "law": "법인세법 시행령",
+          "article": "제106조",
+          "evidence": "법인세법 제27조의2 → 이 조문이 시작 조문을 인용: 법 제27조의2제2항"
+        },
+        {
+          "law": "법인세법",
+          "article": "제60조",
+          "evidence": "법인세법 시행령 제50조의2 → 시작 조문에서 인용: 법 제60조"
+        }
+      ]
+    },
+    {
+      "id": "cmp-02",
+      "query": "간이과세자와 일반과세자 중 연매출 7천만원인 개인사업자에게 유리한 쪽은 어디인가요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 7,
+      "base_seconds": 0.614,
+      "expansion_seconds": 0.063,
+      "base_chars": 5685,
+      "graph_chars": 8359,
+      "additions": [
+        {
+          "law": "부가가치세법 시행령",
+          "article": "제110조",
+          "evidence": "부가가치세법 제62조 → 이 조문이 시작 조문을 인용: 법 제62조제1항"
+        },
+        {
+          "law": "부가가치세법 시행령",
+          "article": "제116조",
+          "evidence": "부가가치세법 제62조 → 이 조문이 시작 조문을 인용: 법 제62조"
+        }
+      ]
+    },
+    {
+      "id": "direct-01",
+      "query": "소득세법 제55조에 뭐라고 되어 있는지 알려줘",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 5,
+      "base_seconds": 0.764,
+      "expansion_seconds": 0.062,
+      "base_chars": 2617,
+      "graph_chars": 2617,
+      "additions": []
+    },
+    {
+      "id": "direct-02",
+      "query": "부가가치세법 제39조 내용이 궁금해",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 5,
+      "base_seconds": 0.412,
+      "expansion_seconds": 0.056,
+      "base_chars": 3256,
+      "graph_chars": 3256,
+      "additions": []
+    },
+    {
+      "id": "hard-01",
+      "query": "1세대 1주택을 팔면 양도소득세가 비과세되는 근거 조문은?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 5,
+      "base_seconds": 0.991,
+      "expansion_seconds": 0.168,
+      "base_chars": 20946,
+      "graph_chars": 20946,
+      "additions": []
+    },
+    {
+      "id": "hard-02",
+      "query": "회사에서 연말정산은 언제 어떻게 하나요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 6,
+      "base_seconds": 0.412,
+      "expansion_seconds": 0.063,
+      "base_chars": 3362,
+      "graph_chars": 4431,
+      "additions": [
+        {
+          "law": "소득세법 시행령",
+          "article": "제201조의11",
+          "evidence": "소득세법 제144조의2 → 이 조문이 시작 조문을 인용: 법 제144조의2제1항"
+        }
+      ]
+    },
+    {
+      "id": "hard-03",
+      "query": "상속세 신고는 언제까지 해야 하나요?",
+      "base_rank": 1,
+      "graph_rank": 1,
+      "base_count": 5,
+      "graph_count": 7,
+      "base_seconds": 0.364,
+      "expansion_seconds": 0.072,
+      "base_chars": 2901,
+      "graph_chars": 5369,
+      "additions": [
+        {
+          "law": "상속세 및 증여세법 시행령",
+          "article": "제69조의2",
+          "evidence": "상속세 및 증여세법 제67조 → 이 조문이 시작 조문을 인용: 법 제67조"
+        },
+        {
+          "law": "상속세 및 증여세법 시행령",
+          "article": "제67조",
+          "evidence": "상속세 및 증여세법 제67조 → 이 조문이 시작 조문을 인용: 법 제67조"
+        }
+      ]
+    },
+    {
+      "id": "expc-01",
+      "query": "부당해고로 복직하면서 받은 해고기간 임금 상당액도 근로소득으로 과세되나요?",
+      "base_rank": 5,
+      "graph_rank": 5,
+      "base_count": 5,
+      "graph_count": 6,
+      "base_seconds": 0.341,
+      "expansion_seconds": 0.058,
+      "base_chars": 6390,
+      "graph_chars": 8154,
+      "additions": [
+        {
+          "law": "법인세법 시행령",
+          "article": "제44조",
+          "evidence": "소득세법 시행령 제38조 → 시작 조문에서 인용: 「법인세법 시행령」 제44조제4항"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "cases": 38,
+    "base_hits": 38,
+    "graph_hits": 38,
+    "expanded_cases": 23,
+    "same_budget_hits": 38,
+    "mean_expansion_seconds": 0.118,
+    "caveat": "Base top-5 vs graph up-to-7; extra hits do not establish precision or answer correctness."
+  }
+}

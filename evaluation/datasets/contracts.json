@@ -1,0 +1,1126 @@
+{
+  "schema_version": "1.0",
+  "name": "deterministic-contracts",
+  "version": "1.0.0",
+  "description": "합성 문법·관계·산술 계약과 오인하기 쉬운 반례. 세무 정답률 평가가 아님.",
+  "cases": [
+    {
+      "id": "ref-branch",
+      "group": "ref-branch",
+      "split": "dev",
+      "stage": "reference",
+      "adapter": "reference",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "text": "제59조의4"
+      },
+      "checks": [
+        {
+          "path": "article",
+          "op": "equals",
+          "expected": 59,
+          "critical": false
+        },
+        {
+          "path": "article_branch",
+          "op": "equals",
+          "expected": 4,
+          "critical": false
+        },
+        {
+          "path": "paragraph",
+          "op": "equals",
+          "expected": null,
+          "critical": false
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "article": 59,
+            "article_branch": null,
+            "paragraph": 4
+          },
+          "reason": "조 가지번호를 항 번호로 오인",
+          "confusion": "branch_vs_paragraph"
+        }
+      ]
+    },
+    {
+      "id": "ref-paragraph",
+      "group": "ref-branch",
+      "split": "dev",
+      "stage": "reference",
+      "adapter": "reference",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "text": "제59조 제4항"
+      },
+      "checks": [
+        {
+          "path": "article",
+          "op": "equals",
+          "expected": 59,
+          "critical": false
+        },
+        {
+          "path": "article_branch",
+          "op": "equals",
+          "expected": null,
+          "critical": false
+        },
+        {
+          "path": "paragraph",
+          "op": "equals",
+          "expected": 4,
+          "critical": false
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "article": 59,
+            "article_branch": 4,
+            "paragraph": null
+          },
+          "reason": "항을 조 가지번호로 오인",
+          "confusion": "branch_vs_paragraph"
+        }
+      ]
+    },
+    {
+      "id": "ref-item",
+      "group": "ref-item",
+      "split": "dev",
+      "stage": "reference",
+      "adapter": "reference",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "text": "제5조의2 제3항 제1호의2 가목"
+      },
+      "checks": [
+        {
+          "path": "article_branch",
+          "op": "equals",
+          "expected": 2,
+          "critical": false
+        },
+        {
+          "path": "paragraph",
+          "op": "equals",
+          "expected": 3,
+          "critical": false
+        },
+        {
+          "path": "item",
+          "op": "equals",
+          "expected": 1,
+          "critical": false
+        },
+        {
+          "path": "item_branch",
+          "op": "equals",
+          "expected": 2,
+          "critical": false
+        },
+        {
+          "path": "subitem",
+          "op": "equals",
+          "expected": "가",
+          "critical": false
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "article_branch": 2,
+            "paragraph": 3,
+            "item": 12,
+            "item_branch": null,
+            "subitem": "가"
+          },
+          "reason": "호 가지번호를 단일 호 번호로 합침",
+          "confusion": "wrong_level"
+        }
+      ]
+    },
+    {
+      "id": "ref-circled",
+      "group": "circled-holdout",
+      "split": "test",
+      "stage": "reference",
+      "adapter": "reference",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "text": "제7조 ②"
+      },
+      "checks": [
+        {
+          "path": "paragraph",
+          "op": "equals",
+          "expected": 2,
+          "critical": false
+        },
+        {
+          "path": "article_branch",
+          "op": "equals",
+          "expected": null,
+          "critical": false
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "paragraph": null,
+            "article_branch": 2
+          },
+          "reason": "원문 항 기호를 조 가지번호로 오인",
+          "confusion": "wrong_level"
+        }
+      ]
+    },
+    {
+      "id": "ref-invalid",
+      "group": "ref-invalid",
+      "split": "dev",
+      "stage": "reference",
+      "adapter": "reference",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "text": "법 제아홉조"
+      },
+      "checks": [
+        {
+          "path": "error_code",
+          "op": "equals",
+          "expected": "invalid_reference",
+          "critical": true
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "article": 9,
+            "error_code": null
+          },
+          "reason": "불명확한 문법을 유효한 참조로 확정",
+          "confusion": "ambiguous"
+        }
+      ]
+    },
+    {
+      "id": "rel-explicit",
+      "group": "rel-explicit",
+      "split": "dev",
+      "stage": "relation",
+      "adapter": "relation",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "text": "「가상법 시행령」 제3조 제2항"
+      },
+      "checks": [
+        {
+          "path": "relations",
+          "op": "equals",
+          "expected": [
+            {
+              "law": "가상법 시행령",
+              "reference": "제3조 제2항"
+            }
+          ],
+          "critical": true
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "relations": [
+              {
+                "law": "다른법",
+                "reference": "제3조"
+              }
+            ]
+          },
+          "reason": "원문에 없는 대상 또는 확정되지 않은 생략 참조를 연결",
+          "confusion": "wrong_law_or_scope"
+        }
+      ]
+    },
+    {
+      "id": "rel-no-alias",
+      "group": "rel-no-alias",
+      "split": "dev",
+      "stage": "relation",
+      "adapter": "relation",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "text": "법 제3조"
+      },
+      "checks": [
+        {
+          "path": "relations",
+          "op": "equals",
+          "expected": [],
+          "critical": true
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "relations": [
+              {
+                "law": "가상법",
+                "reference": "제3조"
+              }
+            ]
+          },
+          "reason": "원문에 없는 대상 또는 확정되지 않은 생략 참조를 연결",
+          "confusion": "wrong_law_or_scope"
+        }
+      ]
+    },
+    {
+      "id": "rel-same-law",
+      "group": "rel-same-law",
+      "split": "dev",
+      "stage": "relation",
+      "adapter": "relation",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "text": "같은 법 제3조",
+        "aliases": {
+          "법": "가상법"
+        }
+      },
+      "checks": [
+        {
+          "path": "relations",
+          "op": "equals",
+          "expected": [],
+          "critical": true
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "relations": [
+              {
+                "law": "가상법",
+                "reference": "제3조"
+              }
+            ]
+          },
+          "reason": "원문에 없는 대상 또는 확정되지 않은 생략 참조를 연결",
+          "confusion": "wrong_law_or_scope"
+        }
+      ]
+    },
+    {
+      "id": "rel-range",
+      "group": "rel-range",
+      "split": "dev",
+      "stage": "relation",
+      "adapter": "relation",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "text": "「가상법」 제3조부터 제5조까지"
+      },
+      "checks": [
+        {
+          "path": "relations",
+          "op": "equals",
+          "expected": [],
+          "critical": true
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "relations": [
+              {
+                "law": "가상법",
+                "reference": "제3조"
+              }
+            ]
+          },
+          "reason": "원문에 없는 대상 또는 확정되지 않은 생략 참조를 연결",
+          "confusion": "wrong_law_or_scope"
+        }
+      ]
+    },
+    {
+      "id": "rel-historical",
+      "group": "rel-historical",
+      "split": "dev",
+      "stage": "relation",
+      "adapter": "relation",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "text": "구 「가상법」 제3조"
+      },
+      "checks": [
+        {
+          "path": "relations",
+          "op": "equals",
+          "expected": [],
+          "critical": true
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "relations": [
+              {
+                "law": "가상법",
+                "reference": "제3조"
+              }
+            ]
+          },
+          "reason": "원문에 없는 대상 또는 확정되지 않은 생략 참조를 연결",
+          "confusion": "wrong_law_or_scope"
+        }
+      ]
+    },
+    {
+      "id": "rel-alias",
+      "group": "rel-alias",
+      "split": "dev",
+      "stage": "relation",
+      "adapter": "relation",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "text": "영 제3조",
+        "aliases": {
+          "영": "가상법 시행령"
+        }
+      },
+      "checks": [
+        {
+          "path": "relations",
+          "op": "equals",
+          "expected": [
+            {
+              "law": "가상법 시행령",
+              "reference": "제3조"
+            }
+          ],
+          "critical": true
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "relations": [
+              {
+                "law": "다른법",
+                "reference": "제3조"
+              }
+            ]
+          },
+          "reason": "원문에 없는 대상 또는 확정되지 않은 생략 참조를 연결",
+          "confusion": "wrong_law_or_scope"
+        }
+      ]
+    },
+    {
+      "id": "graph-missing-item",
+      "group": "graph-missing-item",
+      "split": "dev",
+      "stage": "relation",
+      "adapter": "graph_index",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "articles": [
+          {
+            "law_name": "가상법",
+            "article_no": "제1조",
+            "article_title": "",
+            "article_text": "「가상법」 제2조 제9항",
+            "effective_date": "20200101",
+            "amendment_date": "20200101"
+          },
+          {
+            "law_name": "가상법",
+            "article_no": "제2조",
+            "article_title": "",
+            "article_text": "제2조\n① 합성 본문",
+            "effective_date": "20200101",
+            "amendment_date": "20200101"
+          }
+        ]
+      },
+      "checks": [
+        {
+          "path": "relations",
+          "op": "equals",
+          "expected": [],
+          "critical": true
+        },
+        {
+          "path": "unresolved",
+          "op": "equals",
+          "expected": 1,
+          "critical": false
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "relations": [
+              {
+                "source": "가상법 제1조",
+                "target": "가상법 제2조",
+                "reference": "제2조 제9항"
+              }
+            ],
+            "unresolved": 0
+          },
+          "reason": "조문은 존재하지만 없는 항을 참조한 관계를 허용",
+          "confusion": "missing_subdivision"
+        }
+      ]
+    },
+    {
+      "id": "calc-boundary-0",
+      "group": "synthetic-progressive-brackets",
+      "split": "dev",
+      "stage": "calculator",
+      "adapter": "progressive_tax",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "taxable": 0,
+        "brackets": [
+          {
+            "bracket_from": 100,
+            "rate": 0.2,
+            "progressive_deduction": 10
+          },
+          {
+            "bracket_from": 0,
+            "rate": 0.1,
+            "progressive_deduction": 0
+          },
+          {
+            "bracket_from": 200,
+            "rate": 0.3,
+            "progressive_deduction": 30
+          }
+        ]
+      },
+      "checks": [
+        {
+          "path": "amount",
+          "op": "number",
+          "expected": 0,
+          "critical": true
+        },
+        {
+          "path": "error_code",
+          "op": "equals",
+          "expected": null,
+          "critical": false
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "amount": 1,
+            "error_code": null
+          },
+          "reason": "경계·절사 또는 금액 1원 오차",
+          "confusion": "boundary_rounding"
+        }
+      ]
+    },
+    {
+      "id": "calc-boundary-1",
+      "group": "synthetic-progressive-brackets",
+      "split": "dev",
+      "stage": "calculator",
+      "adapter": "progressive_tax",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "taxable": 1,
+        "brackets": [
+          {
+            "bracket_from": 100,
+            "rate": 0.2,
+            "progressive_deduction": 10
+          },
+          {
+            "bracket_from": 0,
+            "rate": 0.1,
+            "progressive_deduction": 0
+          },
+          {
+            "bracket_from": 200,
+            "rate": 0.3,
+            "progressive_deduction": 30
+          }
+        ]
+      },
+      "checks": [
+        {
+          "path": "amount",
+          "op": "number",
+          "expected": 0,
+          "critical": true
+        },
+        {
+          "path": "error_code",
+          "op": "equals",
+          "expected": null,
+          "critical": false
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "amount": 1,
+            "error_code": null
+          },
+          "reason": "경계·절사 또는 금액 1원 오차",
+          "confusion": "boundary_rounding"
+        }
+      ]
+    },
+    {
+      "id": "calc-boundary-99",
+      "group": "synthetic-progressive-brackets",
+      "split": "dev",
+      "stage": "calculator",
+      "adapter": "progressive_tax",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "taxable": 99,
+        "brackets": [
+          {
+            "bracket_from": 100,
+            "rate": 0.2,
+            "progressive_deduction": 10
+          },
+          {
+            "bracket_from": 0,
+            "rate": 0.1,
+            "progressive_deduction": 0
+          },
+          {
+            "bracket_from": 200,
+            "rate": 0.3,
+            "progressive_deduction": 30
+          }
+        ]
+      },
+      "checks": [
+        {
+          "path": "amount",
+          "op": "number",
+          "expected": 9,
+          "critical": true
+        },
+        {
+          "path": "error_code",
+          "op": "equals",
+          "expected": null,
+          "critical": false
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "amount": 10,
+            "error_code": null
+          },
+          "reason": "경계·절사 또는 금액 1원 오차",
+          "confusion": "boundary_rounding"
+        }
+      ]
+    },
+    {
+      "id": "calc-boundary-100",
+      "group": "synthetic-progressive-brackets",
+      "split": "dev",
+      "stage": "calculator",
+      "adapter": "progressive_tax",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "taxable": 100,
+        "brackets": [
+          {
+            "bracket_from": 100,
+            "rate": 0.2,
+            "progressive_deduction": 10
+          },
+          {
+            "bracket_from": 0,
+            "rate": 0.1,
+            "progressive_deduction": 0
+          },
+          {
+            "bracket_from": 200,
+            "rate": 0.3,
+            "progressive_deduction": 30
+          }
+        ]
+      },
+      "checks": [
+        {
+          "path": "amount",
+          "op": "number",
+          "expected": 10,
+          "critical": true
+        },
+        {
+          "path": "error_code",
+          "op": "equals",
+          "expected": null,
+          "critical": false
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "amount": 11,
+            "error_code": null
+          },
+          "reason": "경계·절사 또는 금액 1원 오차",
+          "confusion": "boundary_rounding"
+        }
+      ]
+    },
+    {
+      "id": "calc-boundary-101",
+      "group": "synthetic-progressive-brackets",
+      "split": "dev",
+      "stage": "calculator",
+      "adapter": "progressive_tax",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "taxable": 101,
+        "brackets": [
+          {
+            "bracket_from": 100,
+            "rate": 0.2,
+            "progressive_deduction": 10
+          },
+          {
+            "bracket_from": 0,
+            "rate": 0.1,
+            "progressive_deduction": 0
+          },
+          {
+            "bracket_from": 200,
+            "rate": 0.3,
+            "progressive_deduction": 30
+          }
+        ]
+      },
+      "checks": [
+        {
+          "path": "amount",
+          "op": "number",
+          "expected": 10,
+          "critical": true
+        },
+        {
+          "path": "error_code",
+          "op": "equals",
+          "expected": null,
+          "critical": false
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "amount": 11,
+            "error_code": null
+          },
+          "reason": "경계·절사 또는 금액 1원 오차",
+          "confusion": "boundary_rounding"
+        }
+      ]
+    },
+    {
+      "id": "calc-boundary-200",
+      "group": "synthetic-progressive-brackets",
+      "split": "dev",
+      "stage": "calculator",
+      "adapter": "progressive_tax",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "taxable": 200,
+        "brackets": [
+          {
+            "bracket_from": 100,
+            "rate": 0.2,
+            "progressive_deduction": 10
+          },
+          {
+            "bracket_from": 0,
+            "rate": 0.1,
+            "progressive_deduction": 0
+          },
+          {
+            "bracket_from": 200,
+            "rate": 0.3,
+            "progressive_deduction": 30
+          }
+        ]
+      },
+      "checks": [
+        {
+          "path": "amount",
+          "op": "number",
+          "expected": 30,
+          "critical": true
+        },
+        {
+          "path": "error_code",
+          "op": "equals",
+          "expected": null,
+          "critical": false
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "amount": 31,
+            "error_code": null
+          },
+          "reason": "경계·절사 또는 금액 1원 오차",
+          "confusion": "boundary_rounding"
+        }
+      ]
+    },
+    {
+      "id": "calc-boundary-201",
+      "group": "synthetic-progressive-brackets",
+      "split": "dev",
+      "stage": "calculator",
+      "adapter": "progressive_tax",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "taxable": 201,
+        "brackets": [
+          {
+            "bracket_from": 100,
+            "rate": 0.2,
+            "progressive_deduction": 10
+          },
+          {
+            "bracket_from": 0,
+            "rate": 0.1,
+            "progressive_deduction": 0
+          },
+          {
+            "bracket_from": 200,
+            "rate": 0.3,
+            "progressive_deduction": 30
+          }
+        ]
+      },
+      "checks": [
+        {
+          "path": "amount",
+          "op": "number",
+          "expected": 30,
+          "critical": true
+        },
+        {
+          "path": "error_code",
+          "op": "equals",
+          "expected": null,
+          "critical": false
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "amount": 31,
+            "error_code": null
+          },
+          "reason": "경계·절사 또는 금액 1원 오차",
+          "confusion": "boundary_rounding"
+        }
+      ]
+    },
+    {
+      "id": "calc-boundary-250",
+      "group": "synthetic-progressive-brackets",
+      "split": "dev",
+      "stage": "calculator",
+      "adapter": "progressive_tax",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "taxable": 250,
+        "brackets": [
+          {
+            "bracket_from": 100,
+            "rate": 0.2,
+            "progressive_deduction": 10
+          },
+          {
+            "bracket_from": 0,
+            "rate": 0.1,
+            "progressive_deduction": 0
+          },
+          {
+            "bracket_from": 200,
+            "rate": 0.3,
+            "progressive_deduction": 30
+          }
+        ]
+      },
+      "checks": [
+        {
+          "path": "amount",
+          "op": "number",
+          "expected": 45,
+          "critical": true
+        },
+        {
+          "path": "error_code",
+          "op": "equals",
+          "expected": null,
+          "critical": false
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "amount": 46,
+            "error_code": null
+          },
+          "reason": "경계·절사 또는 금액 1원 오차",
+          "confusion": "boundary_rounding"
+        }
+      ]
+    },
+    {
+      "id": "calc-missing-data",
+      "group": "calc-missing-data",
+      "split": "dev",
+      "stage": "calculator",
+      "adapter": "progressive_tax",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "taxable": 100,
+        "brackets": []
+      },
+      "checks": [
+        {
+          "path": "error_code",
+          "op": "equals",
+          "expected": "missing_tax_data",
+          "critical": true
+        },
+        {
+          "path": "amount",
+          "op": "absent",
+          "expected": null,
+          "critical": true
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "amount": 0,
+            "error_code": "missing_tax_data"
+          },
+          "reason": "실패를 정상 0원 결과로 표시",
+          "confusion": "failure_vs_zero"
+        }
+      ]
+    },
+    {
+      "id": "calc-holdout",
+      "group": "synthetic-single-rate",
+      "split": "test",
+      "stage": "calculator",
+      "adapter": "progressive_tax",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "합성 문법/산술 계약. 실제 세법 정답 또는 전문가 검수 아님."
+      },
+      "input": {
+        "taxable": 123,
+        "brackets": [
+          {
+            "bracket_from": 0,
+            "rate": 0.4,
+            "progressive_deduction": 0
+          }
+        ]
+      },
+      "checks": [
+        {
+          "path": "amount",
+          "op": "number",
+          "expected": 49,
+          "critical": true
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "amount": 50,
+            "error_code": null
+          },
+          "reason": "원 단위 절사 대신 반올림",
+          "confusion": "rounding"
+        }
+      ]
+    }
+  ]
+}

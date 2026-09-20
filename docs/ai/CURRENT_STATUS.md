@@ -1,5 +1,102 @@
 # 현재 구현 상태
 
+## 2026-09-20 공식 판례 평가 후보 수집
+
+- 법제처 prec API 실제 연결 성공, 대법원 출처/4개 참조법령 검색으로 목록·본문 10건 수집, 오류 0. 세무 8/민사 2건이며 후보 전체를 보존했다. 출처 ID/사건번호 일치 및 본문 길이 확인.
+- evaluation/sources/precedents/2026-09-20-pilot: 원본 JSON, manifest, 검수 목록 README, draft-cards.json 5건. 소득세 주택 특례·예식 꽃 장식·외국납부세액·상한 초과 중개수수료·상속재산 시가 쟁점 선정. 모두 dev/draft, 승인 0, 스키마 검증 통과.
+- evaluation/precedents.py 추가. 원본/초안은 Git·Docker 제외, OC URL 정제, 기존 파일 덮어쓰기 금지. 운영 DB/Neo4j/임베딩/모델 학습/서비스 재시작/LLM Judge 호출 없음.
+- 사건의 사실관계 전체·귀속기간·구법/부칙·관련 심급과 후속 판결 검수는 미완료. 판시사항/요지로 만든 초안을 정답 인증으로 해석하지 말 것.
+
+## 2026-09-19 마지막 질문 수정·답변 재생성
+
+- 마지막 완료 턴에 질문 편집/다시 답변 버튼 추가. POST conversations/{id}/revise는 소유권·마지막 메시지 ID·완료된 user/assistant 쌍을 검증하고 직전 턴 이전 문맥만 새 대화에 복사한다. 원본은 수정하지 않는다. 기존 테이블 사용, 스키마 변경 없음.
+- 메시지 API에 message_id 추가, 저장 완료 후 UI 재조회. 문맥·목록 메시지는 id 순서로 정렬하여 같은 타임스탬프의 순서 모호함을 제거했다. 생성/분기 요청 중 중복 클릭 차단 및 대화 이동 후 늦은 응답 무시.
+- WSL venv + 기존 Ollama 실행 스크립트로 Docker backend/frontend 재빌드. 전체 backend 490 passed/2 skipped, frontend 8 passed/build 성공. Edge 합성 API 브라우저에서 편집·재생성·새 대화 라우팅 확인. 실제 PG 트랜잭션으로 복사/원본 보존 검증 후 테스트 데이터 rollback.
+- 생성 LLM의 실제 재답변 품질은 이번 검증 대상이 아니다. 한 대화의 버전 넘기기 대신 별도 대화로 보존한다. 서버 전역 중복 요청 방지/idempotency는 미구현이며 여러 탭 요청은 별도 분기를 만들 수 있다.
+
+## 2026-09-19 Judge 증거 ID 보정
+
+- 직접 발췌 문자열 대신 A/R ID 선택·원문 복원, 중복/없는 ID 차단. 일반 paired와 기존 합성 정보 부족 사례의 behavioral 정책을 분리했다. omission/absence 모드와 최대 1회 형식 보정 추가.
+- 같은 저장 답변 재평가: 기존 pass 1/error 2 → pass 3/error 0. 결과 evaluation/runs/judge-evidence-ids-01/judge.md. 1개 합성 행동 사례의 보조 평가이며 세무 정답률이나 Judge 전체 정확도는 아니다.
+- 관련 테스트 43 passed. 운영 서비스/DB/원래 관측과 인간 gate 변경 없음. LangSmith 전송 없음.
+
+## 2026-09-19 LLM Judge 초기 연결
+
+- evaluation/judge.py와 CLI judge 추가. 기존 run/hash/관측 검증, 항목별 구조화 판정과 발췌 대조, 비밀 예외 비노출, draft/원문 부재 unknown 처리. 인간 gate/Adjudication은 변경하지 않는다.
+- 로컬 현재 provider 모델 사용. 첫 저장 답변 평가는 입력 예산 초과 3 unknown, 예산을 6000 UTF-8 bytes/컨텍스트 8192로 조정해 재실행. 생성 답변을 자르지 않았다.
+- 관련 테스트 40 passed. 서비스 재배포/DB 변경/외부 전송 없음. LangSmith 자동 Judge feedback 연결 및 미검수 5개 법령 카드의 실제 정확도 평가는 후속이다.
+- 실제 로컬 Qwen3.5:9b로 과거 생성된 정보 부족 답변 1개/루브릭 3개 평가: judge-pilot-02 및 오류 종류 구체화 후 judge-pilot-03 모두 pass 1/error 2. 금액 미확정 항목만 통과, 나머지는 발췌 검증 오류로 답변 오답과 구분한다. 종합 정확도 산출 불가. 결과 evaluation/runs/judge-pilot-03/judge.md (Git 제외). 최종 관련 40 tests 및 diff check 통과.
+
+## 2026-09-19 평가 기준 구체화
+
+- evaluation/QUALITY_CRITERIA.md: 검색/Graph/답변/계산 11항목, 판정 상태·분모·중대 오류·Judge 교정·A/B 비교 규약 작성.
+- datasets/answer_pilot.json: 기본공제/면세 포기/의료비 예외/과거 귀속/입력 부족 5개 dev/draft 카드. 기존 Dataset 규약, recorded 어댑터와 input.review_card를 사용한다. 후보 근거·필수/금지 주장·혼동 후보·교정용 오답을 분리했다.
+- 공식 원문 적용 버전·부칙·인간 승인은 미완료. Judge 구현/실행 및 LangSmith 전송 없음. 서비스/Graph 설정과 DB는 변경하지 않았다.
+
+## 2026-09-19 실제 채팅 GraphRAG 활성화
+
+- 사용자 요청으로 LLM Judge 구현은 보류하고 로컬 `.env`의 GRAPH_RAG_ENABLED=true 적용. 기존 Ollama 유지, WSL venv + dev/docker-up-wsl.sh backend frontend neo4j로 재빌드했다. 코드/Compose 기본값 false는 유지한다.
+- 그래프 확장 로그에 base/added 개수만 추가했다. 일반/SSE 채팅의 기존 hybrid_search 경로를 사용하며 원문 단독 조회·문서 도구 및 관계도 UI는 변경하지 않았다.
+- 읽기 전용 감사: 조문 6,675/인용 8,387, 누락·중복·무결성 오류 0. 미해결 참조 6,275는 그대로이며 재수집/DB 변경 없음.
+- 프런트 Nginx 경유 실제 회원가입→로그인→대화→SSE→저장 재조회 확인. 정상 한국어 질문에서 base=5 added=2, 약 15.1초, DONE 및 메시지 2개 저장. 답변에 부가가치세법 시행령 제57조·제58조 인용 포함. 브라우저 시각 검증이나 법적 정답 판정은 아니다.
+- 검증 중 WSL 재기동 직후 Neo4j 미준비 요청은 ServiceUnavailable 후 기본 검색으로 정상 응답. 초기 PowerShell stdin 한글 손상 요청은 성공 사례에서 제외하고 Unicode escape로 재검증했다. 합성 스모크 계정/대화 3개는 보존했다.
+- 로그 비노출 테스트 추가 후 최종 재빌드 이미지 전체 478 passed, 2 skipped, 26 warnings, 5 subtests passed. git diff --check 통과. 답변의 조건·설명 정확성과 전체 프롬프트 토큰 예산 검증은 여전히 필요하다.
+
+## 2026-09-19 LangSmith 키 파일 변경
+
+- .env.example을 현재 .env의 설정 항목과 Ollama 구성에 맞췄다. 미사용 llama.cpp/전환 예제를 제거하고 EMBED_MODEL·JWT_EXPIRE_MIN·외부 API 키 입력란을 반영했다. 비밀번호/JWT/외부 API는 예시값 또는 빈 값, 기존 LangSmith 키는 보존했다. 실제 .env는 변경하지 않았다.
+
+- 사용자 요청으로 평가 publish의 키 입력 파일을 .env.example로 변경했다. .env.langsmith와 중복 키 예제 파일을 삭제했다. 실제 키는 출력하거나 복사하지 않았다.
+- .env.example의 Docker 포함 예외를 제거했다. Git 추적은 그대로이므로 실제 키가 담긴 파일을 커밋하지 말 것. 아래 .env.langsmith 사용 안내는 과거 이력이다.
+
+## 2026-09-19 LangSmith 평가 화면 전환
+
+- 자체 대시보드 소스·실행기·전용 테스트 제거, 8765 프로세스 종료 확인. 아래 로컬 UI 내용은 과거 이력이며 현재 실행 경로가 아니다. Python 캐시만 남을 수 있다(캐시 디렉터리 재귀 삭제는 실행 정책에서 거부됨).
+- evaluation/langsmith_bridge.py 및 CLI langsmith prepare/publish 추가. 기존 scorer 재계산/저장 report 대조, 기본 본문 제외, 본문/검수 큐 명시 선택, 전송 계획 hash 승인, 원격 base/graph 실험·feedback·선택 annotation queue 매핑, 부분 실패 receipt·중복 실험 방지 구현.
+- langsmith==0.12.1 고정. .env.langsmith에 빈 API key 자리 마련(Git/Docker 제외, 서비스에는 로드하지 않음). production 추적·모델/DB 호출·GraphRAG 설정 변경 없음.
+- 실제 retrieval-rescored 39문항/78결과로 metrics/review 계획 생성 성공(uploaded=false). API 키 미설정으로 원격 계정 연결·업로드·LangSmith UI 검증은 아직 수행하지 않았다.
+- 로컬 평가 테스트 45 passed(신규 bridge 9개), 최신 Compose 이미지 전체 476 passed/2 skipped/26 warnings/5 subtests passed. SDK 메서드 규약 기반 mock 검증이며 실제 클라우드 검증은 아니다. git diff --check 통과.
+- 사용법 evaluation/LANGSMITH.md. LangSmith 인간 검수의 자동 다운로드/로컬 Adjudication 변환은 미구현이며 수동 검수·재채점한다. 기존 runs/reviews는 보존했다.
+
+## 2026-09-19 로컬 평가 대시보드 (이력: LangSmith로 대체)
+
+- 명칭을 evaluation_dashboard로 통일했다. 패키지·import·테스트 파일·문서·CI/Docker 제외 경로를 함께 변경했으며 대시보드 테스트 8개 통과. 실행 명령과 포트는 동일하다.
+
+- evaluation_dashboard(별도 FastAPI·정적 화면)와 scripts/evaluation_dashboard.py 추가. 127.0.0.1:8765에서 수동 실행하며 제품 프런트엔드/API/Compose에는 연결하지 않는다. UI 코드·검수 파일은 서비스 Docker 이미지에서 제외했다.
+- 실행 목록·영역별 지표·질문별 실제 출력·검색 근거/답변 검수·변경 이력·JSON 다운로드·동일 조건 실행 비교 지원. 모델·DB 호출과 평가 실행 버튼은 없다.
+- 원본 runs는 수정하지 않고 reviews에 해시 결합 리비전 저장. 낙관적 충돌 검사, Host/Origin/저장 토큰, CSP·텍스트 렌더링, 경로 탈출 차단 적용. 검수자 이름은 본인 기재이며 인증된 신원이 아니다.
+- WSL 평가/UI 테스트 44개(신규 UI 8개) 통과. 최신 서비스 Docker 이미지 전체 467 passed/2 skipped(UI 테스트는 로컬 전용이라 이미지 제외). Edge에서 실제 검색 78행/231후보, 답변 양식, 모바일 가로 넘침 없음 검증. 실제 후보에 테스트 검수는 저장하지 않았다.
+- 기존 서비스 컨테이너 재시작·DB 수정·GraphRAG 활성화 없음. 실행/검수 절차는 evaluation_dashboard/README.md.
+
+## 2026-09-19 평가 실행 파일 정리
+
+- scripts/evaluate.py는 얇은 실행 진입점으로 유지하고 기존 명령 처리를 evaluation/cli.py로 이동했다. validate/run/suite/score/compare와 기존 옵션을 보존했다.
+- 안내만 출력하던 scripts/eval_rag.py·scripts/eval_graph_rag.py를 제거했다. 기존 질문·평가 결과와 데이터 수집·Docker 기동 스크립트는 보존했다. 아래 이전 평가 기록의 구 파일명은 당시 이력이다.
+- CLI 실행·종료 코드·비밀 오류 내용 비노출 회귀 테스트 7개를 추가했다. WSL 평가 관련 테스트 36개 통과.
+- 최신 Compose 이미지 일회성 컨테이너에서 전체 467 passed, 2 skipped, 합성 평가 22개 gate=pass. 서비스 컨테이너 재시작은 하지 않았다. 초기 독립 컨테이너는 토크나이저 다운로드 차단/DB 설정 부재로 실패했고 Compose 환경으로 재검증했다. git diff --check 통과.
+
+## 2026-09-19 요소별 평가 파이프라인 재설계
+
+- 최종 최신 Docker 검증: 460 passed, 2 skipped, 26 warnings, 5 subtests passed. 새 평가기 테스트 29개 포함. scorer 1.1의 합성 22사례/반례 통과, git diff --check 통과. CI 구성은 로컬에서 동등 명령을 검증했으며 원격 CI 실행 결과는 아니다.
+
+- evaluation/schema.py·scoring.py·adapters.py·runner.py와 scripts/evaluate.py 추가. validate/run/suite/score/compare, 영역별 report JSON/Markdown, 실행별 정답/관측/검수 hash, 중복/group split 누출 검사, 반례 검증, 종료 코드 gate를 구현했다.
+- contracts 22개 + 각 오답 반례, 기존 검색 39문항을 draft/dev로 이관(제안 hard negative 6개), component 7개 계약/검수 초안. 모델이 정답을 자동 확정하지 않는다. 공식 승인에는 출처·기준일·버전·인간 검수가 필요하다.
+- 실제 검색 39문항 base/graph 비교 실행: 실행 오류 0, 공개 DB fingerprint 전후 동일, 검수 후보 231개 생성. 초안 기대 조문이 있는 38개 중 37개 발견했지만 공식 품질 점수는 아니며 gate=incomplete. 과거 정답 세목 필터를 준 38/38과 직접 비교 금지.
+- 실제 계산 잘못된 입력 처리·모델 도구 선택 통과. 고정 컨텍스트 답변 생성 성공 후 인간 루브릭 미검수로 incomplete 유지. 모든 raw 결과는 evaluation/runs/에 보존(Git/이미지 제외).
+- 기존 eval_rag.py/eval_graph_rag.py는 종료 안내로 대체했고 과거 결과는 삭제하지 않았다. CI에 스키마/반례/합성 계약 실행과 artifact 업로드를 추가했으며 원격 CI 자체를 실행한 것은 아니다.
+- 현재 한계: 전문가 승인된 실제 세무 gold는 아직 없음. context/safety/performance는 recorded 관측 계약만 있고 전체 제품 trace 자동 계측은 후속. 신규 평가기가 답변 정답률을 인증하거나 GraphRAG를 활성화한 것은 아니다.
+- 상세 판정 규약·검수·명령: evaluation/README.md. 운영 provider는 Ollama 그대로, GraphRAG=false, PG 스키마/벡터/법령 데이터 변경 없음.
+
+## 2026-09-19 GraphRAG 연결·약칭 확장·실제 비교
+
+- 9/13에 남긴 config/Compose/검색 메타데이터/Neo4j 의존성 불일치와 재정경제부 수집 필터를 복구했다. 일반 hybrid_search의 단일/멀티쿼리 뒤 선택형 그래프 확장이 연결됐다.
+- 원문에 유일하게 정의된 법/영 약칭을 정의 이후 범위에서 해석한다. 정의 조문 버전도 저장·재검증한다. 인용은 양방향 1-hop, 역방향은 동일 계열만, 키워드 필터와 3 seed/24 후보/+2 조문/추가 4,000자/3초 제한이다.
+- WSL venv + dev/docker-up-wsl.sh로 실제 Ollama 구성을 유지해 재빌드. 최신 Docker pytest 431 passed, 2 skipped, 26 warnings, 5 subtests passed. 격리 Neo4j 통합 2 passed. 프런트 경유 ready/dependencies HTTP 200.
+- 6,675개 조문 CITES를 2,464→8,387개로 동기화. 감사 누락·중복·버전 무결성 오류 0, 미해결 6,275(대상 없음 3,198/호 확인 실패 2,953/항 확인 실패 124). TaxLaw 39개 보존, 관측 스냅샷 2개. PG 7,587행/벡터와 집계 해시 전후 동일.
+- 신규 scripts/eval_graph_rag.py로 기존 라벨 38문항 실제 비교: 기본 top-5 38/38, 확장 전체도 38/38, 23문항에 보충, 평균 확장 0.118초. 질문 분류/답변 생성은 평가하지 않았고 새로운 정확도 향상 근거는 없다.
+- GRAPH_RAG_ENABLED=false 유지. 같은 계열 내 부적절한 추가 근거도 남아 있어 복합 질문 정답셋·근거 정밀도·전체 토큰 예산·생성 답변 검증 후 활성화한다. 제품 UI는 아직 별도 연결하지 않았다.
+- 상세: docs/GRAPH_RAG_VALIDATION_2026-09-19.md, docs/evaluations/graph_rag_2026-09-19.json. 이전 9/13 미복구/실패 기록은 당시 상태이며 위 결과가 현재 상태다.
+
 ## 2026-09-13 Neo4j 통합 테스트 정리
 
 - dev/verify-graph-wsl.py를 제거하고 tests/integration/conftest.py 및 test_neo4j_graph.py로 전환했다. --run-neo4j 명시 시에만 격리 Docker DB를 생성하고 --graph-real-sample 추가 시 tax_backend 공개 법령 표본을 읽는다. 일반 실행은 두 테스트 skip.

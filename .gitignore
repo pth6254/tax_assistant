@@ -49,6 +49,9 @@ coverage.xml
 *.py.cover
 .hypothesis/
 .pytest_cache/
+evaluation/runs/
+evaluation/reviews/
+evaluation/sources/
 cover/
 
 # Translations
@@ -149,6 +152,7 @@ activemq-data/
 
 # Environments
 .env
+.env.langsmith
 .envrc
 .venv
 .venv-wsl

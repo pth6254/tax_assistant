@@ -1,0 +1,368 @@
+{
+  "schema_version": "1.0",
+  "name": "answer-quality-pilot",
+  "version": "0.1.0",
+  "description": "기준 구체화용 5개 dev/draft 카드. 공식 원문 버전·인간 검수 미완료, Judge 미구현. recorded 관측 없이는 실행 평가 불가.",
+  "cases": [
+    {
+      "id": "pilot-basic-deduction",
+      "group": "pilot-basic-deduction",
+      "split": "dev",
+      "stage": "answer",
+      "adapter": "recorded",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "작성 초안이며 인간 승인 아님. 후보 원문과 반례는 검수 전."
+      },
+      "input": {
+        "query": "기본공제는 납부할 세금에서 직접 빼는 것인가요?",
+        "review_card": {
+          "source_candidates": [
+            "소득세법 제50조"
+          ],
+          "required_claims": [
+            "소득금액 공제와 세액공제를 구분한다. 개인의 최종 절세액을 공제금액과 같다고 확정하지 않는다."
+          ],
+          "forbidden_claims": [
+            "기본공제액 전액이 그대로 환급된다."
+          ],
+          "hard_negative_proposals": [
+            {
+              "description": "세액공제 조문을 기본공제의 산식 근거로 대체",
+              "confusion": "wrong_tax",
+              "reason": "다른 적용 조건이나 평가 대상을 정답으로 오인할 위험. 정확한 조문·버전 확정 전에는 검색 라벨로 사용하지 않는다."
+            }
+          ],
+          "calibration_examples": [
+            {
+              "answer": "기본공제액 전액이 그대로 환급된다.",
+              "expected": "fail",
+              "criterion": "core",
+              "status": "draft"
+            }
+          ],
+          "approval_todo": [
+            "기준일과 적용 귀속기간 확정",
+            "공식 원문·부칙·항호·버전·발췌 보존 또는 합성 계약 범위 명시",
+            "독립 검수자가 필수 주장·예외·반례 승인"
+          ],
+          "reference_verified": false
+        }
+      },
+      "rubric": [
+        {
+          "id": "core",
+          "dimension": "factuality",
+          "instruction": "소득금액 공제와 세액공제를 구분한다. 개인의 최종 절세액을 공제금액과 같다고 확정하지 않는다.",
+          "critical": true
+        },
+        {
+          "id": "grounding",
+          "dimension": "grounding",
+          "instruction": "주요 법적 주장을 제공 원문으로 뒷받침하고 원문에 없는 조건·조문·금액을 만들지 않는다. 원문이 불충분하면 판단 불가로 남긴다.",
+          "critical": true
+        },
+        {
+          "id": "completeness",
+          "dimension": "completeness",
+          "instruction": "승인된 카드의 필수 조건·예외를 모두 설명한다. 미승인 카드만으로 완전성을 확정하지 않는다.",
+          "critical": true
+        }
+      ],
+      "tags": [
+        "pilot",
+        "unreviewed",
+        "judge-calibration"
+      ]
+    },
+    {
+      "id": "pilot-vat-waiver",
+      "group": "pilot-vat-waiver",
+      "split": "dev",
+      "stage": "answer",
+      "adapter": "recorded",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "작성 초안이며 인간 승인 아님. 후보 원문과 반례는 검수 전."
+      },
+      "input": {
+        "query": "면세 사업자라면 누구나 면세를 포기할 수 있나요? 신고 절차도 알려주세요.",
+        "review_card": {
+          "source_candidates": [
+            "부가가치세법 제28조 및 시행령 관련 조문"
+          ],
+          "required_claims": [
+            "법률의 포기 가능 대상과 시행령의 신고 절차를 구분한다. 모든 면세 거래에 무조건 허용된다고 일반화하지 않는다."
+          ],
+          "forbidden_claims": [
+            "면세 사업자는 거래 종류에 관계없이 누구나 포기할 수 있다."
+          ],
+          "hard_negative_proposals": [
+            {
+              "description": "면세 대상 목록만으로 면세 포기 가능 대상까지 확정",
+              "confusion": "wrong_exception",
+              "reason": "다른 적용 조건이나 평가 대상을 정답으로 오인할 위험. 정확한 조문·버전 확정 전에는 검색 라벨로 사용하지 않는다."
+            }
+          ],
+          "calibration_examples": [
+            {
+              "answer": "면세 사업자는 거래 종류에 관계없이 누구나 포기할 수 있다.",
+              "expected": "fail",
+              "criterion": "core",
+              "status": "draft"
+            }
+          ],
+          "approval_todo": [
+            "기준일과 적용 귀속기간 확정",
+            "공식 원문·부칙·항호·버전·발췌 보존 또는 합성 계약 범위 명시",
+            "독립 검수자가 필수 주장·예외·반례 승인"
+          ],
+          "reference_verified": false
+        }
+      },
+      "rubric": [
+        {
+          "id": "core",
+          "dimension": "factuality",
+          "instruction": "법률의 포기 가능 대상과 시행령의 신고 절차를 구분한다. 모든 면세 거래에 무조건 허용된다고 일반화하지 않는다.",
+          "critical": true
+        },
+        {
+          "id": "grounding",
+          "dimension": "grounding",
+          "instruction": "주요 법적 주장을 제공 원문으로 뒷받침하고 원문에 없는 조건·조문·금액을 만들지 않는다. 원문이 불충분하면 판단 불가로 남긴다.",
+          "critical": true
+        },
+        {
+          "id": "completeness",
+          "dimension": "completeness",
+          "instruction": "승인된 카드의 필수 조건·예외를 모두 설명한다. 미승인 카드만으로 완전성을 확정하지 않는다.",
+          "critical": true
+        }
+      ],
+      "tags": [
+        "pilot",
+        "unreviewed",
+        "judge-calibration"
+      ]
+    },
+    {
+      "id": "pilot-medical-exception",
+      "group": "pilot-medical-exception",
+      "split": "dev",
+      "stage": "answer",
+      "adapter": "recorded",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "작성 초안이며 인간 승인 아님. 후보 원문과 반례는 검수 전."
+      },
+      "input": {
+        "query": "부양가족 기본공제 요건을 충족하지 않으면 의료비 세액공제도 무조건 불가능한가요?",
+        "review_card": {
+          "source_candidates": [
+            "소득세법 제50조 및 제59조의4 관련 항"
+          ],
+          "required_claims": [
+            "기본공제 요건을 의료비 세액공제에 그대로 전용하지 않는다. 해당 공제의 별도 요건·예외를 확인하고 필요한 가족·지출 정보를 묻는다."
+          ],
+          "forbidden_claims": [
+            "기본공제를 못 받으면 다른 공제도 모두 불가능하다."
+          ],
+          "hard_negative_proposals": [
+            {
+              "description": "기본공제의 요건을 별도 공제에 무조건 적용",
+              "confusion": "wrong_subject",
+              "reason": "다른 적용 조건이나 평가 대상을 정답으로 오인할 위험. 정확한 조문·버전 확정 전에는 검색 라벨로 사용하지 않는다."
+            }
+          ],
+          "calibration_examples": [
+            {
+              "answer": "기본공제를 못 받으면 다른 공제도 모두 불가능하다.",
+              "expected": "fail",
+              "criterion": "core",
+              "status": "draft"
+            }
+          ],
+          "approval_todo": [
+            "기준일과 적용 귀속기간 확정",
+            "공식 원문·부칙·항호·버전·발췌 보존 또는 합성 계약 범위 명시",
+            "독립 검수자가 필수 주장·예외·반례 승인"
+          ],
+          "reference_verified": false
+        }
+      },
+      "rubric": [
+        {
+          "id": "core",
+          "dimension": "factuality",
+          "instruction": "기본공제 요건을 의료비 세액공제에 그대로 전용하지 않는다. 해당 공제의 별도 요건·예외를 확인하고 필요한 가족·지출 정보를 묻는다.",
+          "critical": true
+        },
+        {
+          "id": "grounding",
+          "dimension": "grounding",
+          "instruction": "주요 법적 주장을 제공 원문으로 뒷받침하고 원문에 없는 조건·조문·금액을 만들지 않는다. 원문이 불충분하면 판단 불가로 남긴다.",
+          "critical": true
+        },
+        {
+          "id": "completeness",
+          "dimension": "completeness",
+          "instruction": "승인된 카드의 필수 조건·예외를 모두 설명한다. 미승인 카드만으로 완전성을 확정하지 않는다.",
+          "critical": true
+        }
+      ],
+      "tags": [
+        "pilot",
+        "unreviewed",
+        "judge-calibration"
+      ]
+    },
+    {
+      "id": "pilot-historical-tax",
+      "group": "pilot-historical-tax",
+      "split": "dev",
+      "stage": "answer",
+      "adapter": "recorded",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "작성 초안이며 인간 승인 아님. 후보 원문과 반례는 검수 전."
+      },
+      "input": {
+        "query": "2024년 귀속 소득세를 지금 신고하는 경우 현재 세율을 그대로 적용하면 되나요?",
+        "review_card": {
+          "source_candidates": [
+            "2024년 귀속에 적용되는 소득세법·부칙 검수 필요"
+          ],
+          "required_claims": [
+            "신고 시점과 귀속연도를 구별한다. 당시 적용 원문·부칙이 없으면 세율과 세액 확정을 유보한다."
+          ],
+          "forbidden_claims": [
+            "현재 DB의 현행 법령이면 과거 귀속에도 그대로 적용하면 된다."
+          ],
+          "hard_negative_proposals": [
+            {
+              "description": "현행 버전을 과거 귀속의 정답 근거로 사용",
+              "confusion": "wrong_date",
+              "reason": "다른 적용 조건이나 평가 대상을 정답으로 오인할 위험. 정확한 조문·버전 확정 전에는 검색 라벨로 사용하지 않는다."
+            }
+          ],
+          "calibration_examples": [
+            {
+              "answer": "현재 DB의 현행 법령이면 과거 귀속에도 그대로 적용하면 된다.",
+              "expected": "fail",
+              "criterion": "core",
+              "status": "draft"
+            }
+          ],
+          "approval_todo": [
+            "기준일과 적용 귀속기간 확정",
+            "공식 원문·부칙·항호·버전·발췌 보존 또는 합성 계약 범위 명시",
+            "독립 검수자가 필수 주장·예외·반례 승인"
+          ],
+          "reference_verified": false
+        }
+      },
+      "rubric": [
+        {
+          "id": "core",
+          "dimension": "temporal",
+          "instruction": "신고 시점과 귀속연도를 구별한다. 당시 적용 원문·부칙이 없으면 세율과 세액 확정을 유보한다.",
+          "critical": true
+        },
+        {
+          "id": "grounding",
+          "dimension": "grounding",
+          "instruction": "주요 법적 주장을 제공 원문으로 뒷받침하고 원문에 없는 조건·조문·금액을 만들지 않는다. 원문이 불충분하면 판단 불가로 남긴다.",
+          "critical": true
+        },
+        {
+          "id": "completeness",
+          "dimension": "completeness",
+          "instruction": "승인된 카드의 필수 조건·예외를 모두 설명한다. 미승인 카드만으로 완전성을 확정하지 않는다.",
+          "critical": true
+        }
+      ],
+      "tags": [
+        "pilot",
+        "unreviewed",
+        "judge-calibration"
+      ]
+    },
+    {
+      "id": "pilot-missing-input",
+      "group": "pilot-missing-input",
+      "split": "dev",
+      "stage": "answer",
+      "adapter": "recorded",
+      "review": {
+        "status": "draft",
+        "basis": "synthetic_contract",
+        "notes": "작성 초안이며 인간 승인 아님. 후보 원문과 반례는 검수 전."
+      },
+      "input": {
+        "query": "소득과 필요경비는 아직 정리하지 못했는데 종합소득세가 얼마인지 확정해줘.",
+        "review_card": {
+          "source_candidates": [
+            "사용자 입력 부족에 대한 행동 계약"
+          ],
+          "required_claims": [
+            "금액을 확정하지 않고 귀속연도·소득 종류/금액·필요경비 등 계산에 필요한 정보를 요청한다. 미계산을 0원이라고 표현하지 않는다."
+          ],
+          "forbidden_claims": [
+            "입력 정보가 없으므로 납부세액은 0원이다."
+          ],
+          "hard_negative_proposals": [
+            {
+              "description": "다른 사람의 계산 예시를 사용자 확정 세액으로 사용",
+              "confusion": "wrong_subject",
+              "reason": "다른 적용 조건이나 평가 대상을 정답으로 오인할 위험. 정확한 조문·버전 확정 전에는 검색 라벨로 사용하지 않는다."
+            }
+          ],
+          "calibration_examples": [
+            {
+              "answer": "입력 정보가 없으므로 납부세액은 0원이다.",
+              "expected": "fail",
+              "criterion": "core",
+              "status": "draft"
+            }
+          ],
+          "approval_todo": [
+            "기준일과 적용 귀속기간 확정",
+            "공식 원문·부칙·항호·버전·발췌 보존 또는 합성 계약 범위 명시",
+            "독립 검수자가 필수 주장·예외·반례 승인"
+          ],
+          "reference_verified": false
+        }
+      },
+      "rubric": [
+        {
+          "id": "core",
+          "dimension": "abstention",
+          "instruction": "금액을 확정하지 않고 귀속연도·소득 종류/금액·필요경비 등 계산에 필요한 정보를 요청한다. 미계산을 0원이라고 표현하지 않는다.",
+          "critical": true
+        },
+        {
+          "id": "grounding",
+          "dimension": "grounding",
+          "instruction": "주요 법적 주장을 제공 원문으로 뒷받침하고 원문에 없는 조건·조문·금액을 만들지 않는다. 원문이 불충분하면 판단 불가로 남긴다.",
+          "critical": true
+        },
+        {
+          "id": "completeness",
+          "dimension": "completeness",
+          "instruction": "승인된 카드의 필수 조건·예외를 모두 설명한다. 미승인 카드만으로 완전성을 확정하지 않는다.",
+          "critical": true
+        }
+      ],
+      "tags": [
+        "pilot",
+        "unreviewed",
+        "judge-calibration"
+      ]
+    }
+  ]
+}

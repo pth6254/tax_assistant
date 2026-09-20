@@ -29,6 +29,24 @@
 
 ## 1. 프로젝트 소개
 
+### 마지막 질문 수정·답변 재생성
+
+완료된 마지막 질문 옆의 `✎ 질문 수정`, 마지막 답변 아래의 `↻ 다시 답변`을 사용할 수 있습니다.
+원본 대화는 목록에 보존하며 마지막 질문·답변 이전의 문맥만 복사한 별도 대화에서 다시 실행합니다.
+생성 중에는 사용할 수 없으며, 재생성이 답변의 정확도를 보장하지는 않습니다.
+새 요청이 실패해도 원본 대화는 유지됩니다. 과거 중간 질문 수정과 한 대화 내 버전 전환 UI는 지원하지 않습니다.
+
+### 선택형 GraphRAG
+
+pgvector 검색 결과를 Neo4j의 법령 인용 관계로 보충하는 경로를 구현했습니다.
+전체 법령명 인용과 원문에서 정의된 `법`·`영` 약칭을 검증하고, 인용/역방향 인용을 1단계 탐색합니다.
+원문·약칭 정의의 버전 해시 대조, 질문 키워드 필터, 최대 2개 추가 및 3초 제한을 적용합니다.
+장애 시 기존 검색 결과를 유지하며 `GRAPH_RAG_ENABLED=false`가 기본값입니다.
+2026-09-19 로컬 배포는 `.env`에서 `GRAPH_RAG_ENABLED=true`로 활성화했습니다.
+일반 채팅의 검색 근거에 반영되며, 별도의 채팅 관계도 UI는 아직 없습니다.
+관계가 존재한다는 것이 해당 질문에 법적으로 적용된다는 의미는 아닙니다.
+실행·검증·제한은 [GraphRAG 문서](docs/GRAPH_RAG.md)를 참고하세요.
+
 ### 해결하려는 문제
 
 일반 LLM에 세무 질문을 하면 세 가지 문제가 발생합니다.
@@ -115,7 +133,8 @@ Agentic RAG 파이프라인 (검색 → 계산 → 합성 → 인용 검증)
 
 ### RAG 품질 평가 도구
 
-- `scripts/eval_rag.py`: 골든 평가셋 기반으로 검색 hit-rate·MRR·세목 분류 정확도·인용 정확도를 측정하고 이전 실행과 자동 비교(회귀 감지)
+- `scripts/evaluate.py`: 버전 관리된 평가셋·hard negative·단계별 자동 판정·인간 검수·회귀 비교를 통합한 평가 CLI. [판정 규약](evaluation/README.md)
+- `scripts/evaluate.py langsmith`: 평가 결과를 LangSmith 실험·검수 큐로 명시적 전송. 자체 대시보드는 제거했으며 실서비스 자동 추적은 켜지 않습니다. [설정·사용법](evaluation/LANGSMITH.md)
 - 파라미터(임계값, 프롬프트 등) 변경 시 효과를 수치로 검증 가능
 - `--repeat N` 옵션으로 동일 평가를 반복 실행해 생성 품질 지표의 샘플링 편차와 실행마다 결과가 바뀌는 비결정적 항목을 확인 가능
 
@@ -341,7 +360,7 @@ tax-assistant/
 │   ├── sync_laws.py              # 법령 개정 자동 동기화 CLI (cron 등록 대상)
 │   ├── backfill_law_type.py      # law_type 일괄 보정 (일회성 데이터 보정)
 │   ├── embed_clauses.py          # 긴 조문 항(項) 단위 보조 임베딩 백필
-│   └── eval_rag.py               # RAG 품질 평가 CLI (골든셋 기반 hit-rate/MRR 측정)
+│   └── evaluate.py               # 단계별 평가·검수·회귀 비교 통합 CLI
 │
 ├── db/
 │   ├── init.sql                  # Alembic 최초 baseline이 사용하는 레거시 기본 스키마
@@ -521,7 +540,7 @@ docker exec tax_backend python scripts/backfill_embeddings_v2.py --table all
 docker exec tax_backend python scripts/backfill_embeddings_v2.py --table all --run
 
 # v2 환경으로 골든셋 평가
-docker exec tax_backend python scripts/eval_rag.py --eval
+docker exec tax_backend python scripts/evaluate.py run --dataset evaluation/datasets/contracts.json --split all
 ```
 
 `EMBEDDING_VERSION=v2`는 세 테이블의 `embedding_v2 IS NULL`이 0건이고 골든셋 성능이
@@ -703,24 +722,23 @@ pytest --lf
 
 > API 테스트는 실제 DB·Ollama 없이 실행됩니다. 서비스 레이어를 mock으로 대체하여 HTTP 계층의 동작을 검증합니다.
 
-### RAG 품질 평가 (골든셋 기반)
+### 요소별 품질 평가 및 hard negative 검증
 
 ```bash
-# 골든셋 각 질문의 실제 검색 후보 채우기 (정답 확정 전 단계)
-python scripts/eval_rag.py --build
+# 합성 파싱·관계·산술 계약과 오답 반례 — DB/모델 불필요
+python scripts/evaluate.py run --split all
 
-# 검색 hit-rate·MRR·세목 분류 정확도 측정 (이전 실행과 자동 비교)
-python scripts/eval_rag.py --eval
+# 실제 검색/Graph 비교: 미검수 라벨 진단이므로 통과가 아니라 exit 2 예상
+python scripts/evaluate.py run --dataset evaluation/datasets/retrieval.json --mode live --include-draft
 
-# + 실제 답변 생성 후 인용 정확도까지 확인 (느림)
-python scripts/eval_rag.py --eval --with-answer
-
-# temperature 샘플링 편차 검증: N회 반복해 citation_accuracy 평균/편차와
-# 실행마다 결과가 바뀌는 비결정적 항목을 확인
-python scripts/eval_rag.py --eval --with-answer --repeat 3
+# 모든 평가 영역 수집. 생성 호출은 --allow-generation으로 별도 허용
+python scripts/evaluate.py suite --mode live --include-draft --output evaluation/runs/review-batch
 ```
-결과는 `tests/eval/results/`에 타임스탬프 파일로 누적되어 파라미터 변경(임계값, 프롬프트 등) 전후 효과를 수치로 비교할 수 있습니다.
-생성 품질에 영향을 주는 변경(프롬프트, `temperature` 등)은 `temperature=0.3` 샘플링 편차 때문에 1회 실행 비교가 신뢰할 수 없다는 게 실측으로 확인되어(같은 코드로 재평가해도 73.7~84.2% 사이를 오갔음), `--repeat`으로 여러 번 돌린 평균으로 판단합니다. 검색 단계 변경(청킹·임베딩 등)은 결정론적이라 1회 비교로 충분합니다.
+새 결과는 Git/Docker 빌드에서 제외되는 `evaluation/runs/`에 보존합니다. 정답 데이터와 관측 결과는 별도 파일이며, 미판정 후보는 오답으로 간주하지 않습니다.
+출처·기준일·검수 이력이 없는 기존 39문항은 draft로 이관했습니다. 합성 계약 통과를 세무 정답률로 표시하지 않습니다.
+답변의 의미·법적 적용은 기준별 인간 검수를 요구하며 키워드/인용 존재만으로 통과시키지 않습니다. 반복 실행은 `--repeat N`, 동일 데이터셋 비교는 `compare`를 사용합니다.
+기존 `eval_rag.py`·`eval_graph_rag.py`는 제거했습니다. 실행 명령은 `scripts/evaluate.py`로 통일하고, CLI 구현은 `evaluation/cli.py`에 둡니다. 과거 결과 파일은 보존합니다.
+스키마·판정 기준·검수·재현 방법은 [평가 파이프라인 문서](evaluation/README.md)를 참고하세요.
 
 ---
 
@@ -1329,7 +1347,7 @@ citation_accuracy가 81.6% → 73.7%로 오히려 하락 — 개선인지 퇴보
 "한 번 돌려서 수치가 오르면 개선, 내리면 퇴보"라는 그동안의 판단 방식 자체가 이 정도
 샘플링 편차 앞에서는 신뢰할 수 없다는 게 이번에 드러난 문제였다.
 
-**해결**: `scripts/eval_rag.py`에 `--repeat N` 옵션을 추가했다. `--eval --with-answer`를
+**과거 해결 기록**: 당시 `scripts/eval_rag.py`에 `--repeat N` 옵션을 추가했다. 현재는 해당 CLI를 폐기했으며 [새 평가 실행기](evaluation/README.md)의 `--repeat N`을 사용한다. 아래는 당시 명령이다. `--eval --with-answer`를
 N회 반복 실행하여 (1) citation_accuracy의 평균/최솟값/최댓값을 함께 보고하고,
 (2) 문항별로 실행마다 인용 히트 여부가 바뀐 "비결정적 항목"을 별도로 식별해 출력한다.
 ```bash

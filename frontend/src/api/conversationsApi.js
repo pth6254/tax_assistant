@@ -11,5 +11,8 @@ const api = async (path, options = {}) => {
 export const listConversations  = ()            => api('')
 export const createConversation = ()            => api('', { method: 'POST' })
 export const getMessages        = (id)          => api(`/${id}/messages`)
+export const reviseConversation = (id, expected_message_id, query) => api(`/${id}/revise`, {
+  method: 'POST', body: JSON.stringify({ expected_message_id, ...(query === undefined ? {} : { query }) }),
+})
 export const renameConversation = (id, title)   => api(`/${id}`, { method: 'PATCH',  body: JSON.stringify({ title }) })
 export const deleteConversation = (id)          => api(`/${id}`, { method: 'DELETE' })

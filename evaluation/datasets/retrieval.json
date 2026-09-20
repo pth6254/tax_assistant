@@ -1,0 +1,1222 @@
+{
+  "schema_version": "1.0",
+  "name": "tax-retrieval-review-pool",
+  "version": "1.0.0",
+  "description": "기존 39문항 및 hard-negative 검수 초안. 정답 필터를 입력으로 주지 않으며 전부 dev, 공식 통과 점수 아님.",
+  "cases": [
+    {
+      "id": "inc-01",
+      "group": "legacy-inc-01",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "종합소득세 최고세율 구간의 세율과 누진공제액은 얼마인가요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "소득세법",
+            "reference": "제55조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "inc-02",
+      "group": "legacy-inc-02",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "종합소득세 기본공제(인적공제) 금액은 얼마인가요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "소득세법",
+            "reference": "제50조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        },
+        {
+          "evidence": {
+            "law": "소득세법",
+            "reference": "제103조"
+          },
+          "label": "hard_negative",
+          "reason": "종합소득 기본공제 질문에 양도소득 기본공제가 혼입되는 후보. 공식 원문과 전문가 검수 전까지 초안.",
+          "confusion": "wrong_tax"
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "inc-03",
+      "group": "legacy-inc-03",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "사업소득자에게 적용되는 표준세액공제 금액은 얼마인가요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "소득세법",
+            "reference": "제59조의4",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        },
+        {
+          "evidence": {
+            "law": "소득세법",
+            "reference": "제59조"
+          },
+          "label": "hard_negative",
+          "confusion": "branch_vs_paragraph",
+          "reason": "제59조의4의 가지번호를 지워 제59조로 잘못 일치시키는 후보 (원문·전문가 재검수 전 초안)"
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "cg-01",
+      "group": "legacy-cg-01",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "양도소득세 기본공제 금액은 얼마인가요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "소득세법",
+            "reference": "제103조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "cg-02",
+      "group": "legacy-cg-02",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "양도소득세 기본세율 구간은 어떻게 되나요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "소득세법",
+            "reference": "제104조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "cg-03",
+      "group": "legacy-cg-03",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "부동산 장기보유특별공제에서 15년 이상 보유한 1주택자의 공제율은 얼마인가요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "소득세법",
+            "reference": "제95조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "inh-01",
+      "group": "legacy-inh-01",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "상속세율 구간과 누진공제액은 어떻게 되나요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "상속세 및 증여세법",
+            "reference": "제26조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "inh-02",
+      "group": "legacy-inh-02",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "상속세 기초공제 금액은 얼마인가요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "상속세 및 증여세법",
+            "reference": "제18조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "inh-03",
+      "group": "legacy-inh-03",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "상속세 일괄공제 금액은 얼마인가요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "상속세 및 증여세법",
+            "reference": "제21조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "inh-04",
+      "group": "legacy-inh-04",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "배우자상속공제의 최소 보장 금액은 얼마인가요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "상속세 및 증여세법",
+            "reference": "제19조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "gift-01",
+      "group": "legacy-gift-01",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "배우자에게 증여할 때 증여재산공제 한도는 얼마인가요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "상속세 및 증여세법",
+            "reference": "제53조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        },
+        {
+          "evidence": {
+            "law": "상속세 및 증여세법",
+            "reference": "제19조"
+          },
+          "label": "hard_negative",
+          "confusion": "wrong_tax",
+          "reason": "배우자 증여 공제 질문에 배우자 상속 공제 조문이 섞이는 후보 (원문·전문가 재검수 전 초안)"
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "vat-01",
+      "group": "legacy-vat-01",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "간이과세자의 부가가치세 신고 기준은 어떻게 되나요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "부가가치세법",
+            "reference": "제67조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "vat-02",
+      "group": "legacy-vat-02",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "매입세액 불공제 대상을 알려주세요."
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "부가가치세법",
+            "reference": "제39조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "vat-03",
+      "group": "legacy-vat-03",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "세금계산서 발급 의무가 없는 경우는 어떤 경우인가요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "부가가치세법",
+            "reference": "제33조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "vat-04",
+      "group": "legacy-vat-04",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "의제매입세액공제는 어떤 사업자가 적용받을 수 있나요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "부가가치세법",
+            "reference": "제42조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "vat-05",
+      "group": "legacy-vat-05",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "수출품에 영세율이 적용되는 요건은 무엇인가요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "부가가치세법",
+            "reference": "제21조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "corp-01",
+      "group": "legacy-corp-01",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "법인의 접대비 한도는 어떻게 계산하나요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "법인세법",
+            "reference": "제25조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "corp-02",
+      "group": "legacy-corp-02",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "법인 업무용승용차 관련 비용의 손금산입 한도는 얼마인가요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "법인세법",
+            "reference": "제27조의2",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        },
+        {
+          "evidence": {
+            "law": "소득세법",
+            "reference": "제33조의2"
+          },
+          "label": "hard_negative",
+          "confusion": "wrong_subject",
+          "reason": "법인 업무용승용차 질문에 개인 소득세 근거만 제시하는 혼동 후보 (원문·전문가 재검수 전 초안)"
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "corp-03",
+      "group": "legacy-corp-03",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "결손금 소급공제 신청 방법을 알려주세요."
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "법인세법",
+            "reference": "제72조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "corp-04",
+      "group": "legacy-corp-04",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "법인세법상 익금불산입 항목에는 어떤 것들이 있나요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "법인세법",
+            "reference": "제18조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "basic-01",
+      "group": "legacy-basic-01",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "경정청구 기한은 얼마나 되나요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "국세기본법",
+            "reference": "제45조의2",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "basic-02",
+      "group": "legacy-basic-02",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "가산세를 감면받을 수 있는 경우는 어떤 경우인가요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "국세기본법",
+            "reference": "제48조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "basic-03",
+      "group": "legacy-basic-03",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "조세심판청구 기한은 언제까지인가요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "국세기본법",
+            "reference": "제68조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "basic-04",
+      "group": "legacy-basic-04",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "기한후신고를 하면 가산세는 어떻게 되나요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "국세기본법",
+            "reference": "제45조의3",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "trc-01",
+      "group": "legacy-trc-01",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "중소기업 특별세액감면 요건은 무엇인가요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "조세특례제한법",
+            "reference": "제7조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "trc-02",
+      "group": "legacy-trc-02",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "고용증대세액공제는 어떤 조건에서 적용되나요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "조세특례제한법",
+            "reference": "제29조의7",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "trc-03",
+      "group": "legacy-trc-03",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "청년 창업 중소기업 세액감면 대상은 누구인가요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "조세특례제한법",
+            "reference": "제6조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "local-01",
+      "group": "legacy-local-01",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "부동산 취득세 세율은 어떻게 되나요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "지방세법",
+            "reference": "제11조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "local-02",
+      "group": "legacy-local-02",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "재산세 과세기준일은 언제인가요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "지방세법",
+            "reference": "제114조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "cust-01",
+      "group": "legacy-cust-01",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "관세 환급을 받을 수 있는 요건은 무엇인가요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "관세법",
+            "reference": "제106조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "cmp-01",
+      "group": "legacy-cmp-01",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "법인 업무용승용차를 리스로 이용하는 것과 장기렌트로 이용하는 것 중 손금산입 측면에서 어느 쪽이 유리한가요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "법인세법",
+            "reference": "제27조의2",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "cmp-02",
+      "group": "legacy-cmp-02",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "간이과세자와 일반과세자 중 연매출 7천만원인 개인사업자에게 유리한 쪽은 어디인가요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "부가가치세법",
+            "reference": "제61조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "cmp-03",
+      "group": "legacy-cmp-03",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "개인사업자로 유지하는 것과 법인전환하는 것 중 세부담 측면에서 무엇이 유리한가요?"
+      },
+      "judgments": [],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "direct-01",
+      "group": "legacy-direct-01",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "소득세법 제55조에 뭐라고 되어 있는지 알려줘"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "소득세법",
+            "reference": "제55조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        },
+        {
+          "evidence": {
+            "law": "법인세법",
+            "reference": "제55조"
+          },
+          "label": "hard_negative",
+          "confusion": "wrong_subject",
+          "reason": "소득세법 제55조 원문 지정 질문에서 다른 법의 같은 번호를 반환 (원문·전문가 재검수 전 초안)"
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "direct-02",
+      "group": "legacy-direct-02",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "부가가치세법 제39조 내용이 궁금해"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "부가가치세법",
+            "reference": "제39조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        },
+        {
+          "evidence": {
+            "law": "부가가치세법",
+            "reference": "제3조"
+          },
+          "label": "hard_negative",
+          "confusion": "same_terms",
+          "reason": "제39조 지정 질문에 제3조를 부분 문자열로 잘못 일치시킴 (원문·전문가 재검수 전 초안)"
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "hard-01",
+      "group": "legacy-hard-01",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "1세대 1주택을 팔면 양도소득세가 비과세되는 근거 조문은?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "소득세법",
+            "reference": "제89조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "hard-02",
+      "group": "legacy-hard-02",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "회사에서 연말정산은 언제 어떻게 하나요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "소득세법",
+            "reference": "제137조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "hard-03",
+      "group": "legacy-hard-03",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "상속세 신고는 언제까지 해야 하나요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "상속세 및 증여세법",
+            "reference": "제67조",
+            "kind": "law"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    },
+    {
+      "id": "expc-01",
+      "group": "legacy-expc-01",
+      "split": "dev",
+      "stage": "retrieval",
+      "adapter": "retrieval",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "기존 golden_qa에서 이관. grounded 표시는 인간 검수 이력·현행 출처 검증을 대체하지 않음."
+      },
+      "input": {
+        "query": "부당해고로 복직하면서 받은 해고기간 임금 상당액도 근로소득으로 과세되나요?"
+      },
+      "judgments": [
+        {
+          "evidence": {
+            "law": "소득세법",
+            "reference": "10-0075",
+            "kind": "interpretation"
+          },
+          "label": "required",
+          "reason": "기존 평가셋의 기대 조문. 재검수 필요."
+        }
+      ],
+      "tags": [
+        "legacy",
+        "not_holdout"
+      ]
+    }
+  ]
+}

@@ -2,7 +2,6 @@
 .github
 .env
 .env.*
-!.env.example
 .pytest_cache
 .venv-wsl
 venv-wsl
@@ -11,3 +10,6 @@ __pycache__
 frontend
 assets
 tests/eval/results
+evaluation/runs
+evaluation/reviews
+evaluation/sources

@@ -112,7 +112,7 @@ async def _fetch_history(conversation_id: _uuid.UUID) -> list[dict]:
         rows = await conn.fetch(
             """SELECT message FROM chat_logs
                WHERE conversation_id = $1
-               ORDER BY created_at DESC LIMIT $2""",
+               ORDER BY id DESC LIMIT $2""",
             conversation_id, MEMORY_TURNS * 2,
         )
     history = []
@@ -388,7 +388,7 @@ async def _classify_and_generate_queries(
         logger.info("[CLASSIFY] 다중 세목 감지(%s) — ALL 전체 검색", matched_laws)
 
     # 키워드만으로 세목이 명확히 하나로 확정되면 분류 LLM 호출 자체를 생략한다
-    # (멀티쿼리 다양성은 포기하되 TTFT를 약 3초 단축 — 회귀 여부는 scripts/eval_rag.py로 검증)
+    # (멀티쿼리 다양성은 포기하되 TTFT를 약 3초 단축 — 요소별 검증: scripts/evaluate.py)
     if len(matched_laws) == 1:
         logger.info("[CLASSIFY] 키워드로 세목 확정(%s) — 분류 LLM 생략, 원본 쿼리로 검색", keyword_law)
         return keyword_law, [query]

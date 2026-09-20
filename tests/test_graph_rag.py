@@ -60,6 +60,19 @@ async def test_historical_query_does_not_expand(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_expansion_logs_counts_without_query(monkeypatch, caplog):
+    import logging
+    monkeypatch.setattr(service.config, 'GRAPH_RAG_ENABLED', True)
+    base = [object()]
+    expanded = base + [object()]
+    monkeypatch.setattr(service, '_expand', AsyncMock(return_value=expanded))
+    with caplog.at_level(logging.INFO, logger=service.__name__):
+        assert await service.expand_graph(base, 'private query') is expanded
+    assert 'base=1 added=1' in caplog.text
+    assert 'private query' not in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_disabled_never_connects(monkeypatch):
     monkeypatch.setattr(service.config, 'GRAPH_RAG_ENABLED', False)
     query = AsyncMock()
@@ -96,7 +109,7 @@ async def test_failure_and_timeout_keep_base_results(monkeypatch):
     results = [object()]
     monkeypatch.setattr(service, '_expand', AsyncMock(side_effect=RuntimeError('private')))
     assert await service.expand_graph(results) is results
-    async def slow(_):
+    async def slow(_, query=''):
         await asyncio.sleep(10)
     monkeypatch.setattr(service, '_expand', slow)
     monkeypatch.setattr(service.config, 'GRAPH_TIMEOUT_SEC', 0.01)
@@ -134,3 +147,84 @@ async def test_cancellation_is_not_swallowed(monkeypatch):
     monkeypatch.setattr(service, '_expand', AsyncMock(side_effect=asyncio.CancelledError))
     with pytest.raises(asyncio.CancelledError):
         await service.expand_graph([object()])
+
+
+def test_alias_requires_definition_and_matching_family():
+    base = article('제2조', '제2조 대상')
+    definition = article(text='「시험법」(이하 "법"이라 한다)에 따른다.', law='시험법 시행령')
+    source = article('제3조', '법 제2조에 따른다.', law='시험법 시행령')
+    nodes, edges, _ = build_graph([base, definition, source])
+    assert len(edges) == 1
+    assert edges[0]['target'] == article_key(base)
+    assert edges[0]['alias_definition_key'] == article_key(definition)
+    assert build_graph([base, source])[1] == []
+    assert build_graph([base, definition | {'article_text': '「다른법」(이하 "법"이라 한다)'}, source])[1] == []
+
+
+def test_alias_shadowing_and_same_law_not_guessed():
+    base = article('제2조', '제2조 대상')
+    definition = article(text='「시험법」(이하 "법"이라 한다)', law='시험법 시행령')
+    source = article('제3조', '같은 법 제2조와 종전의 법 제2조', law='시험법 시행령')
+    assert build_graph([base, definition, source])[1] == []
+    source['article_text'] = '법 제2조'
+    shadow = article('제4조', '「다른법」(이하 이 조에서 "법"이라 한다)', law='시험법 시행령')
+    assert build_graph([base, definition, source, shadow])[1] == []
+
+
+def test_alias_defined_later_applies_only_after_definition():
+    base = article('제2조', '제2조 대상')
+    definition = article('제3조', '법 제2조. 「시험법」(이하 "법"이라 한다). 법 제2조.', law='시험법 시행령')
+    before = article('제1조', '법 제2조.', law='시험법 시행령')
+    after = article('제4조', '법 제2조.', law='시험법 시행령')
+    edges = build_graph([base, before, definition, after])[1]
+    assert len(edges) == 2
+    assert {e['source'] for e in edges} == {article_key(definition), article_key(after)}
+    assert all(e['alias_definition_article'] == '제3조' for e in edges)
+
+
+@pytest.mark.asyncio
+async def test_incoming_relevance_and_alias_version_guard(monkeypatch):
+    monkeypatch.setattr(service.config, 'GRAPH_RAG_ENABLED', True)
+    source = article(text='제1조 의료비 공제')
+    target = article('제2조', '제2조 의료비 공제 요건')
+    result = _row_to_article_result(source | {'similarity_score': 1})
+    monkeypatch.setattr(service, 'get_law_article', AsyncMock(side_effect=lambda law, number:
+        LawArticleDetail(**(source if number == '제1조' else target))))
+    edge = dict(source_key=article_key(source), target_key=article_key(target),
+                law_name='시험법', article_no='제2조', evidence='「시험법」 제1조', direction='incoming')
+    monkeypatch.setattr(service, 'neighbors', AsyncMock(return_value=[edge]))
+    assert len(await service.expand_graph([result], '의료비 공제')) == 2
+    assert len(await service.expand_graph([result], '주택 양도')) == 1
+    edge.update(alias_definition_key='old', alias_definition_law='시험법')
+    assert len(await service.expand_graph([result], '의료비 공제')) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('queries', [['의료비'], ['의료비', '공제']])
+async def test_normal_search_calls_graph_after_base_ranking(monkeypatch, queries):
+    from app.services.search import hybrid_search_service as hybrid
+    result = _row_to_article_result(article() | {'similarity_score': 1})
+    monkeypatch.setattr(hybrid, '_lookup_referenced_article', AsyncMock(return_value=None))
+    monkeypatch.setattr(hybrid, 'embed_texts', AsyncMock(return_value=[[0.0]] * len(queries)))
+    monkeypatch.setattr(hybrid, '_search_all', AsyncMock(return_value=[result]))
+    expand = AsyncMock(return_value=[result])
+    monkeypatch.setattr(hybrid, 'expand_graph', expand)
+    assert await hybrid.hybrid_search(queries, original_query='의료비 공제') == [result]
+    expand.assert_awaited_once_with([result], '의료비 공제')
+
+
+@pytest.mark.asyncio
+async def test_reverse_other_family_and_large_context_excluded(monkeypatch):
+    monkeypatch.setattr(service.config, 'GRAPH_RAG_ENABLED', True)
+    source = article()
+    target = article('제2조', '의료비 공제', law='다른법')
+    base = [_row_to_article_result(source | {'similarity_score': 1})]
+    monkeypatch.setattr(service, 'get_law_article', AsyncMock(side_effect=lambda law, number:
+        LawArticleDetail(**(source if number == '제1조' else target))))
+    edge = dict(source_key=article_key(source), target_key=article_key(target), law_name='다른법',
+                article_no='제2조', evidence='「시험법」 제1조', direction='incoming')
+    monkeypatch.setattr(service, 'neighbors', AsyncMock(return_value=[edge]))
+    assert await service.expand_graph(base, '의료비 공제') == base
+    target['article_text'] = '의료비 공제' * 1000
+    edge.update(direction='outgoing', target_key=article_key(target))
+    assert await service.expand_graph(base, '의료비 공제') == base

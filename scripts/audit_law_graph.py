@@ -14,10 +14,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import config
 from app.database import close_pool
-from app.services.graph.index_service import article_key, build_graph, effective_now, law_key, load_articles
+from app.services.graph.index_service import article_key, build_graph, build_aliases, extract_row_relations, effective_now, law_key, load_articles
 from app.services.graph.store import connect
 from app.services.law.reference_parser import parse_law_reference
-from app.services.law.relation_extractor import extract_relations
 from app.services.law.structure_parser import resolve_reference_target
 
 
@@ -27,6 +26,7 @@ async def main():
         nodes, edges, unresolved = build_graph(rows)
         current = {article_key(r): r for r in rows if effective_now(r)}
         expected = {(e['source'], e['target'], e['reference']) for e in edges}
+        expected_proofs = {(e['source'], e['target'], e['reference']): e for e in edges}
         async with connect() as driver:
             stored, _, _ = await driver.execute_query(
                 'MATCH (n:TaxArticle) RETURN n.key AS key', database_=config.NEO4J_DATABASE)
@@ -34,7 +34,9 @@ async def main():
                 MATCH (s:TaxArticle)-[r:CITES]->(t:TaxArticle)
                 RETURN s.key AS source, t.key AS target,
                        r.reference AS reference, r.evidence AS evidence,
-                       r.status AS status
+                       r.status AS status, r.alias_definition_key AS alias_definition_key,
+                       r.alias_definition_article AS alias_definition_article,
+                       r.alias_definition_law AS alias_definition_law
                 ORDER BY source, target, reference
             ''', database_=config.NEO4J_DATABASE)
         actual = {(r['source'], r['target'], r['reference']) for r in links}
@@ -42,6 +44,10 @@ async def main():
         problems = Counter()
         samples, sample_groups = [], set()
         for edge in links:
+            expected_edge = expected_proofs.get((edge['source'], edge['target'], edge['reference']), {})
+            if any((edge[field] or '') != expected_edge.get(field, '') for field in
+                   ('alias_definition_key', 'alias_definition_article', 'alias_definition_law')):
+                problems['alias_proof_mismatch'] += 1
             source, target = current.get(edge['source']), current.get(edge['target'])
             if not source or not target:
                 problems['noncurrent_endpoint'] += 1
@@ -70,8 +76,9 @@ async def main():
         for row in current.values():
             lookup.setdefault((law_key(row['law_name']), row['article_no']), []).append(row)
         reasons, missing_laws = Counter(), Counter()
+        aliases = build_aliases(list(current.values()))
         for row in current.values():
-            for candidate in extract_relations(row['article_text']):
+            for candidate, _ in extract_row_relations(row, aliases):
                 targets = lookup.get((law_key(candidate['law_name']), candidate['article_no']), [])
                 if not targets:
                     reasons['target_absent_from_eligible_snapshot'] += 1

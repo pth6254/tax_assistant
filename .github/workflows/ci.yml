@@ -23,7 +23,7 @@ jobs:
 
       # 문법 오류(과거 chat_service.py에 한글 'ㅇ'가 섞여 서버가 안 뜨던 사고 재발 방지)
       - name: Compile check
-        run: python -m compileall app scripts alembic main.py config.py -q
+        run: python -m compileall app evaluation scripts alembic main.py config.py -q
 
       - name: Validate Alembic revision graph
         run: test "$(alembic heads | wc -l)" -eq 1
@@ -33,3 +33,22 @@ jobs:
         run: pytest -q
         env:
           JWT_SECRET: ci-test-secret-not-a-real-key
+
+      - name: Validate versioned evaluation datasets
+        run: |
+          python scripts/evaluate.py validate --dataset evaluation/datasets/contracts.json
+          python scripts/evaluate.py validate --dataset evaluation/datasets/retrieval.json
+          python scripts/evaluate.py validate --dataset evaluation/datasets/components.json
+
+      - name: Run deterministic evaluation contracts (not tax accuracy)
+        run: python scripts/evaluate.py run --split all --output evaluation/runs/ci-contracts
+        env:
+          JWT_SECRET: ci-test-secret-not-a-real-key
+
+      - name: Upload evaluation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-contracts
+          path: evaluation/runs/ci-contracts
+          if-no-files-found: ignore

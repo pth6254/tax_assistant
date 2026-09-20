@@ -1,12 +1,13 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import ToolCallCard from './ToolCallCard'
 import Notice from '../ui/Notice'
 import Icon from '../ui/Icon'
 const CITATION_RE = /\[(법률|시행령|시행규칙)\]\s*([^\n\[]+?)\s*(제\s*\d+\s*조(?:\s*의\s*\d+)?(?:\s*제\s*\d+\s*항)?(?:\s*제\s*\d+\s*호(?:\s*의\s*\d+)?)?(?:\s*[가-힣]\s*목)?)/g
-export default function MessageBubble({ message, onCitationClick, onOpenCalculator, onRetry }) {
+export default function MessageBubble({ message, onCitationClick, onOpenCalculator, onRetry, onEdit, onRegenerate }) {
   const isUser = message.role === 'user', body = useRef()
+  const [editing, setEditing] = useState(false), [draft, setDraft] = useState(message.content)
   useEffect(() => {
     if (isUser || !body.current) return
     body.current.innerHTML = DOMPurify.sanitize(marked.parse(message.content || ''), {
@@ -34,7 +35,12 @@ export default function MessageBubble({ message, onCitationClick, onOpenCalculat
     }
   }, [message.content, isUser])
   return <article className={'message ' + (isUser ? 'user-message' : 'assistant-message')}>
-    {isUser ? <div className="question-bubble">{message.content}</div> : <>
+    {isUser ? <div className="question-bubble">{editing && onEdit ? <form onSubmit={e => { e.preventDefault(); if (draft.trim()) { onEdit(draft.trim()); setEditing(false) } }}>
+      <textarea aria-label="질문 수정" value={draft} maxLength={10000} rows={4} autoFocus onChange={e => setDraft(e.target.value)} style={{ width: '100%', minWidth: 200, resize: 'vertical' }} />
+      <p className="small">원래 대화는 보존하고 별도 대화에서 다시 답변합니다.</p>
+      <button className="button secondary" type="button" onClick={() => setEditing(false)}>취소</button>
+      <button className="button secondary" type="submit" disabled={!draft.trim()}>수정 후 보내기</button>
+    </form> : <>{message.content}{onEdit && <div><button className="button secondary" aria-label="마지막 질문 수정" onClick={() => { setDraft(message.content); setEditing(true) }}>✎ 질문 수정</button></div>}</>}</div> : <>
       <div className="answer-label"><Icon name="book" size={18} /><span>세무 AI</span><span className="muted small">근거와 적용 조건을 함께 확인하세요</span></div>
       {message.tools?.map(t => <ToolCallCard key={t.id} tool={t} onCitationClick={onCitationClick} onOpenCalculator={onOpenCalculator} onRetry={onRetry} />)}
       <div ref={body} className="markdown-bubble" onClick={e => { const target = e.target.closest('button.citation-link'); if (target && body.current.contains(target)) onCitationClick?.(target.dataset.law, target.dataset.article) }} />
@@ -42,6 +48,7 @@ export default function MessageBubble({ message, onCitationClick, onOpenCalculat
       {message.status === 'error' && <Notice onRetry={onRetry}>{message.error}</Notice>}
       {message.status === 'stopped' && onRetry && <button className="button secondary" onClick={onRetry}>같은 질문 다시 보내기</button>}
       {message.calc && !message.tools?.some(t => t.tool === message.calc.tool && t.status === 'ok') && <button className="button secondary" onClick={() => onOpenCalculator?.(message.calc.tool, message.calc.params)}>계산기에서 조건 바꾸기 →</button>}
+      {onRegenerate && <button className="button secondary" title="원래 대화를 보존하고 별도 대화에서 다시 답변합니다" onClick={onRegenerate}>↻ 다시 답변</button>}
     </>}
   </article>
 }

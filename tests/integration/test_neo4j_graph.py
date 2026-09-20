@@ -33,6 +33,11 @@ async def test_synthetic_roundtrip(isolated_neo4j):
     assert unresolved == 0
     assert len(edges) == 1
     await assert_roundtrip(nodes, edges)
+    await save_graph(nodes, edges)
+    reverse = await neighbors([edges[0]['target']], bidirectional=True)
+    assert len(reverse) == 1
+    assert reverse[0]['direction'] == 'incoming'
+    assert reverse[0]['target_key'] == edges[0]['source']
 
 
 @pytest.fixture

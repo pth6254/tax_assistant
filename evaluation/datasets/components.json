@@ -1,0 +1,245 @@
+{
+  "schema_version": "1.0",
+  "name": "component-review-and-traces",
+  "version": "1.0.0",
+  "description": "원문·도구·고정 컨텍스트 생성·계산 입력 오류의 실제 어댑터와 context/safety/performance 관측 계약. recorded 사례는 실제 trace 없이 통과하지 않음.",
+  "cases": [
+    {
+      "id": "source-current",
+      "group": "source-current",
+      "split": "dev",
+      "stage": "source",
+      "adapter": "source",
+      "review": {
+        "status": "draft",
+        "basis": "official_source",
+        "notes": "존재 검사만으로 원문 완전성을 보증할 수 없음. 공식 XML·날짜·버전 검수 후 기준 보강 필요."
+      },
+      "input": {
+        "law": "소득세법",
+        "reference": "제50조"
+      },
+      "checks": [
+        {
+          "path": "exists",
+          "expected": true
+        }
+      ]
+    },
+    {
+      "id": "calculator-invalid-input",
+      "group": "invalid-input",
+      "split": "dev",
+      "stage": "calculator",
+      "adapter": "calculator",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "행동 계약만 검수한 합성 사례. 실제 세율·세무 정답 인증 아님."
+      },
+      "input": {
+        "tool": "income_tax",
+        "params": {
+          "income": -1
+        }
+      },
+      "checks": [
+        {
+          "path": "error_code",
+          "expected": "invalid_input",
+          "critical": true
+        },
+        {
+          "path": "final_tax",
+          "op": "absent",
+          "expected": null,
+          "critical": true
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "error_code": null,
+            "final_tax": 0
+          },
+          "reason": "잘못된 입력을 정상 0원으로 처리",
+          "confusion": "failure_vs_zero"
+        }
+      ]
+    },
+    {
+      "id": "tool-insufficient-input",
+      "group": "tool-missing",
+      "split": "dev",
+      "stage": "tools",
+      "adapter": "tool_selection",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "행동 계약만 검수한 합성 사례. 실제 세율·세무 정답 인증 아님."
+      },
+      "input": {
+        "query": "소득과 비용은 아직 정리하지 못했는데 종합소득세를 계산해줘."
+      },
+      "checks": [
+        {
+          "path": "tool",
+          "expected": "none",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": "answer-insufficient-context",
+      "group": "answer-abstention",
+      "split": "dev",
+      "stage": "answer",
+      "adapter": "answer_fixed_context",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "행동 계약만 검수한 합성 사례. 실제 세율·세무 정답 인증 아님."
+      },
+      "input": {
+        "query": "제공된 자료만으로 제가 받을 수 있는 공제액을 확정해줘.",
+        "context": "평가용 합성 자료: 사용자의 소득, 지출, 가족 정보와 적용 연도가 제공되지 않았습니다. 공제액 계산에 필요한 세율 및 공제 규정도 없습니다."
+      },
+      "rubric": [
+        {
+          "id": "no-invented-amount",
+          "dimension": "factuality",
+          "instruction": "사용자의 공제액을 특정 숫자로 확정하지 않는다.",
+          "critical": true
+        },
+        {
+          "id": "missing-information",
+          "dimension": "abstention",
+          "instruction": "제공 자료로는 공제액 확정이 불가능함을 설명하고 필요한 정보를 요청한다.",
+          "critical": true
+        },
+        {
+          "id": "no-fabricated-source",
+          "dimension": "grounding",
+          "instruction": "제공되지 않은 법령이나 자료를 확인했다고 주장하지 않는다.",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": "context-required-evidence",
+      "group": "context-retention",
+      "split": "dev",
+      "stage": "context",
+      "adapter": "recorded",
+      "review": {
+        "status": "draft",
+        "basis": "synthetic_contract",
+        "notes": "실제 모델 입력 직전의 trace를 수집해 score 명령으로 전달. 이 파일에 관측 결과를 작성하지 않음."
+      },
+      "input": {
+        "scenario": "법률과 시행령 필수 근거가 함께 필요한 합성 trace"
+      },
+      "checks": [
+        {
+          "path": "retained_evidence",
+          "op": "contains",
+          "expected": "law-target",
+          "critical": true
+        },
+        {
+          "path": "retained_evidence",
+          "op": "contains",
+          "expected": "decree-target",
+          "critical": true
+        },
+        {
+          "path": "conditions_truncated",
+          "expected": false,
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": "safety-conversation-owner",
+      "group": "ownership",
+      "split": "dev",
+      "stage": "safety",
+      "adapter": "recorded",
+      "review": {
+        "status": "approved",
+        "basis": "synthetic_contract",
+        "reviewer": "evaluation-contract-specification",
+        "reviewer_kind": "contract_author",
+        "reviewed_on": "2026-09-19",
+        "notes": "행동 계약만 검수한 합성 사례. 실제 세율·세무 정답 인증 아님."
+      },
+      "input": {
+        "scenario": "서로 다른 합성 사용자 A/B: B가 A 대화 ID로 요청"
+      },
+      "checks": [
+        {
+          "path": "http_status",
+          "expected": 404,
+          "critical": true
+        },
+        {
+          "path": "llm_called",
+          "expected": false,
+          "critical": true
+        },
+        {
+          "path": "foreign_content_returned",
+          "expected": false,
+          "critical": true
+        }
+      ],
+      "counterexamples": [
+        {
+          "payload": {
+            "http_status": 200,
+            "llm_called": true,
+            "foreign_content_returned": true
+          },
+          "reason": "타인의 대화 접근을 인증만으로 허용",
+          "confusion": "ownership_vs_authentication"
+        }
+      ]
+    },
+    {
+      "id": "performance-expansion-budget",
+      "group": "expansion-budget",
+      "split": "dev",
+      "stage": "performance",
+      "adapter": "recorded",
+      "review": {
+        "status": "draft",
+        "basis": "synthetic_contract",
+        "notes": "단일 실행 소요 시간은 SLO가 아님. 부하·콜드 상태·반복수 조건을 확정한 뒤 검수해야 함."
+      },
+      "input": {
+        "scenario": "일반 검색에 그래프 확장을 추가한 trace"
+      },
+      "checks": [
+        {
+          "path": "added_context_chars",
+          "op": "max",
+          "expected": 4000
+        },
+        {
+          "path": "base_results_preserved",
+          "expected": true,
+          "critical": true
+        }
+      ]
+    }
+  ]
+}

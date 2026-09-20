@@ -35,6 +35,8 @@ class HybridSearchResult:
     source_type: str
     similarity_score: float
     priority: int
+    article_no: str = ""
+    graph_evidence: str = ""
 
 
 class ParsedLawReference(BaseModel):

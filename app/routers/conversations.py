@@ -10,7 +10,7 @@ import json
 import uuid as _uuid
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.database import get_pool
 from app.core.security import verify_token
@@ -21,6 +21,19 @@ router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 
 class RenameRequest(BaseModel):
     title: str
+
+
+class ReviseRequest(BaseModel):
+    expected_message_id: int = Field(gt=0)
+    query: str | None = Field(default=None, min_length=1, max_length=10000)
+
+
+@router.post('/{conv_id}/revise', status_code=201)
+async def revise_conversation(conv_id: str, body: ReviseRequest, user: dict = Depends(verify_token)):
+    from app.services.chat_revision_service import fork_last_turn
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        return await fork_last_turn(conn, conv_id, user['id'], body.expected_message_id, body.query)
 
 
 @router.get("")
@@ -81,7 +94,7 @@ async def get_messages(conv_id: str, user: dict = Depends(verify_token)):
     async with pool.acquire() as conn:
         cid = await require_conversation_owner(conn, conv_id, user["id"])
         rows = await conn.fetch(
-            "SELECT message FROM chat_logs WHERE conversation_id = $1 ORDER BY created_at ASC",
+            "SELECT id, message FROM chat_logs WHERE conversation_id = $1 ORDER BY id ASC",
             cid,
         )
     result = []
@@ -89,7 +102,7 @@ async def get_messages(conv_id: str, user: dict = Depends(verify_token)):
         msg = r["message"]
         if isinstance(msg, str):
             msg = json.loads(msg)
-        result.append({"role": msg["role"], "content": msg["content"],
+        result.append({"message_id": r.get('id'), "role": msg["role"], "content": msg["content"],
                        "tools": msg.get("tools", [])})
     return result
 

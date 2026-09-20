@@ -32,6 +32,9 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-tax_db}
       # WSL 실행 스크립트가 현재 Windows 게이트웨이를 아래 별칭에 연결한다.
       OLLAMA_BASE_URL: http://ollama.windows.host:11434
+      GRAPH_RAG_ENABLED: ${GRAPH_RAG_ENABLED:-false}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env}
     depends_on:
       postgres:
         condition: service_healthy
@@ -64,6 +67,33 @@ services:
       retries: 5
       start_period: 10s
 
+  neo4j:
+    image: neo4j:5.26-community
+    container_name: tax_neo4j
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env}
+      NEO4J_server_memory_heap_initial__size: 256m
+      NEO4J_server_memory_heap_max__size: 512m
+      NEO4J_server_memory_pagecache_size: 256m
+    mem_limit: 2g
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:7474/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   # ── pgAdmin (DB 관리 UI) ───────────────────────────────────────
   pgadmin:
     image: dpage/pgadmin4
@@ -79,3 +109,4 @@ services:
 
 volumes:
   pgvector_data:
+  neo4j_data:

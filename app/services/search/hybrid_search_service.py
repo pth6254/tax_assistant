@@ -27,6 +27,7 @@ from app.schemas.law import HybridSearchResult
 from app.services.embedding_service import embed_texts
 from app.services.law.reference_parser import extract_law_reference
 from app.services.law.lookup_service import get_law_article
+from app.services.search.graph_search_service import expand_graph
 from config import EMBEDDING_VERSION, SIMILARITY_THRESHOLD, TOP_K
 
 logger = logging.getLogger(__name__)
@@ -149,6 +150,7 @@ def _row_to_article_result(r) -> HybridSearchResult:
         source_type=source_type,
         similarity_score=round(float(r["similarity_score"]), 4),
         priority=priority,
+        article_no=r["article_no"],
     )
 
 
@@ -265,7 +267,8 @@ def format_hybrid_context(results: list[HybridSearchResult]) -> str:
 
     return "\n\n---\n\n".join(
         f"[출처: {r.source} | {r.law_name} | 📌 {r.category} ({r.source_type})]\n"
-        f"{r.content}"
+        + (f"[관계 검색 보조 근거: {r.graph_evidence}; 질문의 법적 적용 여부는 별도 판단]\n" if r.graph_evidence else "")
+        + f"{r.content}"
         for r in results
     )
 
@@ -301,6 +304,7 @@ async def _lookup_referenced_article(
         source_type=source_type,
         similarity_score=1.0,   # 직접 조회 — 항상 최상위
         priority=priority,
+        article_no=article.article_no,
     )
 
 
@@ -355,7 +359,7 @@ async def hybrid_search(
                 "[SEARCH] 필터=%s | 후보 %d건 → 최종 %d건 (%.2fs)",
                 law_filter, len(candidates), len(final), time.perf_counter() - t0,
             )
-        return final
+        return await expand_graph(final, original_query or queries[0])
 
     fetch_k = TOP_K * 2
     q_embs = await embed_texts(queries)
@@ -372,7 +376,7 @@ async def hybrid_search(
         "[MULTI-QUERY] %d개 쿼리 → RRF %d건 → 최종 %d건 (%.2fs)",
         len(queries), len(merged), len(final), time.perf_counter() - t0,
     )
-    return final
+    return await expand_graph(final, original_query or queries[0])
 
 async def search_user_documents(query: str, user_id: str, top_k: int = 3) -> list[HybridSearchResult]:
     """사용자 PDF만 조회한다. 인증 사용자 ID는 서버가 전달한다."""

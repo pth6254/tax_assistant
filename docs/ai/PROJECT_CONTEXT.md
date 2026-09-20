@@ -23,6 +23,7 @@
 - 답변의 법령 인용과 계산 금액을 검증하는 citation guard
 - JWT httpOnly 쿠키 인증, 대화 관리, 세무 일정, PDF 업로드
 - Alembic, Docker Compose healthcheck, pytest 및 RAG 골든셋 평가
+- `evaluation/`: 정답·hard negative·검수 상태를 분리한 요소별 평가. 독립 실행기 `scripts/evaluate.py`, 합성 계약과 실제 세무 품질 점수 구분, 인간 루브릭 검수 및 재현 가능한 실행 기록.
 
 ## 3. 런타임 구조
 
@@ -49,6 +50,7 @@ React + Nginx
 | `tax_frontend` | React 빌드 결과를 제공하는 Nginx |
 | `tax_pgvector` | PostgreSQL 17 + pgvector |
 | `tax_pgadmin` | 개발용 DB 관리 UI |
+| `tax_neo4j` | 공식 조문 인용·계열·관측 시점 그래프, 선택형 GraphRAG |
 | Windows Ollama | 현재 Qwen3.5-9B 생성·Qwen3 Embedding 4B v1 임베딩 서빙 |
 
 `tax_llama_chat`·`tax_llama_embedding`은 선택형 overlay를 실행할 때만 생성되며 현재는 없다.
@@ -105,6 +107,11 @@ app/services/search/hybrid_search_service.py
 
 scripts/
   수집·동기화·백필·평가 CLI 진입점. 핵심 로직은 services에 둔다.
+
+evaluation/
+  서비스에서 import하지 않는 평가 전용 cli/schema/scoring/adapters/runner와 버전 데이터셋.
+  scripts/evaluate.py는 얇은 진입점이며 명령 처리는 evaluation/cli.py에 둔다.
+  정답 파일을 모델 출력으로 덮어쓰지 않는다. 미판정·미수집·오류를 성공으로 처리하지 않는다.
 ```
 
 ## 5. 법령 도메인 불변 규칙
@@ -122,6 +129,7 @@ scripts/
 ## 6. 검색 및 생성 원칙
 
 - 질문에 법령명과 조문번호가 있으면 벡터 검색보다 직접 조회 fast path를 우선한다.
+- GraphRAG 코드 기본값은 false, 2026-09-19 로컬 배포는 사용자 요청으로 true. 기본 RAG 뒤 검증된 CITES 1-hop으로 최대 2개/4,000자 보충한다. 역방향은 동일 계열만, 3초/장애 시 기본 결과 유지. 원문/약칭 정의 버전은 PG와 대조하고 시점 질문·PDF·해석례 seed는 제외한다. 원문 단독 조회 도구는 확장하지 않는다.
 - 사용자 PDF는 `user_id`로 격리한다.
 - 유사도만으로 법적 권위를 결정하지 않고 법령 위계를 재정렬에 반영한다.
 - LLM이 세액을 직접 계산하게 하지 않고 DB 세율표 기반 계산기를 사용한다.
@@ -147,6 +155,8 @@ scripts/
 - `.env`의 실제 값은 문서, 로그, 답변에 노출하지 않는다.
 
 ## 9. 더 자세한 문서
+
+- 평가 UI는 LangSmith 사용: `evaluation/LANGSMITH.md`. 자체 대시보드는 제거했다. `scripts/evaluate.py langsmith prepare/publish`로 선택한 결과만 전송하고 원본 평가 규약은 로컬에 유지한다. 사용자 요청으로 `.env.example`에서 평가 키를 읽으며 Docker 빌드에서 해당 파일을 제외한다. 실제 키를 Git에 커밋하지 않는다. 서비스 자동 추적은 켜지 않는다.
 
 - 전체 기능·실행·트러블슈팅: `README.md`
 - 배치 CLI: `scripts/README.md`

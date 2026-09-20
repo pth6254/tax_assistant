@@ -54,6 +54,11 @@ export const useChat = (conversationId) => {
         event => update(m => ({ ...m, tools: mergeTool(m.tools, event) })),
         controller.signal)
       update(m => ({ ...m, status: 'complete' }))
+      // Refresh server IDs only after DONE (the server has committed the turn).
+      try {
+        const saved = await getMessages(conversationId)
+        if (request.current === controller) setMessages(saved.map((m, i) => ({ ...m, id: 'saved-' + i, tools: m.tools || [] })))
+      } catch { /* Generation succeeded; missing IDs can be recovered by reloading history. */ }
     } catch (e) {
       if (e.name !== 'AbortError') update(m => ({ ...m, tools: interruptTools(m.tools), status: 'error', error: errorMessage(e) }))
     } finally {

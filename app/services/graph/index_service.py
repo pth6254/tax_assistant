@@ -5,7 +5,7 @@ import re
 from datetime import date
 
 from app.database import get_pool
-from app.services.law.relation_extractor import extract_relations
+from app.services.law.relation_extractor import extract_relations, alias_definitions
 from app.services.law.reference_parser import parse_law_reference
 from app.services.law.structure_parser import resolve_reference_target
 
@@ -45,8 +45,55 @@ async def load_articles(law_name: str | None = None):
     ''', law_name)
 
 
+def build_aliases(rows):
+    """Unique global original-text definition + exact stored family identity.
+
+    Any second/scoped definition disables the alias rather than guessing scope.
+    """
+    grouped = {}
+    for row in rows:
+        grouped.setdefault(row['law_name'], []).append(row)
+    result = {}
+    for name, articles in grouped.items():
+        base = re.sub(r' 시행(?:령|규칙)$', '', name)
+        expected = {'법': base, '영': base + ' 시행령'}
+        safe, proofs = {}, {}
+        definitions = [(r, *d) for r in articles for d in alias_definitions(r['article_text'])]
+        for alias, target in expected.items():
+            matches = [d for d in definitions if d[1] == alias]
+            mentions = sum(len(re.findall(r'이하[^\n)]{0,80}["“「]' + alias + r'["”」]', r['article_text'])) for r in articles)
+            if len(matches) != 1 or mentions != 1 or target not in grouped or name == target:
+                continue
+            definition, _, defined_name, offset, evidence = matches[0]
+            if defined_name != target:
+                continue
+            safe[alias] = target
+            proofs[alias] = {'key': article_key(definition), 'article_no': definition['article_no'],
+                             'offset': offset, 'evidence': evidence}
+        if safe:
+            result[name] = (safe, proofs)
+    return result
+
+
+def extract_row_relations(row, aliases):
+    """Shared by index and audit so scope exclusions cannot drift."""
+    alias_map, proofs = aliases.get(row['law_name'], ({}, {}))
+    for candidate in extract_relations(row['article_text'], alias_map):
+        proof = proofs.get(candidate['alias'], {})
+        if proof:
+            current_ref = parse_law_reference(row['article_no'])
+            definition_ref = parse_law_reference(proof['article_no'])
+            if ((current_ref.article, current_ref.article_branch or 0) <
+                    (definition_ref.article, definition_ref.article_branch or 0)):
+                continue
+            if row['article_no'] == proof['article_no'] and candidate['offset'] < proof['offset']:
+                continue
+        yield candidate, proof
+
+
 def build_graph(rows):
     rows = [row for row in rows if effective_now(row)]
+    aliases = build_aliases(rows)
     # Ambiguous names are deliberately not resolved.
     lookup = {}
     for row in rows:
@@ -57,7 +104,7 @@ def build_graph(rows):
         nodes.append({key: str(row.get(key) or '') for key in (
             'law_name', 'article_no', 'effective_date', 'amendment_date')}
                      | {'key': source})
-        for candidate in extract_relations(row['article_text']):
+        for candidate, proof in extract_row_relations(row, aliases):
             targets = lookup.get((law_key(candidate['law_name']), candidate['article_no']), [])
             if len(targets) != 1:
                 unresolved += 1
@@ -71,5 +118,8 @@ def build_graph(rows):
             if article_key(target) == source:
                 continue
             edges.append({'source': source, 'target': article_key(target),
-                          'reference': candidate['reference'], 'evidence': candidate['evidence']})
+                          'reference': candidate['reference'], 'evidence': candidate['evidence'],
+                          'alias_definition_key': proof.get('key', ''),
+                          'alias_definition_article': proof.get('article_no', ''),
+                          'alias_definition_law': row['law_name'] if candidate['alias'] else ''})
     return nodes, edges, unresolved
