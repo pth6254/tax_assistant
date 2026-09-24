@@ -1,5 +1,73 @@
 # 현재 구현 상태
 
+## 2026-09-24 임베딩 재개 상태 점검
+
+- 이전 진행 정지 후 배치에서 `ReadTimeout` 4개가 기록됐고 프로세스가 오류 종료했다. Docker가 다시 기동한 indexer는 20,532 → 20,632/127,838로 실제 증가 중임을 확인했다.
+- 실패 4개는 기본 실행에서 제외되므로 전체 백필 후 `--retry-failed`로 별도 재시도해야 한다. 원인은 Ollama 요청 읽기 시간 초과이며 서버 `/api/tags` 응답은 200이다.
+
+## 2026-09-24 과거 법령 임베딩 재개
+
+- 사용자 요청으로 `bash dev/history-index-wsl.sh start` 실행. `tax_law_history_indexer` running, 재시작 0회 확인.
+- 중지 시 저장량 10,292/127,838에서 재개 후 10,320/127,838로 증가, 실패 0. 전체 백필은 계속 진행 중.
+
+## 2026-09-24 임베딩 일시 중지
+
+- 사용자 PC 종료 요청으로 indexer만 중지. `exited`, `running=false` 확인. 저장 완료 10,292/127,838, 실패 0. 데이터 삭제 없음.
+- 전체 백필은 미완료이며 사용자 요청 시 `bash dev/history-index-wsl.sh start`로 재개한다.
+
+## 2026-09-24 과거 법령 GraphRAG 배포 — 전체 임베딩 진행 중
+
+- Alembic 20260924_0004 적용, index_texts/search_chunks/text_chunks/graph_progress 추가. 원본/현행 검색 보존. 조문 고유 본문 84,529, 부칙 포함 90,935, 청크 127,838.
+- History* Neo4j 5,400 스냅샷 적재 및 전수 소속/버전/hash 검수 통과. 명시적 MENTIONS 86,552. 과거 약칭 해석/법적 계열 적용 확정은 미구현.
+- 날짜·법령버전 질의를 history_lookup으로 분리, 모호한 버전/미완료 색인 유보. backend HISTORY_GRAPH_RAG_ENABLED=true 실제 확인. 최신 backend/frontend 배포 및 561 passed/2 skipped, frontend 8 passed/build 성공.
+- 실제 생성: 법령버전 1063 제16조 → 1012 제75조 그래프 확장 1건. 버전 529 전체 우선 임베딩 후 번호 없는 질문의 조문·부칙 벡터 검색 확인. 사용자 대화 저장 없는 스모크다.
+- 전체 백필 tax_law_history_indexer 재개, 마지막 확인 6,224/127,838 및 실패 0. 완료 아님. dev/history-index-wsl.sh status로 최신 상태 조회. docs/HISTORY_RAG.md 참조.
+
+## 2026-09-24 수집 실행 관리 보강 및 재개
+
+- **완료 확인**: 00:24 KST 41개/5,400 버전 전체 저장, pending/failed=0. 00:27 KST 전수 검수 passed=true, 5,400 스냅샷 불일치 0, 공식 법/영/규칙 표본 3개 일치. worker exit 0. 조문 단위 1,163,620, 부칙 297,843. 보고서 docs/evaluation/2026-09-24-law-history-recovery.md 및 JSON.
+
+- history profile 독립 law-history-worker 추가, dev/law-history-wsl.sh start/status/logs/stop. API 컨테이너 변경 없음. on-failure:3 제한 복구, PC/WSL 종료 후 자동 기동은 보장하지 않음.
+- 2,898개 보존 후 pending 재개. 컨테이너 재생성 후 이어받기 확인: 9/23 23:55 KST 3,284/5,400, pending 2,116, failed 0. run 4/5 interrupted, run 6 running 및 실제 lock 확인. 수치는 이후 status 재조회 필요.
+- 저장 상태와 lock/heartbeat 관측 상태 분리. 전체 수집 완료 후 evaluation.history_audit 전수 검사 및 공식 표본 3건 검수를 자동 실행, evaluation/runs/law-history에 시각별 JSON 보존.
+- 최신 이미지 전체 테스트 543 passed/2 skipped. 별도 실제 수집 및 전수 검수도 완료했다. 법적 적용 시점 판정·구법 검색 연결은 아직 미완료다.
+
+## 2026-09-23 과거 법령 데이터 검수
+
+- 22:13 KST 읽기 전용 DB 검수: 41개/5,400 목록 중 2,898 원문 저장(53.7%), pending 2,502, failed 0. 8개 법령만 본문 목록 수 일치. 조문 단위 684,031, 부칙 단위 218,799(버전별 반복 포함).
+- 저장된 모든 원문 해시/ID/시행일/공포일/공포번호 및 조문·부칙 재파싱 저장 대조 불일치 0. 공식 API 표본 3건 XML 해시/파싱 일치. 동일 파서 round-trip 검사이며 법적 적용 의미 검증은 아님.
+- run 4 running 표시는 오래된 상태: heartbeat 9/22 21:10 KST, docker top에 수집 worker 없음. 수집은 중단 상태이며 이번 검수에서 재개·상태 수정하지 않음.
+- 같은 법령/시행일의 복수 버전 묶음 474개. 단순 날짜 정렬로 법적 적용 버전을 확정하면 안 됨. 결과 docs/evaluation/2026-09-23-law-history-audit.md 및 JSON. 읽기 전용 검사 코드 evaluation/history_audit.py.
+
+## 2026-09-22 조회 실패 판단 유보
+
+- 최신 이미지 빌드 후 Compose 환경 일회성 컨테이너에서도 526 passed/2 skipped 확인. DB 설정 없는 단독 docker run에서는 DB 의존 계산기 테스트 2개가 503으로 실패했으며, Compose DB 환경에서 재검증 통과. 운영 API/수집 worker 재시작 없음.
+
+- chat_service의 계산 실패 생성 차단을 법령/문서 도구에도 확장. invalid_arguments/needs_input/not_found/timeout/error 및 알 수 없는 실패 상태에서 고정 안내 반환, 일반/SSE 모두 최종 LLM·인용 보정 우회. 실패 문구를 자유 생성 근거로 쓰지 않음.
+- 22개 회귀 테스트 추가, 전체 526 passed/2 skipped. 수집 작업을 보존하려고 서비스 컨테이너 재시작은 하지 않음. 실행 중인 API는 재시작 전 기존 import를 사용하며 변경 활성화는 수집 완료 후 재배포 필요.
+- 수집 상태 확인: 5,400 중 1,574 저장/실패 0/run 4 running. 시점성 수치이므로 이후 실제 status 확인. 일반 RAG 빈 결과·구법 적합성·Judge 교정은 후속.
+
+## 2026-09-22 과거 법령 아카이브 시작
+
+- Alembic 20260922_0003 적용: 별도 law_history 스키마에 범위/법령/시행일 버전/원문 스냅샷/조문/부칙/수집 run 및 coverage·관측 버전 순서 뷰 추가. 기존 검색 테이블·임베딩·Neo4j 수정 없음.
+- 현재 원문 수집 41개 법령을 scope로 고정. 공식 eflaw 전체 페이지 5,400개 버전 목록 확보, 41/41 discovery 완료. 연혁·현행·시행예정 합계이며 공식 ID 변경 전신 법령까지 완전 수집했다는 뜻은 아님.
+- (law_id,MST,시행일)로 단계 시행을 구별. 전체 정제 XML과 삭제/표제 조문 및 부칙 보존. identity/시행일/공포일 대조. 동일 본문 재수집 멱등·정정 원문 추가 보존을 실제 DB transaction rollback으로 검증.
+- 본문 10개와 최오래된 소득세법 1949-07-15 버전 저장 확인 후 전체 미수집 본문 수집 시작. 진행률은 scripts/collect_law_history.py status로 확인. 완료를 추정하지 말 것. 5회 연속 실패 시 중단, 재시작은 collect, 실패 재시도는 --retry-failed.
+- 최신 Ollama backend 이미지 재빌드, 전체 504 passed/2 skipped. 실행/스키마/제한 docs/LAW_HISTORY.md. 버전 목록·원문 show·동일 법령 본문 diff 지원. 채팅 시점 검색·구법 임베딩·과거 Neo4j 관계·법적 조문 승계 자동 확정은 미연결.
+
+## 2026-09-22 판례 5건 실제 답변 및 Judge 진단
+
+- WSL venv + dev/docker-up-wsl.sh로 현재 Ollama 서비스 재빌드/기동. 컨테이너 Graph 설정은 false로 관측되어 과거 활성화 기록과 다름. 임의 변경 없음. 이번 실험은 Graph A/B가 아니다.
+- evaluation/precedent_pilot.py: 실제 process_chat 5건 실행, 웹/대화 저장/클라우드 추적 차단, 정답 판결요지는 Judge에만 전달. 생성 5/5, 도구 입력 오류 2건·not_found 1건에도 생성이 지속됨. 나머지 2건은 일반 검색 5개씩.
+- judge.assess의 명시적 diagnostic_draft 옵션만 초안 진단 허용; 기존 CLI 미승인 차단 및 인간 gate 유지. 16,384 컨텍스트/14,000 bytes 상한. 전체 공식 판결요지를 사용하며 본문 전체 평가가 아님.
+- Judge 10항목 pass 6/fail 3/error 1이지만 모순된 답변을 pass 처리하는 의미 판정 오류 확인. 정답률로 해석 금지. 원시 결과 evaluation/runs/precedent-pilot-20260922, 분석 docs/evaluation/2026-09-22-precedent-pilot.md.
+- 서비스 오류 처리는 수정하지 않음. 후속 우선순위: 조회 실패 시 유보/fallback → 구법 근거 검증 → 원자적 루브릭/반례로 Judge 교정. 최신 서비스 이미지에 평가 변경 파일을 복사한 컨테이너에서 496 passed/2 skipped, git diff --check 확인. LangSmith 업로드 없음.
+
+## 2026-09-22 판례 검수용 읽기 문서
+
+- 로컬 수집 10건/초안 5건 파일 존재 확인. evaluation/precedent_review.py로 해당 배치의 검수자료.html 생성. 사건 목록·질문/채점 초안·판시사항·요지·참조조문·판례내용 전체를 읽기 전용으로 제공한다.
+- 별도 대시보드/서버/승인 기능은 추가하지 않았다. 원본 JSON과 draft 상태 유지, 외부 전송 없음. 산출 HTML도 sources 하위라 Git/Docker 제외.
+
 ## 2026-09-20 공식 판례 평가 후보 수집
 
 - 법제처 prec API 실제 연결 성공, 대법원 출처/4개 참조법령 검색으로 목록·본문 10건 수집, 오류 0. 세무 8/민사 2건이며 후보 전체를 보존했다. 출처 ID/사건번호 일치 및 본문 길이 확인.

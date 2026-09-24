@@ -1,5 +1,59 @@
 services:
 
+  law-history-indexer:
+    profiles: ["history-index"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tax_law_history_indexer
+    init: true
+    restart: "on-failure:3"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-tax_db}
+      OLLAMA_BASE_URL: http://ollama.windows.host:11434
+      NEO4J_URI: bolt://neo4j:7687
+    extra_hosts:
+      - "ollama.windows.host=${OLLAMA_WINDOWS_IP:?Use WSL startup script}"
+    command: ["python", "-u", "scripts/index_law_history.py", "all"]
+    volumes:
+      - ./evaluation/runs/law-history-index:/app/evaluation/runs/law-history-index
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Explicit opt-in batch worker; independent of API restarts. No model required.
+  law-history-worker:
+    profiles: ["history"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tax_law_history_worker
+    init: true
+    restart: "on-failure:3"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-tax_db}
+    command: ["python", "-u", "scripts/run_law_history_worker.py"]
+    volumes:
+      - ./evaluation/runs/law-history:/reports
+    depends_on:
+      postgres:
+        condition: service_healthy
+    stop_grace_period: 60s
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   # ── PostgreSQL + pgvector ──────────────────────────────────────
   postgres:
     image: pgvector/pgvector:pg17
@@ -33,6 +87,7 @@ services:
       # WSL 실행 스크립트가 현재 Windows 게이트웨이를 아래 별칭에 연결한다.
       OLLAMA_BASE_URL: http://ollama.windows.host:11434
       GRAPH_RAG_ENABLED: ${GRAPH_RAG_ENABLED:-false}
+      HISTORY_GRAPH_RAG_ENABLED: ${HISTORY_GRAPH_RAG_ENABLED:-true}
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env}
     depends_on:

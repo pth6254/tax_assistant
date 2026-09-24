@@ -14,6 +14,23 @@ evaluation/sources는 Git/Docker 제외. 운영 DB·학습·외부 평가 업로
 
 ## 로컬 LLM Judge (보조 판정)
 
+### 판례 5건 탐색 실험
+
+`python -m evaluation.precedent_pilot --batch BATCH --output NEW_OUTPUT`
+
+2026-09-20 파일럿의 5개 ID를 대상으로, 실제 backend 환경에서 순차 실행한다.
+질문에 구법 범위를 명시하고 정답 판결문은 생성 단계에 전달하지 않는다.
+실제 process_chat의 검색·도구 선택·생성·인용 검증을 실행하되 대화 기록은 읽거나 쓰지 않고,
+임의 UUID 사용자로 개인 문서를 격리하며 웹 검색과 클라우드 추적을 끈다. HTTP/SSE/UI 검증은 아니다.
+현재 Graph 설정을 그대로 기록하며 설정을 켜거나 끄지 않는다.
+
+Judge에는 공식 판결요지 **전체**를 제공한다. 원문 본문 전체를 투입하는 평가는 아니다.
+`diagnostic_draft=True`를 명시한 보조 평가만 허용하며 draft 상태·인간 gate를 유지한다.
+일반 judge CLI의 미승인 차단 정책은 그대로다. 16,384 컨텍스트와 14,000 UTF-8 bytes 입력 상한을
+사용하며 넘으면 자르지 않고 unknown 처리한다. 실제 토크나이저 계측은 아직 없다.
+결과는 dataset.json·experiment.json(검색 원문/도구 상태/실제 답변/증거 ID 포함)·report.md다.
+같은 모델의 자기평가이므로 pass를 법적 정답 확정으로 해석하지 않는다. 외부 업로드는 하지 않는다.
+
 `python scripts/evaluate.py judge --run-dir evaluation/runs/RUN --output evaluation/runs/JUDGE`
 
 기존 생성 관측과 승인된 고정 컨텍스트 루브릭을 현재 provider/model로 판정한다.

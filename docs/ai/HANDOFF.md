@@ -1,5 +1,63 @@
 # 세션 인수인계
 
+## 2026-09-24 임베딩 일시 정지 진단 및 재개 확인
+
+- 배치의 마지막 오류는 `ReadTimeout` 4개였다. 작업 프로세스는 한 차례 종료됐으나 컨테이너가 재기동했고, DB 임베딩이 20,532 → 20,632/127,838로 증가하는 것을 확인했다. 현재 실패 4개.
+- 진행 중인 worker를 중복 실행하지 않는다. 나머지 완료 후 worker 종료/락 해제를 확인하고 `python scripts/index_law_history.py embed --retry-failed --limit 4` 등으로 실패 4개를 재처리한 뒤 `failed=0`, `embedded=chunks` 검수 필요. 재시도 전에 Ollama 지연 원인을 점검한다.
+
+## 2026-09-24 사용자 요청으로 임베딩 재개
+
+- `bash dev/history-index-wsl.sh start` 실행 후 컨테이너 running 확인. 저장량 10,292 → 10,320/127,838로 증가, 실패 0.
+- 전체 백필 진행 중. 최신 수치는 `bash dev/history-index-wsl.sh status`로 확인하고, 완료는 chunks=embedded/failed=0/unprepared=0 및 배치 종료로 판정한다.
+
+## 2026-09-24 사용자 요청으로 임베딩 중지
+
+- PC 종료를 위해 `bash dev/history-index-wsl.sh stop` 실행. 컨테이너 `exited`, `running=false` 확인.
+- 중지 후 DB: 10,292/127,838 청크 임베딩 저장, 실패 0. 원본 및 Graph 5,400개 보존. 전체 임베딩 미완료.
+- 사용자가 재개를 요청하면 Docker/DB 실행 상태 확인 후 `bash dev/history-index-wsl.sh start`로 남은 작업 재개. 임의 자동 재개하지 않는다.
+
+## 2026-09-24 과거 법령 GraphRAG — 백필 완료 추적 필요
+
+- 서비스/Graph 적재/전수 소속 검수는 완료. 전체 벡터는 6,224/127,838에서 진행 중, 실패 0. tax_law_history_indexer를 최신 코드로 재개했고 docker wait로 WSL 연결을 유지했다. PC/WSL 종료 후 dev/history-index-wsl.sh start 필요.
+- `bash dev/history-index-wsl.sh status`의 chunks=embedded, failed=0, unprepared=0 및 종료 코드를 확인해야 백필 완료다. 성공으로 미리 표시하지 말 것. 모델 tag 내부 가중치를 바꾸면 색인 규격 버전도 올리고 재색인한다.
+- 5,400 Neo4j snapshot audit 통과/MENTIONS 86,552. docs/HISTORY_RAG.md에 구현/실험/한계 기록. 생성 및 벡터 검색은 소수 스모크이며 전체 정답률 평가 아님.
+- backend/frontend 재배포로 과거 조회 및 이전 조회 실패 유보 코드도 실행 이미지에 반영됨. 전체 561 passed/2 skipped, frontend 8 passed. 역사 답변은 현행 뷰어 대신 공식 MST+efYd 링크를 사용한다.
+- 다음: 전체 임베딩 완료/오류 점검 → 여러 연도·동일 시행일 모호성·부칙/hard negative 평가 → 법적 적용 검수. 현행 Graph 설정은 유지하고 HISTORY_GRAPH_RAG_ENABLED만 true로 활성화했다.
+
+## 2026-09-24 독립 수집기 및 전수 검수 완료
+
+- **최종 상태**: 5,400/5,400, pending/failed=0. 전수 검수 passed=true, 공식 표본 3개 일치, 컨테이너 정상 종료 0. 추가 수집 2,502개. docs/evaluation/2026-09-24-law-history-recovery.md 및 JSON 참고. 아래 3,284는 진행 중 관측 이력이다.
+- 다음 작업: 동일 시행일 복수 버전 474묶음 및 부칙/사건 기준일 적용 검수, 구법 검색·Graph 연계 설계. 수집 완료를 법적 적용 정확도 인증으로 해석하지 말 것. 현행 검색/Neo4j에는 아직 구법 미반영.
+
+- 사용자 승인으로 미수집 2,502개 재개. tax_law_history_worker가 수집 후 자동 전수 검수까지 실행한다. 최신 관측 3,284/5,400, 실패 0. API/현행 검색/Neo4j 변경 없음.
+- bash dev/law-history-wsl.sh status 및 logs, evaluation/runs/law-history/audit-*.json 확인. 보고서 passed=true + 전체 coverage + 컨테이너 exit 0을 함께 확인해야 완료.
+- 543 passed/2 skipped. 독립 worker 재생성 후 정상 이어받기 실증. PC/WSL 종료 후에는 start 명시 재실행 필요; 실패 데이터는 자동 무한 재시도하지 않는다.
+
+## 2026-09-23 검수 결과 — 수집 재개 필요
+
+- 실제 수집 중단 확인: 2,898/5,400 저장, pending 2,502, 실패 0. run 4는 running으로 남았지만 마지막 heartbeat 9/22 21:10 KST, 수집 프로세스 없음. 이번 요청은 검수이므로 재개하지 않음.
+- 저장 원문 전체 무결성 및 법/영/규칙 표본 3건 공식 원문 대조 통과. 동일 시행일 복수 버전 474묶음의 적용 의미는 미검증. docs/evaluation/2026-09-23-law-history-audit.md 참고.
+- 다음: 사용자 지시에 따라 collect 재개, 완료 후 재검수. 구법 채팅/Graph 연결은 아직 불가. DB 수정·API 재배포 없음.
+
+## 2026-09-22 판단 유보 구현 — 활성화 대기
+
+- app/services/chat_service.py _failed_tool_answer: 법령/문서 도구 실패 시 고정 안내로 최종 생성 차단. 일반/SSE, 저장 도구 상태 유지. tests/test_lookup_abstention.py 22개 추가, 전체 526 passed/2 skipped.
+- 수집 worker를 유지하려고 tax_backend 재시작하지 않음. 변경 파일 복사 후 별도 pytest 프로세스로 검증했으나 현재 API 프로세스에는 미활성화. 수집 완료 후 dev/docker-up-wsl.sh backend로 재배포하고 실제 질문 확인 필요.
+- 일반 검색 빈 결과, 구법 버전 적용 확인, Judge 교정은 이번 변경 범위 아님. 수집 마지막 확인 1,574/5,400, 실패 0; 실제 최신 상태를 재조회할 것.
+
+## 2026-09-22 과거 법령 수집 진행 중
+
+- law_history 스키마와 20260922_0003 적용, 41개 대상/5,400개 목록 확보. 본문 전체 수집은 진행 중이며 status를 실제 조회할 것.
+- Windows 숨김 wsl 프로세스로 `docker exec tax_backend python scripts/collect_law_history.py collect` 실행. stdout history-collection.20260922.log, stderr history-collection.20260922.error.log (Git/Docker 제외). WSL 유지용 전경 docker exec이며 PC/WSL/컨테이너 재시작 때 자동 복구하지 않는다.
+- 중복 작업은 DB advisory lock 차단. 중단 후 같은 collect로 미수집 재개, 실패는 collect --retry-failed. 기존 실행 running 표시만으로 살아 있다고 간주하지 말고 heartbeat/프로세스도 확인.
+- 전체 504 passed/2 skipped, DB 멱등·정정 스냅샷·시점 불일치 rollback 검증, 1949-07-15 소득세법 원문 저장 성공. 채팅/임베딩/Neo4j에는 미반영.
+- 후속: 수집 완료/실패 사유·원문 품질 감사 → 부칙/조문 시점 검수 → 구법 임베딩/과거 Graph 투영. 법령 ID가 바뀐 전신/후신 연결, 별표 첨부 다운로드는 미구현.
+
+## 2026-09-22 검수 자료 열기
+
+- evaluation/sources/precedents/2026-09-20-pilot/검수자료.html을 브라우저로 열면 수집 10건과 미승인 기준 5건을 함께 볼 수 있다. 읽기 전용이며 메모 저장/승인 UI는 없다.
+- 재생성은 python -m evaluation.precedent_review --batch BATCH. 기존 HTML은 덮어쓰지 않는다. 원본에 비해 HTML 태그만 제거한 텍스트 표시이므로 원문 서식은 공식 출처에서 확인한다.
+
 ## 2026-09-20 판례 후보
 
 - evaluation/sources/precedents/2026-09-20-pilot/README.md와 draft-cards.json부터 검수. 10건 원문/5건 초안, 운영 DB 적재 없음. sources 전체 Git/Docker 제외.
@@ -316,3 +374,10 @@
 - 코드 경로와 함수명을 구체적으로 적는다.
 - 비밀값, 토큰, 실제 `.env` 내용을 기록하지 않는다.
 - 작업이 완전히 끝나면 임시 메모를 제거하고 `CURRENT_STATUS.md`에 최종 상태를 반영한다.
+# 2026-09-22 판례 실험 후속
+
+- 판례 5건 실험 완료: evaluation/runs/precedent-pilot-20260922/report.md와 experiment.json. 분석은 docs/evaluation/2026-09-22-precedent-pilot.md. 원시 Judge pass 6/fail 3/error 1을 정답률로 쓰지 말 것(명백한 의미 판정 오류 존재).
+- 법령 도구 invalid_arguments 2건/not_found 1건에서 일반 검색 없이 정상 생성으로 흘러감. chat_service.py의 법령/문서 tool_run 분기에서 실패 처리 구분 필요. 이번 요청은 평가이므로 서비스 수정은 하지 않음.
+- 구법 질문에 현행 검색 자료가 섞임. 시점 버전 확인과 부족 시 유보, 전체 프롬프트 토큰 계측 필요. 컨테이너 GRAPH_RAG_ENABLED=false 관측(과거 문서 true와 다름), 설정 변경하지 않음.
+- 현재 생성/Ollama 설정 보존. 평가 전용 assess diagnostic_draft 옵션은 인간 승인 변경 없이 허용하며 일반 CLI gate 유지. 실제 평가 모델도 Qwen3.5:9b여서 자기평가 편향. 별도 검수 및 반례 교정 필요.
+- 관련 회귀 테스트 포함 backend 496 passed/2 skipped. 실험 원문/결과 외부 전송 없음. 컨테이너 /tmp/precedent-source와 /tmp/precedent-pilot-20260922에도 복사본이 남으며 호스트 결과는 보존됨.

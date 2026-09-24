@@ -20,6 +20,29 @@ async def test_draft_never_self_approves():
 
 
 @pytest.mark.asyncio
+async def test_explicit_draft_diagnostic_preserves_review_status():
+    case, observation = inputs('draft')
+    provider = SimpleNamespace(structured=AsyncMock(return_value=dict(
+        verdict='pass', rationale='reason', mode='support', answer_ids=['A1'], reference_ids=['R1'])))
+    result = await assess(provider, case, observation, diagnostic_draft=True)
+    assert result[0]['diagnostic_draft'] is True
+    assert result[0]['verdict'] == 'pass'
+    assert case.review.status == 'draft'
+
+
+@pytest.mark.asyncio
+async def test_diagnostic_still_requires_reference_and_budget():
+    case, observation = inputs('draft')
+    provider = SimpleNamespace(structured=AsyncMock())
+    result = await assess(provider, case, observation, diagnostic_draft=True, input_budget_bytes=1)
+    assert result[0]['verdict'] == 'unknown'
+    case.input['context'] = ''
+    result = await assess(provider, case, observation, diagnostic_draft=True)
+    assert result[0]['verdict'] == 'unknown'
+    provider.structured.assert_not_called()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize('quote,expected', [('A1','pass'),('invented','error')])
 async def test_exact_evidence(quote, expected):
     provider = SimpleNamespace(structured=AsyncMock(return_value=dict(

@@ -72,5 +72,11 @@ test('tool card escapes document markup and exposes only valid actions', async (
       tool: { tool: 'law_lookup', status: 'not_found' }, onCitationClick: () => {},
     }))
     assert.ok(!failed.includes('<button'))
+    const history = renderToStaticMarkup(createElement(Card, {
+      tool: { tool: 'history_lookup', status: 'ok', params: { law_name: '소득세법', article_no: '제1조' } },
+      onCitationClick: () => {}, onOpenCalculator: () => {},
+    }))
+    assert.ok(history.includes('과거 법령·GraphRAG 조회'))
+    assert.ok(!history.includes('<button'))
   } finally { await server.close() }
 })

@@ -14,6 +14,8 @@ export default function MessageBubble({ message, onCitationClick, onOpenCalculat
       ALLOW_DATA_ATTR: false,
       FORBID_TAGS: ['img', 'video', 'audio', 'iframe', 'form', 'input', 'button', 'textarea', 'select', 'style'],
     })
+    // Archive answers already have exact version links. Never open the current-law viewer.
+    if (message.tools?.some(tool => tool.tool === 'history_lookup')) return
     // Link only text nodes after sanitization; model-generated attributes cannot become actions.
     const walker = document.createTreeWalker(body.current, NodeFilter.SHOW_TEXT)
     const nodes = []
@@ -33,7 +35,7 @@ export default function MessageBubble({ message, onCitationClick, onOpenCalculat
       }
       fragment.append(text.slice(start)); node.replaceWith(fragment)
     }
-  }, [message.content, isUser])
+  }, [message.content, message.tools, isUser])
   return <article className={'message ' + (isUser ? 'user-message' : 'assistant-message')}>
     {isUser ? <div className="question-bubble">{editing && onEdit ? <form onSubmit={e => { e.preventDefault(); if (draft.trim()) { onEdit(draft.trim()); setEditing(false) } }}>
       <textarea aria-label="질문 수정" value={draft} maxLength={10000} rows={4} autoFocus onChange={e => setDraft(e.target.value)} style={{ width: '100%', minWidth: 200, resize: 'vertical' }} />

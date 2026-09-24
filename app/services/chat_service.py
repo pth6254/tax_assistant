@@ -18,6 +18,8 @@ from config import (
 )
 from app.services.calculator.engine import CALCULATORS, CalcRun
 from app.services.tools.planner import run_tools_for_query
+from app.services.search.history_search import temporal_request
+from app.services.law.history_answer import answer as history_answer
 from app.services.citation_guard import apply_citation_guard, build_citation_footer, extract_citations
 from app.services.llm_client import call_llm, call_llm_structured, stream_llm
 from app.schemas.ai_output import CitationList, QueryClassification
@@ -507,8 +509,22 @@ def _calc_meta(calc_run: CalcRun | None) -> dict | None:
 
 
 
-def _failed_calculation_answer(events):
+def _failed_tool_answer(events):
     for event in reversed(events):
+        if event.get("tool") in {"law_lookup", "document_search"} and event.get("status") not in {"ok", "selecting", "running"}:
+            document = event.get("tool") == "document_search"
+            status = event.get("status")
+            if status in {"needs_input", "invalid_arguments"}:
+                message = ("검색할 문서와 찾으려는 내용을 구체적으로 알려주세요." if document else
+                           "법령명과 조·항·호 번호를 확인해 주세요. 과거 법령이라면 적용할 날짜나 개정 전 버전도 알려주세요.")
+            elif status == "not_found":
+                message = ("접근 가능한 업로드 문서에서 요청한 자료를 찾지 못했습니다. 업로드 상태와 검색 내용을 확인해 주세요." if document else
+                           "저장된 법령 자료에서 요청한 조문을 확인하지 못했습니다. 법령명·조문 번호·적용 시점을 확인하거나 공식 원문을 제공해 주세요.")
+            elif status == "timeout":
+                message = "자료 조회 시간이 초과됐습니다. 잠시 후 다시 시도해 주세요."
+            else:
+                message = "자료 조회를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요."
+            return message + "\n\n근거를 확보하지 못해 이번 요청의 세무 판단은 유보합니다. 조회 실패가 해당 규정이나 권리가 없다는 뜻은 아닙니다."
         if event.get("tool") in {*CALCULATORS, "none"} and event.get("status") not in {"ok", "selecting", "running"}:
             if event.get("tool") == "none":
                 return "도구나 필수 입력을 확정하지 못해 실행하지 않았습니다. 조회할 대상 또는 계산할 세목과 조건을 구체적으로 알려주세요."
@@ -522,11 +538,16 @@ async def process_chat(query: str, conversation_id: str, user_id: str, *, tool_e
 
     conv_id = _uuid.UUID(conversation_id)
     events = tool_events if tool_events is not None else []
+    if temporal_request(query):
+        history = await _fetch_history(conv_id)
+        answer = await history_answer(query, events.append)
+        await _save_history(conv_id,query,answer,is_first=len(history)==0,tools=_terminal_tools(events))
+        return answer,None
     context, web_results, history, calc_run = await _fetch_rag_and_web_context(
         query, conv_id, user_id, on_tool_event=events.append,
     )
 
-    failure = _failed_calculation_answer(events)
+    failure = _failed_tool_answer(events)
     if failure:
         await _save_history(conv_id, query, failure, is_first=len(history) == 0, tools=_terminal_tools(events))
         return failure, None
@@ -563,6 +584,29 @@ async def stream_chat_response(
         events.append(event)
         queue.put_nowait(event)
 
+    if temporal_request(query):
+        history = await _fetch_history(conv_id)
+        async def prepare_history():
+            try:
+                return await history_answer(query,on_tool_event)
+            finally:
+                queue.put_nowait(None)
+        task = asyncio.create_task(prepare_history())
+        try:
+            while True:
+                event = await queue.get()
+                if event is None:
+                    break
+                yield event
+            answer = await task
+        finally:
+            if not task.done():
+                task.cancel()
+            await asyncio.gather(task,return_exceptions=True)
+        yield {'type':'chunk','text':answer}
+        await _save_history(conv_id,query,answer,is_first=len(history)==0,tools=_terminal_tools(events))
+        return
+
     async def prepare():
         try:
             return await _fetch_rag_and_web_context(
@@ -585,7 +629,7 @@ async def stream_chat_response(
         await asyncio.gather(task, return_exceptions=True)
 
 
-    failure = _failed_calculation_answer(events)
+    failure = _failed_tool_answer(events)
     if failure:
         yield {"type": "chunk", "text": failure}
         await _save_history(conv_id, query, failure, is_first=len(history) == 0, tools=_terminal_tools(events))

@@ -2,7 +2,7 @@ import { TOOL_LABELS, STATUS_LABELS, isPendingTool } from './toolState'
 import Icon from '../ui/Icon'
 export default function ToolCallCard({ tool, onCitationClick, onOpenCalculator, onRetry }) {
   const pending = isPendingTool(tool), success = tool.status === 'ok'
-  const calculator = !['none','law_lookup','document_search'].includes(tool.tool)
+  const calculator = !['none','law_lookup','document_search','history_lookup'].includes(tool.tool)
   return <section className={'tool-card ' + (pending ? 'pending' : success ? 'success' : 'failed')} aria-label={TOOL_LABELS[tool.tool] || '도구'}>
     <div className="tool-heading" role="status" aria-live="polite"><span className="tool-name">{pending ? <span className="spinner" /> : <Icon name={calculator ? 'calculator' : tool.tool === 'document_search' ? 'file' : 'book'} size={17} />}{TOOL_LABELS[tool.tool] || '도구'}</span><span className="status-text">{STATUS_LABELS[tool.status] || '확인 필요'}</span></div>
     {tool.context && <details open={!success && !pending}><summary>{success ? '실행 결과 보기' : '상세 안내'}</summary><pre>{tool.context}</pre></details>}

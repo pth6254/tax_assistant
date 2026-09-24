@@ -51,6 +51,8 @@ React + Nginx
 | `tax_pgvector` | PostgreSQL 17 + pgvector |
 | `tax_pgadmin` | 개발용 DB 관리 UI |
 | `tax_neo4j` | 공식 조문 인용·계열·관측 시점 그래프, 선택형 GraphRAG |
+| `tax_law_history_worker` | 선택형 history profile 배치: 미수집 구법 재개 → 전체 무결성 검수 → 종료 |
+| `tax_law_history_indexer` | 선택형 history-index 배치: 파생 색인·History* 그래프·중복 제거 임베딩 |
 | Windows Ollama | 현재 Qwen3.5-9B 생성·Qwen3 Embedding 4B v1 임베딩 서빙 |
 
 `tax_llama_chat`·`tax_llama_embedding`은 선택형 overlay를 실행할 때만 생성되며 현재는 없다.
@@ -137,6 +139,9 @@ evaluation/
 - 정상 인용이 있는 답변에는 불필요한 structured-output 보정 호출을 추가하지 않는다.
 
 ## 7. 데이터와 마이그레이션 원칙
+
+- 2026-09-22부터 과거 법령은 별도 `law_history` 스키마에 저장한다. 공식 법령 ID와 `(MST, 시행일)` 버전, 정제 원문 스냅샷·조문·부칙·수집 상태를 관리한다. 현행 law_articles/임베딩/Neo4j와 자동 혼합하지 않는다. 실행·한계: `docs/LAW_HISTORY.md`.
+- 2026-09-24 역사 전용 임베딩·History* Neo4j·날짜/버전 채팅 경로 추가. 전체 벡터 백필은 진행 중이며 버전 단위 준비 상태를 검사한다. 시행일 후보 조회는 사건 적용 법령 확정이 아니다. `docs/HISTORY_RAG.md`.
 
 - DB 스키마의 기준은 Alembic이다.
 - `db/init.sql`과 `db/migrations/`는 최초 legacy baseline이 채택하는 자료이며 신규 변경을

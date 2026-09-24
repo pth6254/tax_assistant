@@ -1,4 +1,5 @@
 export const TOOL_LABELS = {
+  history_lookup: '과거 법령·GraphRAG 조회',
   none: '도구 선택', law_lookup: '법령 원문 조회', document_search: '내 문서 검색',
   income_tax: '소득세 계산', capital_gains: '양도소득세 계산', inheritance: '상속세 계산',
   gift: '증여세 계산', vat: '부가가치세 계산', penalty_tax: '가산세 계산',

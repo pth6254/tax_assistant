@@ -66,16 +66,18 @@ def validate_evidence(result, answers, references, policy):
         raise InvalidEvidence('absence_requires_pass_and_full_coverage')
 
 
-async def assess(provider, case, observation):
+async def assess(provider, case, observation, *, diagnostic_draft=False, input_budget_bytes=6000):
     answer = observation.payload.get('answer', '')
     reference = case.input.get('context', '')
     rows = []
     for criterion in case.rubric:
         row = dict(criterion_id=criterion.id, critical=criterion.critical)
+        if diagnostic_draft:
+            row['diagnostic_draft'] = True
         if observation.error or not answer:
             rows.append(row | dict(verdict='unknown', rationale='답변 관측 없음 또는 생성 오류'))
             continue
-        if case.review.status != 'approved' or not reference:
+        if (case.review.status != 'approved' and not diagnostic_draft) or not reference:
             rows.append(row | dict(verdict='unknown', rationale='승인된 평가 기준 또는 고정 원문 없음'))
             continue
         answers, references = segments(answer, 'A'), segments(reference, 'R')
@@ -84,7 +86,7 @@ async def assess(provider, case, observation):
                     answer=answers, criterion=criterion.instruction, evidence_policy=policy)
         content = json.dumps(data, ensure_ascii=False)
         # Conservative input guard; no silent truncation of legal conditions.
-        if len(content.encode('utf-8')) + len(PROMPT) > 6000:
+        if len(content.encode('utf-8')) + len(PROMPT.encode('utf-8')) > input_budget_bytes:
             rows.append(row | dict(verdict='unknown', rationale='보수적 Judge 입력 예산 초과'))
             continue
         try:

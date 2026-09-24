@@ -6,6 +6,10 @@
 
 ## 데이터 수집·동기화
 
+- `python scripts/collect_law_history.py discover|collect|status|versions|show|diff`: 현재 수집 법령의 과거 버전 아카이브. 기존 검색 데이터와 분리하며 실행·재개·한계는 [과거 법령 관리](../docs/LAW_HISTORY.md)를 참고한다.
+- 독립 수집·자동 전수 검수는 `bash dev/law-history-wsl.sh start`로 기동한다. `scripts/run_law_history_worker.py`는 해당 컨테이너의 배치 진입점이며 보고서는 `evaluation/runs/law-history/`에 보존한다.
+- 역사 임베딩/그래프는 `scripts/index_law_history.py prepare|graph|embed|all|status`와 `dev/history-index-wsl.sh`로 별도 실행한다. 실행·준비 상태·재개 규칙은 [역사 GraphRAG](../docs/HISTORY_RAG.md)를 참고한다.
+
 | 명령 | 용도 | 실행 시점 |
 |---|---|---|
 | `python scripts/ingest_laws.py` | 세법 법률·시행령·시행규칙 수집 | 최초 구축·수동 수집 |

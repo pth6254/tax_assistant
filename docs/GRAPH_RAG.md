@@ -1,5 +1,8 @@
 # 선택형 Neo4j GraphRAG (1차 구현)
 
+2026-09-24 과거 법령은 별도 History* 그래프와 버전 지정 검색 경로를 추가했다.
+아래 현행 그래프의 시간순 스냅샷과 구별한다. [역사 GraphRAG 실행·검증·한계](HISTORY_RAG.md).
+
 평가 실행기는 후속 리팩토링으로 `scripts/evaluate.py`에 통합됐다.
 `python scripts/evaluate.py run --dataset evaluation/datasets/retrieval.json --mode live --include-draft`로
 후보 검수를 진행한다. 아래 과거 검증 기록의 38/38은 당시 정답 세목 필터를 제공한 검색 결과이며,

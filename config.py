@@ -51,6 +51,7 @@ CHUNK_OVERLAP: int      = 100
 TOP_K: int              = 5
 MEMORY_TURNS: int       = 3     # 채팅 메모리 최근 N 턴
 GRAPH_RAG_ENABLED: bool = os.getenv("GRAPH_RAG_ENABLED", "false").lower() == "true"
+HISTORY_GRAPH_RAG_ENABLED: bool = os.getenv("HISTORY_GRAPH_RAG_ENABLED", "false").lower() == "true"
 GRAPH_TIMEOUT_SEC: float = float(os.getenv("GRAPH_TIMEOUT_SEC", "3"))
 NEO4J_URI: str = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
 NEO4J_USER: str = os.getenv("NEO4J_USER", "neo4j")
