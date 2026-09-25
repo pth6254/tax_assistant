@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import Icon from '../ui/Icon'
 import Notice from '../ui/Notice'
 import { getMe, updateProfile, changePassword, deleteAccount } from '../../api/userApi'
+import './profile.css'
 
 const BUSINESS_TYPE_LABELS = {
   '법인':          '법인사업자',
@@ -24,7 +25,7 @@ export default function ProfileScreen({ onLogout, onOpenCalendar }) {
 
   if (fetching) {
     return (
-      <main style={mainStyle}>
+      <main className="profile-screen">
         <div style={{
           margin: 'auto', display: 'flex', alignItems: 'center', gap: 10,
           color: 'var(--text-muted)',
@@ -44,27 +45,23 @@ export default function ProfileScreen({ onLogout, onOpenCalendar }) {
   }
 
   return (
-    <main style={mainStyle}>
-      <header style={{
-        padding: '18px 32px',
-        borderBottom: '1px solid var(--border)',
-        display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
-        background: 'var(--surface)',
-        backdropFilter: 'blur(8px)',
-      }}>
+    <main className="profile-screen">
+      <header className="page-header profile-header">
         <Icon name="user" />
-        <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: 17, fontWeight: 400 }}>내 정보</h1>
+        <h1>내 정보</h1>
       </header>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: 18, width: '100%', maxWidth: 640 }}>
-        <Notice onRetry={() => setReload(v => v + 1)}>{error}</Notice>
-        <Card title="국세청 세무일정" icon="📅">
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>국세청에 게시된 월별 신고·납부 일정을 확인할 수 있습니다. 전체 일정이며 개인별 신고 의무를 자동 판정하지는 않습니다.</p>
-          <button className="button secondary" onClick={onOpenCalendar}>세무일정 캘린더 열기</button>
-        </Card>
-        {profile && <ProfileSection profile={profile} onUpdated={setProfile} />}
-        <PasswordSection />
-        <DeleteSection onLogout={onLogout} />
+      <div className="profile-scroll">
+        <div className="profile-content">
+          <Notice onRetry={() => setReload(v => v + 1)}>{error}</Notice>
+          <Card title="국세청 세무일정" icon="📅">
+            <p className="profile-description">국세청에 게시된 월별 신고·납부 일정을 확인할 수 있습니다. 전체 일정이며 개인별 신고 의무를 자동 판정하지는 않습니다.</p>
+            <button className="button secondary" onClick={onOpenCalendar}>세무일정 캘린더 열기</button>
+          </Card>
+          {profile && <ProfileSection profile={profile} onUpdated={setProfile} />}
+          <PasswordSection />
+          <DeleteSection onLogout={onLogout} />
+        </div>
       </div>
     </main>
   )
@@ -111,27 +108,27 @@ function ProfileSection({ profile, onUpdated }) {
         </div>
       </div>
 
-      <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <form onSubmit={handleSave} className="profile-form">
         <Field label="이메일">
-          <input value={profile?.email ?? ''} disabled style={{ ...inputStyle, opacity: 0.45, cursor: 'not-allowed' }} />
+          <input value={profile?.email ?? ''} disabled className="profile-input" />
         </Field>
         <Field label="이름">
           <input value={name} onChange={e => setName(e.target.value)}
-            placeholder="이름을 입력하세요" maxLength={50} style={inputStyle} />
+            placeholder="이름을 입력하세요" maxLength={50} className="profile-input" />
         </Field>
         <Field label="전화번호">
           <input value={phone} onChange={e => setPhone(e.target.value)}
-            placeholder="010-0000-0000" maxLength={20} style={inputStyle} />
+            placeholder="010-0000-0000" maxLength={20} className="profile-input" />
         </Field>
         <Field label="사업자 유형" hint="현재 공식 일정은 전체 일정으로 표시됩니다">
-          <select value={businessType} onChange={e => setBusinessType(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+          <select value={businessType} onChange={e => setBusinessType(e.target.value)} className="profile-input">
             {Object.entries(BUSINESS_TYPE_LABELS).map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
             ))}
           </select>
         </Field>
         {msg && <StatusMsg text={msg} error={!msg.includes('저장')} />}
-        <button type="submit" disabled={saving} style={primaryBtn}>
+        <button type="submit" disabled={saving} className="button profile-primary">
           {saving ? '저장 중…' : '저장'}
         </button>
       </form>
@@ -164,18 +161,18 @@ function PasswordSection() {
 
   return (
     <Card title="비밀번호 변경" icon="🔑">
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <form onSubmit={handleSubmit} className="profile-form">
         <Field label="현재 비밀번호">
-          <input type="password" value={form.current} onChange={set('current')} style={inputStyle} required />
+          <input type="password" value={form.current} onChange={set('current')} className="profile-input" required />
         </Field>
         <Field label="새 비밀번호" hint="8자 이상">
-          <input type="password" value={form.next} onChange={set('next')} style={inputStyle} required />
+          <input type="password" value={form.next} onChange={set('next')} className="profile-input" required />
         </Field>
         <Field label="새 비밀번호 확인">
-          <input type="password" value={form.confirm} onChange={set('confirm')} style={inputStyle} required />
+          <input type="password" value={form.confirm} onChange={set('confirm')} className="profile-input" required />
         </Field>
         {msg && <StatusMsg text={msg} error={msg !== '비밀번호가 변경되었습니다.'} />}
-        <button type="submit" disabled={saving} style={primaryBtn}>
+        <button type="submit" disabled={saving} className="button profile-primary">
           {saving ? '변경 중…' : '비밀번호 변경'}
         </button>
       </form>
@@ -203,23 +200,23 @@ function DeleteSection({ onLogout }) {
 
   return (
     <Card title="계정 삭제" icon="⚠️" danger>
-      <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.65, marginBottom: 14 }}>
+      <p className="profile-description">
         계정을 삭제하면 업로드한 문서와 채팅 내역이 모두 삭제되며 복구할 수 없습니다.
       </p>
       {!open ? (
-        <button onClick={() => setOpen(true)} style={dangerBtn}>계정 삭제</button>
+        <button onClick={() => setOpen(true)} className="button profile-danger">계정 삭제</button>
       ) : (
-        <form onSubmit={handleDelete} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <form onSubmit={handleDelete} className="profile-form">
           <Field label="비밀번호 확인">
             <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-              placeholder="현재 비밀번호 입력" style={inputStyle} required autoFocus />
+              placeholder="현재 비밀번호 입력" className="profile-input" required autoFocus />
           </Field>
           {error && <StatusMsg text={error} error />}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" onClick={() => { setOpen(false); setPassword(''); setError('') }} style={ghostBtn}>
+          <div className="profile-danger-actions">
+            <button type="button" onClick={() => { setOpen(false); setPassword(''); setError('') }} className="button secondary">
               취소
             </button>
-            <button type="submit" disabled={deleting} style={dangerBtn}>
+            <button type="submit" disabled={deleting} className="button profile-danger">
               {deleting ? '삭제 중…' : '영구 삭제 확인'}
             </button>
           </div>
@@ -233,34 +230,22 @@ function DeleteSection({ onLogout }) {
 
 function Card({ title, icon, children, danger }) {
   return (
-    <div style={{
-      background: 'var(--surface)',
-      border: `1px solid ${danger ? 'rgba(255,92,92,.25)' : 'var(--border)'}`,
-      borderRadius: 'var(--radius)',
-      overflow: 'hidden',
-    }}>
-      <div style={{
-        padding: '13px 20px',
-        borderBottom: `1px solid ${danger ? 'rgba(255,92,92,.15)' : 'var(--border)'}`,
-        display: 'flex', alignItems: 'center', gap: 8,
-        background: danger ? 'rgba(255,92,92,.04)' : 'rgba(255,255,255,.02)',
-      }}>
-        {icon && <span style={{ fontSize: 14 }}>{icon}</span>}
-        <span style={{ fontSize: 13, fontWeight: 500, color: danger ? 'var(--danger)' : 'var(--text)' }}>
-          {title}
-        </span>
-      </div>
-      <div style={{ padding: '20px' }}>{children}</div>
-    </div>
+    <section className={'profile-card' + (danger ? ' profile-card-danger' : '')}>
+      <header className="profile-card-header">
+        {icon && <span className="profile-card-icon" aria-hidden="true">{icon}</span>}
+        <h2>{title}</h2>
+      </header>
+      <div className="profile-card-body">{children}</div>
+    </section>
   )
 }
 
 function Field({ label, hint, children }) {
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '.4px', fontWeight: 500 }}>
+    <label className="profile-field">
+      <span className="profile-field-label">
         {label}
-        {hint && <span style={{ marginLeft: 6, fontWeight: 400, opacity: .7 }}>({hint})</span>}
+        {hint && <span className="profile-field-hint">({hint})</span>}
       </span>
       {children}
     </label>
@@ -269,58 +254,8 @@ function Field({ label, hint, children }) {
 
 function StatusMsg({ text, error }) {
   return (
-    <div style={{
-      fontSize: 12, padding: '8px 12px', borderRadius: 8,
-      color: error ? 'var(--danger)' : 'var(--success)',
-      background: error ? 'rgba(255,92,92,.08)' : 'rgba(76,175,125,.08)',
-      border: `1px solid ${error ? 'rgba(255,92,92,.2)' : 'rgba(76,175,125,.2)'}`,
-    }}>
+    <div className={'profile-status' + (error ? ' profile-status-error' : '')} role="status">
       {text}
     </div>
   )
-}
-
-const mainStyle = {
-  flex: 1, display: 'flex', flexDirection: 'column',
-  background: 'var(--bg)', minWidth: 0, overflow: 'hidden',
-}
-
-const inputStyle = {
-  width: '100%',
-  background: 'var(--surface2)',
-  border: '1px solid var(--border)',
-  borderRadius: 8,
-  padding: '9px 12px',
-  color: 'var(--text)',
-  fontSize: 14,
-  outline: 'none',
-  transition: 'border-color .15s, box-shadow .15s',
-}
-
-const primaryBtn = {
-  padding: '10px 16px',
-  background: 'var(--accent)',
-  color: '#fff',
-  border: 'none', borderRadius: 8,
-  fontSize: 13, fontWeight: 500, cursor: 'pointer',
-  transition: 'opacity .15s',
-}
-
-const dangerBtn = {
-  flex: 1,
-  padding: '10px 16px',
-  background: 'rgba(255,92,92,.1)',
-  color: 'var(--danger)',
-  border: '1px solid rgba(255,92,92,.25)',
-  borderRadius: 8,
-  fontSize: 13, cursor: 'pointer',
-}
-
-const ghostBtn = {
-  padding: '10px 16px',
-  background: 'var(--surface2)',
-  color: 'var(--text-muted)',
-  border: '1px solid var(--border)',
-  borderRadius: 8,
-  fontSize: 13, cursor: 'pointer',
 }

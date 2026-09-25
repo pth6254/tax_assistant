@@ -115,3 +115,23 @@ test('tool card escapes document markup and exposes only valid actions', async (
     }
   } finally { await server.close() }
 })
+
+test('chat message actions render as labelled icon-only buttons', async () => {
+  const { createServer } = await import('vite')
+  const { createElement } = await import('react')
+  const { renderToStaticMarkup } = await import('react-dom/server')
+  const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' })
+  try {
+    const { default: MessageBubble } = await server.ssrLoadModule('/src/components/Chat/MessageBubble.jsx')
+    const question = renderToStaticMarkup(createElement(MessageBubble, {
+      message: { role: 'user', content: '질문' }, onEdit: () => {},
+    }))
+    const answer = renderToStaticMarkup(createElement(MessageBubble, {
+      message: { role: 'assistant', content: '답변', status: 'complete' }, onRegenerate: () => {},
+    }))
+    assert.match(question, /aria-label="마지막 질문 수정"/)
+    assert.match(answer, /aria-label="다시 답변"/)
+    assert.match(answer, /aria-label="답변 공유"/)
+    assert.doesNotMatch(answer, />↻ 다시 답변</)
+  } finally { await server.close() }
+})

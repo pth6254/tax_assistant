@@ -8,6 +8,12 @@ const assert = require('node:assert/strict')
     const errors = [], forks = [], streams = []
     let completed = false
     page.on('pageerror', e => errors.push(e.message))
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'share', { value: undefined, configurable: true })
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText: async text => { window.__sharedAnswer = text } }, configurable: true,
+      })
+    })
     await page.route('**/api/**', async route => {
       const p = new URL(route.request().url()).pathname
       let body = {}
@@ -30,13 +36,22 @@ const assert = require('node:assert/strict')
     await page.getByLabel('이메일').fill('demo@example.test')
     await page.locator('input[type=password]').fill('synthetic-password')
     await page.getByRole('button',{name:'로그인',exact:true}).last().click()
-    await page.getByRole('button',{name:'마지막 질문 수정'}).click()
+    const editButton = page.getByRole('button',{name:'마지막 질문 수정'})
+    assert.equal(await editButton.innerText(), '')
+    await editButton.click()
     await page.getByLabel('질문 수정',{exact:true}).fill('Edited question')
     await page.getByRole('button',{name:'수정 후 보내기'}).click()
     await page.getByText('New answer',{exact:true}).waitFor()
-    await page.getByRole('button',{name:'↻ 다시 답변',exact:true}).click()
+    const regenerateButton = page.getByRole('button',{name:'다시 답변',exact:true})
+    assert.equal(await regenerateButton.innerText(), '')
+    await regenerateButton.click()
     await page.waitForFunction(() => document.querySelectorAll('.question-bubble').length === 1)
-    await page.getByRole('button',{name:'↻ 다시 답변',exact:true}).waitFor()
+    await page.getByRole('button',{name:'다시 답변',exact:true}).waitFor()
+    const shareButton = page.getByRole('button',{name:'답변 공유'}).last()
+    assert.equal(await shareButton.innerText(), '')
+    await shareButton.click()
+    await page.getByText('답변을 복사했습니다.').waitFor()
+    assert.equal(await page.evaluate(() => window.__sharedAnswer), 'New answer')
     assert.equal(forks.length,2)
     assert.equal(forks[0].query,'Edited question')
     assert.equal(forks[1].query,undefined)

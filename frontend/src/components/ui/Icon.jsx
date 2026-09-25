@@ -11,6 +11,8 @@ const paths = {
   stop: 'M6 6h12v12H6Z', trash: 'M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7',
   chevron: 'm9 5 7 7-7 7', down: 'm5 9 7 7 7-7', check: 'm4 12 5 5L20 6',
   refresh: 'M20 8a9 9 0 1 0 0 9M20 2v6h-6', logout: 'M9 3H3v18h6m5-15 6 6-6 6M8 12h12',
+  edit: 'M12 20h9M4 20l4.2-.9L19 8.3a2.1 2.1 0 0 0-3-3L5.2 16.1 4 20ZM14.5 6.8l3 3',
+  share: 'M12 16V3m-5 5 5-5 5 5M4 13v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7',
 }
 export default function Icon({ name, size = 20, ...props }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" {...props}><path d={paths[name] || paths.file} /></svg>
