@@ -269,6 +269,34 @@ async def test_graph_edges_outside_requested_excerpt_are_not_expanded(monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_history_graph_can_add_more_than_two_cited_articles(monkeypatch):
+    from unittest.mock import MagicMock
+    citations = [f'「시험법」 제{number}조' for number in (2, 3, 4)]
+    seed = evidence(snapshot_id=1, text_key='a:hash', content='; '.join(citations))
+    pool = AsyncMock()
+    pool.fetchval.side_effect = lambda query, *args: 'hash' if 'snapshots' in query else seed['content']
+    pool.fetch.return_value = [dict(law_id='test-law')]
+    monkeypatch.setattr(search, 'get_pool', AsyncMock(return_value=pool))
+    records = [dict(law_name='시험법', reference=f'제{number}조', evidence=citation)
+               for number, citation in zip((2, 3, 4), citations)]
+    driver = AsyncMock()
+    driver.execute_query.return_value = (records, None, None)
+    connection = MagicMock()
+    connection.__aenter__ = AsyncMock(return_value=driver)
+    connection.__aexit__ = AsyncMock(return_value=False)
+    monkeypatch.setattr(search, 'connect', lambda: connection)
+    monkeypatch.setattr(search, 'select_version', AsyncMock(return_value={'id': 600}))
+    monkeypatch.setattr(search, 'direct_article', AsyncMock(side_effect=lambda version, ref:
+        evidence(version_id=600, article_no=ref.article_no, law_name='시험법',
+                 content=f'{ref.article_no}의 검증된 짧은 본문', required=False)))
+
+    expanded = await search.expand([seed], date(2020, 1, 1))
+
+    assert len(expanded) == 4
+    assert sum(bool(item['graph_evidence']) for item in expanded) == 3
+
+
+@pytest.mark.asyncio
 async def test_unknown_explicit_law_name_is_not_silently_ignored(monkeypatch):
     pool = AsyncMock()
     pool.fetchrow.return_value = dict(id=529, law_id='income', law_name='소득세법')

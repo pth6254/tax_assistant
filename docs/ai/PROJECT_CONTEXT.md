@@ -1,5 +1,11 @@
 # 프로젝트 공통 컨텍스트
 
+## 버전별 법령 Knowledge Graph (2026-09-25)
+
+- PostgreSQL `law_history`의 보존 XML이 원본이다. Neo4j의 `TaxProvision`은 스냅샷별 조·항·호·목을 식별하고 `CHILD_OF`로 계층을 보존한다.
+- 명시적 따옴표 정의와 정식 법령명 조문 인용은 `KnowledgeAssertion` 후보로 추출한다. `reviewed` 관계만 과거 법령 RAG에 연결하며 검색 시 원문 해시와 실제 발췌를 재확인한다. 법적 의미·사건 적용시점의 자동 검증은 아니다.
+- 현재 현행 채팅은 기존 CITES GraphRAG, 버전 지정/기준일 과거 채팅은 검수된 Knowledge Graph 보충을 사용한다. 전체 버전 백필은 하지 않았다. 상세 운영은 `docs/TAX_KNOWLEDGE_GRAPH.md`.
+
 ## 생성 모델 작업별 설정 (2026-09-25)
 
 - `app/services/llm_client.py`는 `answer`, `history_answer`, `citation_extraction`, `query_classification`, `tool_selection`, `document_classification`의 고정된 호출 목적별 설정을 선택한다.
@@ -141,7 +147,7 @@ evaluation/
 ## 6. 검색 및 생성 원칙
 
 - 질문에 법령명과 조문번호가 있으면 벡터 검색보다 직접 조회 fast path를 우선한다.
-- GraphRAG 코드 기본값은 false, 2026-09-19 로컬 배포는 사용자 요청으로 true. 기본 RAG 뒤 검증된 CITES 1-hop으로 최대 2개/4,000자 보충한다. 역방향은 동일 계열만, 3초/장애 시 기본 결과 유지. 원문/약칭 정의 버전은 PG와 대조하고 시점 질문·PDF·해석례 seed는 제외한다. 원문 단독 조회 도구는 확장하지 않는다.
+- GraphRAG 코드 기본값은 false, 2026-09-25 로컬 배포는 사용자 요청으로 true. 기본 RAG 뒤 검증된 CITES 1-hop으로 고정 개수 제한 없이 추가 본문 합계 4,000자 이내에서 보충한다. 역방향은 동일 계열만, 3초/장애 시 기본 결과 유지. 원문/약칭 정의 버전은 PG와 대조하고 시점 질문·PDF·해석례 seed는 제외한다. 원문 단독 조회 도구는 확장하지 않는다. 과거 법령은 별도 그래프·근거 입력 예산을 사용한다.
 - 사용자 PDF는 `user_id`로 격리한다.
 - 유사도만으로 법적 권위를 결정하지 않고 법령 위계를 재정렬에 반영한다.
 - LLM이 세액을 직접 계산하게 하지 않고 DB 세율표 기반 계산기를 사용한다.

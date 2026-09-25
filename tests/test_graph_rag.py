@@ -103,6 +103,27 @@ async def test_expansion_and_stale_target(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_expansion_can_add_more_than_two_short_articles(monkeypatch):
+    monkeypatch.setattr(service.config, 'GRAPH_RAG_ENABLED', True)
+    source = article(text='「시험법」 제2조, 제3조 및 제4조에 따른다.')
+    targets = [article(f'제{number}조', f'제{number}조 의료비 공제 요건') for number in (2, 3, 4)]
+    rows = {(row['law_name'], row['article_no']): row for row in [source, *targets]}
+    monkeypatch.setattr(service, 'get_law_article', AsyncMock(
+        side_effect=lambda law, number: LawArticleDetail(**rows[(law, number)])))
+    edges = [dict(source_key=article_key(source), target_key=article_key(target),
+                  law_name=target['law_name'], article_no=target['article_no'],
+                  evidence=f'「시험법」 {target["article_no"]}', direction='outgoing')
+             for target in targets]
+    monkeypatch.setattr(service, 'neighbors', AsyncMock(return_value=edges))
+    base = [_row_to_article_result(source | {'similarity_score': 1})]
+
+    expanded = await service.expand_graph(base, '의료비 공제')
+
+    assert len(expanded) == 4
+    assert sum(bool(result.graph_evidence) for result in expanded) == 3
+
+
+@pytest.mark.asyncio
 async def test_failure_and_timeout_keep_base_results(monkeypatch):
     import asyncio
     monkeypatch.setattr(service.config, 'GRAPH_RAG_ENABLED', True)

@@ -98,6 +98,4 @@ async def _expand(results, query=''):
             continue  # Do not silently truncate legal conditions mid-article.
         selected.append(result)
         chars += len(result.content)
-        if len(selected) == 2:
-            break
     return results + selected

@@ -8,7 +8,9 @@ import config
 from app.database import get_pool
 from app.services.embedding_service import embed_texts
 from app.services.graph.store import connect
+from app.services.graph.knowledge_service import reviewed_citations, reviewed_definitions
 from app.services.law.history_index import model_key
+from app.services.law.history_parser import sha
 from app.services.law.reference_parser import extract_law_reference, format_article_no, parse_law_reference
 from app.services.law.history_context import temporal_request
 from app.services.law.history_structure import article_excerpt, HistoricalStructureError
@@ -195,9 +197,70 @@ async def expand(results, day):
                 item['graph_evidence']=f'{seed["law_name"]} {seed["article_no"]}의 명시적 인용: {ref["evidence"]}'
                 output.append(item)
                 seen.add((item['version_id'],item['article_no']))
-                if len(output)>=len(results)+2:
-                    return output
     return output
+
+
+async def expand_reviewed_citations(version, results, day):
+    """Resolve reviewed symbolic citations against the requested date and PG XML."""
+    articles = {r['article_no'] for r in results if r['version_id'] == version['id']}
+    if not articles:
+        return []
+    claims = await reviewed_citations(version, articles)
+    if not claims:
+        return []
+    pool = await get_pool()
+    additions = []
+    seen = {(r['version_id'], r.get('requested_reference', r['article_no'])) for r in results}
+    for claim in claims:
+        p, a = claim['provision'], claim['assertion']
+        if not any(seed['version_id'] == version['id'] and seed['article_no'] == p['article_no']
+                   and a['quote'] in seed['content'] for seed in results):
+            continue
+        original = await pool.fetchrow('''SELECT body,structure,content_hash FROM law_history.articles
+            WHERE snapshot_id=$1 AND article_number=$2 AND article_branch=$3 AND unit_kind='조문' ''',
+            version['snapshot_id'], p['article_number'], p['article_branch'])
+        if (not original or original['content_hash'] != p['article_hash']
+                or sha(original['body']) != original['content_hash'] or p['quote'] not in original['body']):
+            continue
+        try:
+            excerpt = article_excerpt(original['structure'], original['body'], parse_law_reference(p['reference']))
+        except (HistoricalStructureError, ValueError):
+            continue
+        if (a['quote'] not in excerpt or p['quote'] not in excerpt
+                or sha(p['quote']) != a['source_hash']):
+            continue
+        law_ids = await pool.fetch('''SELECT DISTINCT law_id FROM law_history.versions
+            WHERE replace(law_name,' ','')=$1''', ''.join(claim['target_law'].split()))
+        if len(law_ids) != 1:
+            continue
+        try:
+            target_version = await select_version(law_ids[0]['law_id'], day)
+            target = await direct_article(target_version, parse_law_reference(claim['target_reference']))
+        except HistoryUnavailable:
+            continue
+        identity = (target['version_id'], target.get('requested_reference', target['article_no']))
+        if identity in seen:
+            for existing in results:
+                if (existing['version_id'], existing.get('requested_reference', existing['article_no'])) == identity:
+                    existing['graph_evidence'] = f'검수된 명시적 인용: {a["quote"]}'
+                    existing['knowledge_assertion_id'] = a['key']
+                    break
+            continue
+        target['graph_evidence'] = f'검수된 명시적 인용: {a["quote"]}'
+        target['knowledge_assertion_id'] = a['key']
+        additions.append(target)
+        seen.add(identity)
+    return additions
+
+
+async def expand_knowledge(version, results, query, day):
+    expanded = [dict(result) for result in results]
+    definitions = await reviewed_definitions(version, query)
+    known = {(r['version_id'], r.get('requested_reference'), r['content']) for r in expanded}
+    expanded.extend(r for r in definitions if
+                    (r['version_id'], r.get('requested_reference'), r['content']) not in known)
+    expanded.extend(await expand_reviewed_citations(version, expanded, day))
+    return expanded
 
 
 async def retrieve(query):
@@ -230,6 +293,15 @@ async def retrieve(query):
                 graph_status='unavailable'
         else:
             graph_status='index_pending'
+    knowledge_status = 'disabled'
+    if config.HISTORY_GRAPH_RAG_ENABLED:
+        try:
+            results = await asyncio.wait_for(
+                expand_knowledge(version, results, query, day), config.GRAPH_TIMEOUT_SEC)
+            knowledge_status = 'checked'
+        except Exception:
+            knowledge_status = 'unavailable'
     return {'results':results,'graph_status':graph_status,'as_of':str(day),'notice':NOTICE,
+            'knowledge_status':knowledge_status,
             'history_context':state,
             'legal_applicability_verified':False}
