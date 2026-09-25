@@ -3,11 +3,14 @@ import asyncio
 import json
 import logging
 import re
+from dataclasses import replace
 
 from app.schemas.tool_call import ToolSelection
 from app.services.ai_pipeline import chat_prompt, structured_chain
 from app.services.llm_client import call_llm
-from app.services.law.reference_parser import extract_law_reference
+from app.services.inference.llm.errors import LLMRequestError
+from app.services.law.reference_parser import extract_law_reference, parse_law_reference, InvalidLawReference
+from app.services.law.coverage_service import NATIONAL_TAX_LAWS
 from app.services.tools.registry import TOOL_SCHEMAS
 from app.services.tools.executor import ToolRun, execute_tool
 
@@ -18,8 +21,10 @@ _AMOUNT_RE = re.compile(r"\d|[일이삼사오육칠팔구십백천]+\s*(?:억|�
 _INTENT_RE = re.compile(r"얼마|계산|세액|세금.{0,6}(?:나오|내야|납부|부과)|내야\s*(?:하|할|되)")
 
 def has_calculation_intent(query: str) -> bool:
-    """금액 표현 + 계산 의도 키워드가 모두 있을 때만 True (LLM 호출 게이트)."""
-    return bool(_AMOUNT_RE.search(query)) and bool(_INTENT_RE.search(query))
+    """Explicit calculation requests may lack inputs; a year alone is not money."""
+    without_dates = re.sub(r"\d{4}\s*(?:년|[-./]\d{1,2}[-./]\d{1,2})", "", query)
+    explicit_request = bool(re.search(r"계산(?:\s*(?:해|부탁|좀)|\s*[.!?]*$)", query))
+    return explicit_request or (bool(_AMOUNT_RE.search(without_dates)) and bool(_INTENT_RE.search(query)))
 
 
 
@@ -33,6 +38,18 @@ def has_tool_intent(query: str) -> bool:
 
 
 async def select_tool(query: str, history: list[dict] | None = None) -> tuple[str, dict] | None:
+    # Only an entire, unambiguous current-law reference bypasses the LLM.
+    # Comparisons, dates, unnamed follow-ups and mixed tasks retain the planner.
+    reference_text = re.sub(r"\s*(?:원문|조문)?\s*(?:보여\s*줘|보여주세요|조회(?:해\s*줘|해주세요)?)?\s*[?.!]*$", "", query.strip())
+    try:
+        reference = parse_law_reference(reference_text)
+        known_names = {name + suffix for name in (*NATIONAL_TAX_LAWS, "지방세법")
+                       for suffix in ("", " 시행령", " 시행규칙")}
+        if reference.law_name in known_names:
+            return "law_lookup", {"law_name": reference.law_name,
+                                  "article_no": replace(reference, law_name=None).canonical}
+    except InvalidLawReference:
+        pass
     definitions = {name: schema.model_json_schema() for name, schema in TOOL_SCHEMAS.items()}
     prompt = chat_prompt(
         "세무 보조 도구를 최대 하나 선택하고 JSON만 출력하세요. "
@@ -48,7 +65,7 @@ async def select_tool(query: str, history: list[dict] | None = None) -> tuple[st
         "{query}", history=True,
     )
     async def generate(messages):
-        return await call_llm(messages, temperature=0.0, max_tokens=400)
+        return await call_llm(messages, temperature=0.0, max_tokens=1024, purpose="tool_selection")
     chain = structured_chain(prompt, generate, ToolSelection, name="tool_selection")
     data = await chain.ainvoke({"query": query, "history": (history or [])[-4:]})
     if data.tool == "none":
@@ -57,15 +74,20 @@ async def select_tool(query: str, history: list[dict] | None = None) -> tuple[st
 
 
 async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] | None = None, on_event=None) -> ToolRun | None:
-    if not has_tool_intent(query) and not (
-        history and re.search(r"계산|문서|조문|원문|다시|그럼", query)
-    ):
+    last_question = next((m.get("content", "") for m in reversed(history or []) if m.get("role") == "user"), "")
+    # A changed amount after an actual calculation is a follow-up; "그럼" alone is not.
+    calculation_followup = has_calculation_intent(last_question) and bool(
+        re.search(r"\d[\d,.]*\s*(?:억|만|천|원)|다시\s*(?:해|계산)", query)
+    )
+    if not has_tool_intent(query) and not calculation_followup:
         return None
     if on_event:
         on_event({"type": "tool", "id": "primary", "tool": "none", "status": "selecting"})
     try:
         async with asyncio.timeout(30):
             selection = await select_tool(query, history)
+    except LLMRequestError:
+        raise  # Preserve rate-limit/credit/timeout classification for the UI.
     except Exception as exc:
         logger.warning("Tool selection failed (%s)", type(exc).__name__)
         result = ToolRun("none", "selection_error", "도구 입력을 확정하지 못했습니다. 필요한 조건을 확인하고 결과를 추측하지 마세요.")

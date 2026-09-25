@@ -18,6 +18,10 @@ from app.database import close_pool, get_pool
 from app.routers import auth, chat, upload, calculator, law, tax_schedule, users, conversations, health
 from app.services.embedding_service import close_http_client
 from app.services.llm_client import close_llm_client
+from config import (
+    CHAT_MODEL, LLM_PROVIDER, EMBEDDING_PROVIDER, EMBEDDING_MODEL,
+    LLM_TASK_SETTINGS,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,8 +35,10 @@ async def lifespan(app: FastAPI):
     # startup
     await get_pool()
     print("✅ PostgreSQL 커넥션 풀 생성 완료")
-    print(f"🤖 LLM: Ollama qwen3.5:35b-a3b")
-    print(f"🔢 임베딩: Ollama qwen3-embedding:4b (2560차원)")
+    print(f"🤖 LLM: {LLM_PROVIDER} / {CHAT_MODEL}")
+    for task, settings in LLM_TASK_SETTINGS.items():
+        print(f"🧭 {task}: {settings.provider} / {settings.model} / {settings.reasoning_effort or 'default'}")
+    print(f"🔢 임베딩: {EMBEDDING_PROVIDER} / {EMBEDDING_MODEL}")
     yield
     # shutdown
     await close_pool()

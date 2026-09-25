@@ -11,6 +11,9 @@ os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:
 os.environ.setdefault("OLLAMA_BASE_URL", "http://localhost:11434")
 os.environ.setdefault("LAW_API_KEY", "test-law-api-key")
 os.environ.setdefault("TAVILY_API_KEY", "")
+# Unit tests must never send synthetic prompts to a real tracing account.
+os.environ["LANGSMITH_TRACING"] = "false"
+os.environ["LANGCHAIN_TRACING_V2"] = "false"
 
 from unittest.mock import AsyncMock, MagicMock
 
@@ -26,6 +29,10 @@ def pytest_addoption(parser):
 def _make_mock_pool() -> tuple:
     """asyncpg Pool 동작을 흉내내는 목 객체 생성."""
     conn = AsyncMock()
+    transaction = MagicMock()
+    transaction.__aenter__ = AsyncMock(return_value=None)
+    transaction.__aexit__ = AsyncMock(return_value=False)
+    conn.transaction = MagicMock(return_value=transaction)
     ctx = MagicMock()
     ctx.__aenter__ = AsyncMock(return_value=conn)
     ctx.__aexit__ = AsyncMock(return_value=False)

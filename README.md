@@ -36,8 +36,8 @@
 ### 마지막 질문 수정·답변 재생성
 
 완료된 마지막 질문 아래의 수정 아이콘, 마지막 답변 아래의 다시 답변 아이콘을 사용할 수 있습니다. 답변 아래 공유 아이콘은 기기의 공유 기능을 열거나, 지원하지 않는 브라우저에서는 해당 답변의 텍스트를 클립보드에 복사합니다. 공개 공유 링크나 서버 측 공유 사본은 만들지 않습니다.
-원본 대화는 목록에 보존하며 마지막 질문·답변 이전의 문맥만 복사한 별도 대화에서 다시 실행합니다.
-생성 중에는 사용할 수 없으며, 재생성이 답변의 정확도를 보장하지는 않습니다.
+질문 수정은 원본 대화를 보존하고 이전 문맥을 복사한 별도 대화에서 실행합니다. 다시 답변은 같은 대화의 마지막 질문에 새 답변 버전을 추가하며, 이전/다음 버튼으로 저장된 버전을 선택할 수 있습니다. 새 답변 생성이 끝나기 전에는 기존 답변을 DB에서 바꾸지 않습니다.
+버전 전환은 후속 질문의 문맥이 뒤섞이지 않도록 마지막 완료 턴에서만 허용합니다. 생성 중에는 사용할 수 없으며, 재생성이 답변의 정확도를 보장하지는 않습니다.
 새 요청이 실패해도 원본 대화는 유지됩니다. 과거 중간 질문 수정과 한 대화 내 버전 전환 UI는 지원하지 않습니다.
 
 ### 과거 법령 아카이브
@@ -152,7 +152,7 @@ Agentic RAG 파이프라인 (검색 → 계산 → 합성 → 인용 검증)
 ### RAG 품질 평가 도구
 
 - `scripts/evaluate.py`: 버전 관리된 평가셋·hard negative·단계별 자동 판정·인간 검수·회귀 비교를 통합한 평가 CLI. [판정 규약](evaluation/README.md)
-- `scripts/evaluate.py langsmith`: 평가 결과를 LangSmith 실험·검수 큐로 명시적 전송. 자체 대시보드는 제거했으며 실서비스 자동 추적은 켜지 않습니다. [설정·사용법](evaluation/LANGSMITH.md)
+- `scripts/evaluate.py langsmith`: 평가 결과를 LangSmith 실험·검수 큐로 명시적 전송합니다. 채팅 실행 추적은 별도 `CHAT_TRACING_ENABLED` 설정으로 동작합니다. [설정·사용법](evaluation/LANGSMITH.md)
 - 파라미터(임계값, 프롬프트 등) 변경 시 효과를 수치로 검증 가능
 - `--repeat N` 옵션으로 동일 평가를 반복 실행해 생성 품질 지표의 샘플링 편차와 실행마다 결과가 바뀌는 비결정적 항목을 확인 가능
 
@@ -475,11 +475,13 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5433/tax_db
 JWT_SECRET=your-long-random-secret-here
 JWT_EXPIRE_MIN=1440
 
-# 생성 LLM: OpenRouter Dots3 Note Preview 무료 모델 (키는 실제 .env에만 입력)
+# 생성 LLM: OpenRouter GPT-6 Luna 유료 모델 (키는 실제 .env에만 입력)
 LLM_PROVIDER=openrouter
 LLM_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_API_KEY=
-CHAT_MODEL=dots-studio/dots-3-note-preview:free
+CHAT_MODEL=openai/gpt-6-luna
+# 필요할 때 작업별로 오버라이드 (아래 설명 참고)
+# LLM_TASK_TOOL_SELECTION_REASONING_EFFORT=low
 
 # Ollama 임베딩 — 실행 환경에 따라 아래 "Ollama 연결 설정" 참고
 OLLAMA_BASE_URL=http://localhost:11434
@@ -495,13 +497,51 @@ LAW_API_KEY=your-law-api-key-here
 
 > JWT_SECRET 생성: `python -c "import secrets; print(secrets.token_hex(32))"`
 
+운영 LLM 호출은 `ANSWER`, `HISTORY_ANSWER`, `CITATION_EXTRACTION`, `QUERY_CLASSIFICATION`,
+`TOOL_SELECTION`, `DOCUMENT_CLASSIFICATION`의 6개 작업으로 구분합니다. 기본은 모두
+`LLM_PROVIDER`/`CHAT_MODEL`을 상속하므로 OpenRouter GPT-6 Luna 하나로 실행됩니다.
+각 작업에 `LLM_TASK_<작업명>_PROVIDER`, `_MODEL`, `_BASE_URL`, `_API_KEY`,
+`_REASONING_EFFORT`, `_THINK_ENABLED`, `_TIMEOUT_SEC`, `_TEMPERATURE`, `_MAX_TOKENS`를
+개별 설정할 수 있습니다. 예를 들어 도구 선택만 로컬 Ollama로 전환하려면 실제 `.env`에
+`LLM_TASK_TOOL_SELECTION_PROVIDER=ollama`, `LLM_TASK_TOOL_SELECTION_MODEL=qwen3.5:9b`를
+설정합니다. 이때 Ollama 주소는 기본 `OLLAMA_BASE_URL`을 사용하고 모델을 미리 설치해야 합니다.
+직접 OpenAI provider를 쓰는 작업은 `OPENAI_API_KEY` 또는 해당 작업의 `_API_KEY`가 필요합니다.
+`REASONING_EFFORT`는 지원하는 원격 모델에 전달하고, Ollama/llama.cpp의 추론 사용 여부는
+`THINK_ENABLED=true|false`로 제어합니다. 작업별 `MAX_TOKENS`는 기존 호출값을 덮어쓰지만
+원격 호출에는 `LLM_REMOTE_MAX_TOKENS` 전역 상한이 계속 적용됩니다. 설정 변경 후 백엔드를
+재시작하고 `python dev/probe_chat_routing.py`로 비식별 점검을 수행하세요.
+`TEMPERATURE`는 해당 모델이 허용할 때만 전달되며 Luna처럼 추론 모델에서는 적용되지 않습니다.
+`/api/health/dependencies`의 `llm_tasks`는 6개 작업 상태를, 기존 `llm`/`routing_llm`은
+답변/도구 선택 상태를 표시합니다.
+
 OpenRouter 키를 발급받아 **실제 `.env`의 `OPENROUTER_API_KEY`에만** 입력한 후 WSL에서
 `source venv-wsl/bin/activate`와 `bash dev/docker-up-wsl.sh backend`를 실행합니다.
 키가 비어 있으면 LLM 상태는 `configuration_missing`이며 답변 생성은 사용할 수 없습니다.
-`dots-studio/dots-3-note-preview:free`는 생성 모델을 고정합니다. 이전
-`qwen/qwen3.8-27b:free`는 제공자 측 일시적 429 제한으로 교체했습니다. 무료·프리뷰
-엔드포인트의 가용성과 요청 한도는 달라질 수 있으므로
-[OpenRouter 모델 페이지](https://openrouter.ai/dots-studio/dots-3-note-preview:free)를 확인하세요.
+`openai/gpt-6-luna`는 OpenRouter의 **유료** 생성 모델입니다. 크레딧·사용량 한도를 확인하고
+[OpenRouter 모델 페이지](https://openrouter.ai/openai/gpt-6-luna)에서 현재 가격을 확인하세요.
+기존 Qwen 무료 엔드포인트의 제공자 측 429를 피하려는 전환이며 유료 모델도 429가 완전히 없어지는 것은 아닙니다.
+Luna 요청에는 `temperature`를 보내지 않습니다. 기본 추론 수준은 최종 답변·과거법령 설명·인용 추출·도구 선택은
+`low`, 업로드 문서 분류는 `none`입니다. 각 작업의 `_REASONING_EFFORT`로 조정할 수 있습니다.
+도구 선택 1,024·검색어 분류 1,024·인용 추출 2,048·과거법령 설명 4,096토큰으로 구분하며,
+원격 생성의 **1회 출력** 상한은 `LLM_REMOTE_MAX_TOKENS=8192`입니다. 이는 입력 컨텍스트 한도가 아닙니다.
+답변이 출력 길이 제한으로 끝나면 앞선 답변을 모델에 넘겨 남은 부분만 최대 `LLM_MAX_CONTINUATIONS=2`회
+이어 씁니다. 이어 쓴 본문은 겹치는 부분을 제거한 뒤 인용·계산 검증을 거쳐 저장합니다.
+반복만 하거나 정해진 횟수에도 끝나지 않으면 실패로 표시하고 부분 답변을 저장하지 않습니다.
+따라서 8,192토큰은 **최종 답변 길이의 절대 상한이 아닙니다.** 연속 호출의 총 출력은 더 길 수 있으며
+질문당 비용도 증가할 수 있습니다. 429·연결 오류는 출력 길이 중단으로 취급하지 않습니다.
+각 원격 요청에는 `LLM_TIMEOUT_SEC=180`의 전체 응답 제한 시간도 적용합니다.
+HTTP 429만 응답 시작 전 최대 두 번 재시도합니다. `Retry-After`가 4초를 넘으면 즉시 안내하며,
+중간 스트림 오류·시간 초과·잔액 부족은 자동 재호출하지 않습니다. 429/잔액/시간 초과는 UI에 구분해 전달합니다.
+단일 법령·조문 원문 요청은 파서로 바로 조회하여 도구 선택 LLM 호출을 생략합니다.
+사용량은 제공자가 반환하는 토큰 수·비용 등 숫자 메타데이터만 로그에 기록합니다.
+Compose 채팅의 LangSmith 추적은 `CHAT_TRACING_ENABLED=true`로 켭니다. 채팅 요청과 스트림 전체를
+`chat_request`/`chat_stream` 루트 실행으로 기록하고 내부 LangChain 단계도 함께 추적합니다.
+실제 `.env`에 `LANGSMITH_API_KEY`가 있어야 하며 기존 `LANGSMITH_PROJECT`로 기록합니다.
+질문·답변·검색 근거가 LangSmith에 전송되므로 민감정보 전송 정책을 확인하세요.
+LangSmith의 월간 추적 한도가 소진되면 앱은 동작해도 새 추적은 원격에 저장되지 않을 수 있습니다.
+합성 추적 확인은 `docker exec tax_backend python -m dev.probe_langsmith_chat`으로 수행합니다.
+모델 전환 시 WSL 가상환경에서 `PYTHONPATH=. python dev/probe_openrouter_model.py <모델 ID>`로 비식별 일반·스트리밍·JSON Schema 응답을 확인합니다.
+`--pipeline`을 붙이면 실제 도구 인자 추출과 인용·과거법령 JSON Schema도 합성 입력으로 검사합니다(유료 API 호출).
 구조화 응답이 비어 있거나 유효한 JSON이 아니면 한 번만 재시도하고, 두 번 모두 실패하면
 완료된 답변으로 취급하지 않습니다. 이는 법령 인용·계산 결과의 정확도 보증을 뜻하지 않습니다.
 질문·대화 이력·검색된 법령/사용자 문서 발췌문은 외부 제공자에게 전송되므로 민감한 실사용자
@@ -787,7 +827,12 @@ python scripts/evaluate.py suite --mode live --include-draft --output evaluation
 | `JWT_EXPIRE_MIN` | — | `1440` | JWT 만료 시간 (분, 기본 24시간) |
 | `COOKIE_SECURE` | — | `false` | `true` 설정 시 HTTPS 전용 쿠키 (운영 환경에서 활성화) |
 | `OLLAMA_BASE_URL` | — | `http://localhost:11434` | FastAPI 기준 Ollama 주소. WSL2 Docker 개발환경은 Windows 게이트웨이, 운영 Compose는 `http://ollama:11434` 권장 |
-| `CHAT_MODEL` | — | `qwen3.5:9b` | 답변 생성 LLM 모델명 |
+| `CHAT_MODEL` | — | `qwen3.5:9b` | 6개 작업의 기본 생성 모델명 |
+| `LLM_TASK_<작업명>_PROVIDER` | — | `LLM_PROVIDER` 값 | 각 AI 작업의 provider 독립 선택 |
+| `LLM_TASK_<작업명>_MODEL` | — | `CHAT_MODEL` 값 | 각 AI 작업의 모델 독립 선택 |
+| `LLM_TASK_<작업명>_REASONING_EFFORT` | — | Luna 작업별 `none`/`low` | 원격 추론 수준; 모델 지원값 사용 |
+| `LLM_TASK_<작업명>_THINK_ENABLED` | — | `THINK_ENABLED` 값 | 로컬 Ollama/llama.cpp thinking 여부 |
+| `LLM_TASK_<작업명>_BASE_URL`·`API_KEY`·`TIMEOUT_SEC`·`TEMPERATURE`·`MAX_TOKENS` | — | 공통 설정 또는 호출값 | 작업별 연결·출력 설정 |
 | `LLM_PROVIDER` | — | `ollama` | `ollama`, `llamacpp`, `openrouter` 등 생성 provider |
 | `LLM_BASE_URL` | — | provider별 기본값 | OpenRouter 사용 시 `https://openrouter.ai/api/v1` |
 | `OPENROUTER_API_KEY` | OpenRouter 사용 시 | — | OpenRouter 인증 키. 실제 `.env`에만 입력 |

@@ -9,7 +9,7 @@ import Notice from '../ui/Notice'
 import { reviseConversation } from '../../api/conversationsApi'
 const QUESTIONS = ['소득세법 제55조 원문을 보여주세요', '내가 업로드한 계약서에서 지급 조건을 찾아주세요', '연소득 5천만원인 프리랜서의 소득세를 계산해주세요']
 export default function ChatArea({ user, conversationId, conversationTitle, onMessageSent, onOpenCalculator, pendingQuestion, onPendingQuestionConsumed, onCreateConversation, onRevisionCreated, library }) {
-  const { messages, loading, historyLoading, historyError, retryHistory, sendMessage, stop } = useChat(conversationId)
+  const { messages, loading, versionLoading, historyLoading, historyError, retryHistory, sendMessage, regenerateAnswer, chooseVersion, stop } = useChat(conversationId)
   const [selected, setSelected] = useState(null), [unseen, setUnseen] = useState(false)
   const [revising, setRevising] = useState(false), [revisionError, setRevisionError] = useState('')
   const revisionBusy = useRef(false), active = useRef(conversationId)
@@ -27,7 +27,12 @@ export default function ChatArea({ user, conversationId, conversationTitle, onMe
       if (active.current === source) setRevisionError(e.message || '다시 답변을 요청하지 못했습니다.')
     } finally { revisionBusy.current = false; setRevising(false) }
   }
-  const canRevise = !loading && !historyLoading && !historyError && !revising &&
+  const selectVersion = async (message, version) => {
+    setRevisionError('')
+    try { await chooseVersion(message, version) }
+    catch (e) { setRevisionError(e.message || '답변 버전을 불러오지 못했습니다.') }
+  }
+  const canRevise = !loading && !versionLoading && !historyLoading && !historyError && !revising &&
     messages.at(-1)?.role === 'assistant' && !!messages.at(-1)?.message_id && messages.at(-2)?.role === 'user'
   const scroller = useRef(), follow = useRef(true), opener = useRef(null)
   useEffect(() => { setSelected(null); follow.current = true; setUnseen(false) }, [conversationId])
@@ -58,13 +63,14 @@ export default function ChatArea({ user, conversationId, conversationTitle, onMe
           </div>}
           {messages.map((m, i) => <MessageBubble key={`${conversationId}-${m.id || i}`} message={m} userInitial={user.email?.[0]?.toUpperCase() || 'U'} onCitationClick={open} onOpenCalculator={onOpenCalculator}
             onEdit={canRevise && i === messages.length - 2 ? revise : undefined}
-            onRegenerate={canRevise && i === messages.length - 1 ? () => revise() : undefined}
+            onRegenerate={canRevise && i === messages.length - 1 ? () => regenerateAnswer(m, onMessageSent) : undefined}
+            onSelectVersion={canRevise && i === messages.length - 1 ? version => selectVersion(m, version) : undefined}
             onRetry={loading || revising || !m.query ? undefined : () => send(m.query)} />)}
           {loading && <div className="generation-status" role="status"><span className="spinner" />답변을 준비하고 있습니다. 필요하면 생성을 중지할 수 있습니다.</div>}
         </div>
       </div>
       {unseen && <button className="new-answer button secondary" onClick={bottom}><Icon name="down" size={16} />새 답변 보기</button>}
-      {conversationId && <ChatInput onSend={send} disabled={loading || revising || historyLoading || !!historyError} generating={loading} onStop={stop} library={library} />}
+      {conversationId && <ChatInput onSend={send} disabled={loading || versionLoading || revising || historyLoading || !!historyError} generating={loading} onStop={stop} library={library} />}
     </main>
     {selected && <ArticleViewer {...selected} onClose={close} />}
   </div>

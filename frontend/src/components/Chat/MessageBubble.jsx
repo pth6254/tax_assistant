@@ -5,7 +5,7 @@ import ToolCallCard from './ToolCallCard'
 import Notice from '../ui/Notice'
 import Icon from '../ui/Icon'
 const CITATION_RE = /\[(법률|시행령|시행규칙)\]\s*([^\n\[]+?)\s*(제\s*\d+\s*조(?:\s*의\s*\d+)?(?:\s*제\s*\d+\s*항)?(?:\s*제\s*\d+\s*호(?:\s*의\s*\d+)?)?(?:\s*[가-힣]\s*목)?)/g
-export default function MessageBubble({ message, onCitationClick, onOpenCalculator, onRetry, onEdit, onRegenerate }) {
+export default function MessageBubble({ message, onCitationClick, onOpenCalculator, onRetry, onEdit, onRegenerate, onSelectVersion }) {
   const isUser = message.role === 'user', body = useRef()
   const [editing, setEditing] = useState(false), [draft, setDraft] = useState(message.content)
   const [shareFeedback, setShareFeedback] = useState('')
@@ -65,8 +65,13 @@ export default function MessageBubble({ message, onCitationClick, onOpenCalculat
       {message.status === 'error' && <Notice onRetry={onRetry}>{message.error}</Notice>}
       {message.status === 'stopped' && onRetry && <button className="button secondary" onClick={onRetry}>같은 질문 다시 보내기</button>}
       {message.calc && !message.tools?.some(t => t.tool === message.calc.tool && t.status === 'ok') && <button className="button secondary" onClick={() => onOpenCalculator?.(message.calc.tool, message.calc.params)}>계산기에서 조건 바꾸기 →</button>}
+      {onSelectVersion && message.answer_version_count > 1 && <div className="answer-version-controls" aria-label="답변 버전">
+        <button type="button" className="icon-button" aria-label="이전 답변 버전" disabled={message.answer_version <= 1} onClick={() => onSelectVersion(message.answer_version - 1)}>‹</button>
+        <span>{message.answer_version} / {message.answer_version_count}</span>
+        <button type="button" className="icon-button" aria-label="다음 답변 버전" disabled={message.answer_version >= message.answer_version_count} onClick={() => onSelectVersion(message.answer_version + 1)}>›</button>
+      </div>}
       {(onRegenerate || (message.content && !['streaming', 'error', 'stopped'].includes(message.status))) && <div className="message-actions assistant-actions">
-        {onRegenerate && <button className="icon-button message-action" type="button" aria-label="다시 답변" title="다시 답변 — 원본 대화는 보존됩니다" onClick={onRegenerate}><Icon name="refresh" size={18} /></button>}
+        {onRegenerate && <button className="icon-button message-action" type="button" aria-label="다시 답변" title="같은 대화에 새 답변 버전 추가" onClick={onRegenerate}><Icon name="refresh" size={18} /></button>}
         {message.content && !['streaming', 'error', 'stopped'].includes(message.status) && <button className="icon-button message-action" type="button" aria-label="답변 공유" title="답변 공유 또는 복사" onClick={shareAnswer}><Icon name="share" size={18} /></button>}
       </div>}
       {shareFeedback && <p className="share-feedback small" role="status">{shareFeedback}</p>}

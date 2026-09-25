@@ -10,11 +10,11 @@ export const sendChat = async (query, conversationId) => {
   return data
 }
 
-export const streamChat = async (query, conversationId, onChunk, onDone, onCalc, onTool, signal, onReplace) => {
-  const res = await fetch('/api/chat/stream', {
+export const streamChat = async (query, conversationId, onChunk, onDone, onCalc, onTool, signal, onReplace, regeneration) => {
+  const res = await fetch(regeneration ? `/api/conversations/${conversationId}/regenerate` : '/api/chat/stream', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     credentials: 'include', signal,
-    body: JSON.stringify({ query, conversation_id: conversationId }),
+    body: JSON.stringify(regeneration || { query, conversation_id: conversationId }),
   })
   if (!res.ok) throw await res.json()
   const reader = res.body.getReader()

@@ -89,3 +89,6 @@ button { touch-action:manipulation } .small { font-size:13px } .muted { color:va
  .condition-summary dl { grid-template-columns:1fr 1fr }.workspace-toolbar { padding:0 12px }.generation-status { font-size:12px }
 }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; scroll-behavior:auto!important } }
+.answer-version-controls { display: inline-flex; align-items: center; gap: .35rem; margin: .5rem 0; color: var(--text-muted, #68727b); font-size: .82rem; }
+.answer-version-controls .icon-button { width: 1.8rem; height: 1.8rem; font-size: 1.3rem; line-height: 1; }
+.answer-version-controls .icon-button:disabled { opacity: .35; cursor: not-allowed; }

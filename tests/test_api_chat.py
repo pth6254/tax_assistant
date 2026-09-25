@@ -108,6 +108,26 @@ def test_truncated_stream_emits_error_without_done(client, auth_cookie, mock_poo
     assert "[DONE]" not in resp.text
 
 
+def test_unexpected_stream_error_is_reported_without_false_done(client, auth_cookie, mock_pool):
+    _, conn = mock_pool
+    conn.fetchval.return_value = uuid.uuid4()
+
+    async def fake_stream(query, conversation_id, user_id):
+        yield {"type": "chunk", "text": "답변 일부"}
+        raise RuntimeError("private upstream detail")
+
+    with patch("app.services.chat_service.stream_chat_response", fake_stream):
+        resp = client.post(
+            "/api/chat/stream",
+            json={"query": "테스트", "conversation_id": "00000000-0000-0000-0000-000000000001"},
+            cookies=auth_cookie,
+        )
+    assert resp.status_code == 200
+    assert '"code": "stream_failed"' in resp.text
+    assert "private upstream detail" not in resp.text
+    assert "[DONE]" not in resp.text
+
+
 def test_truncated_nonstream_is_502(client, auth_cookie, mock_pool):
     _, conn = mock_pool
     conn.fetchval.return_value = uuid.uuid4()
@@ -165,3 +185,24 @@ def test_health_returns_ok(client, mock_pool):
     resp = client.get("/api/health")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
+
+
+@pytest.mark.parametrize("stream", [False, True])
+def test_provider_error_reaches_chat_without_false_done(client, auth_cookie, mock_pool, stream):
+    from app.services.inference.llm.errors import LLMRequestError
+    _, conn = mock_pool
+    conn.fetchval.return_value = uuid.uuid4()
+    error = LLMRequestError("llm_rate_limited", "요청 한도", 429)
+
+    async def failed_stream(*args, **kwargs):
+        raise error
+        yield
+
+    target = "stream_chat_response" if stream else "process_chat"
+    replacement = failed_stream if stream else AsyncMock(side_effect=error)
+    with patch(f"app.services.chat_service.{target}", replacement):
+        response = client.post("/api/chat/stream" if stream else "/api/chat", json={
+            "query": "테스트", "conversation_id": "00000000-0000-0000-0000-000000000001",
+        }, cookies=auth_cookie)
+    assert response.status_code == (200 if stream else 429)
+    assert "llm_rate_limited" in response.text and "[DONE]" not in response.text

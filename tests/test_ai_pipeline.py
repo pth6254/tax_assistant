@@ -132,7 +132,7 @@ async def test_valid_tool_extraction_preserves_params(monkeypatch):
     call = AsyncMock(return_value='{"tool":"income_tax","params":{"income":50000000}}')
     monkeypatch.setattr(planner, "call_llm", call)
     assert await planner.select_tool("소득 5000만원") == ("income_tax", {"income": 50000000})
-    assert call.call_args.kwargs == {"temperature": 0.0, "max_tokens": 400}
+    assert call.call_args.kwargs == {"temperature": 0.0, "max_tokens": 1024, "purpose": "tool_selection"}
 
 
 @pytest.mark.asyncio

@@ -3,6 +3,7 @@ config.py — 환경변수 중앙 관리
 모든 설정값은 여기서만 읽어서, 다른 모듈은 이 파일만 import합니다.
 """
 import os
+from dataclasses import dataclass, field
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -17,16 +18,86 @@ DATABASE_URL: str = os.getenv(
 LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "ollama").lower()
 LLM_BASE_URL: str = os.getenv(
     "LLM_BASE_URL",
-    "https://openrouter.ai/api/v1" if LLM_PROVIDER == "openrouter" else "http://localhost:8000/v1",
+    "https://openrouter.ai/api/v1" if LLM_PROVIDER == "openrouter" else
+    "https://api.openai.com/v1" if LLM_PROVIDER == "openai" else "http://localhost:8000/v1",
 )
 LLM_API_KEY: str = os.getenv("LLM_API_KEY", "local-llamacpp")
 OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
+OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 LLM_TIMEOUT_SEC: float = float(os.getenv("LLM_TIMEOUT_SEC", "180"))
+# Paid/remote providers always have an output budget (including reasoning tokens).
+LLM_REMOTE_MAX_TOKENS: int = int(os.getenv("LLM_REMOTE_MAX_TOKENS", "8192"))
+if LLM_REMOTE_MAX_TOKENS <= 0:
+    raise ValueError("LLM_REMOTE_MAX_TOKENS must be positive")
+LLM_MAX_CONTINUATIONS: int = int(os.getenv("LLM_MAX_CONTINUATIONS", "2"))
+if not 0 <= LLM_MAX_CONTINUATIONS <= 4:
+    raise ValueError("LLM_MAX_CONTINUATIONS must be between 0 and 4")
 LLM_DEVICE: str = os.getenv("LLM_DEVICE", "auto").lower()
 
 # ── Ollama (임베딩 및 기존 생성 LLM 호환) ─────────────────────
 OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 CHAT_MODEL: str      = os.getenv("CHAT_MODEL",  "qwen3.5:9b")          # LLM
+LLM_TASK_NAMES = (
+    "answer", "history_answer", "citation_extraction", "query_classification",
+    "tool_selection", "document_classification",
+)
+_DEFAULT_EFFORT = {
+    "answer": "low", "history_answer": "low", "citation_extraction": "low",
+    "query_classification": "low", "tool_selection": "low", "document_classification": "none",
+}
+_VALID_EFFORT = {"none", "minimal", "low", "medium", "high", "xhigh", "max"}
+
+
+@dataclass(frozen=True)
+class LLMTaskSettings:
+    provider: str
+    model: str
+    base_url: str
+    timeout_sec: float
+    reasoning_effort: str | None
+    think_enabled: bool
+    temperature: float | None
+    max_tokens: int | None
+    api_key: str = field(repr=False)
+
+
+def _task_settings(name: str) -> LLMTaskSettings:
+    prefix = f"LLM_TASK_{name.upper()}_"
+    provider = os.getenv(prefix + "PROVIDER", LLM_PROVIDER).lower()
+    if provider not in {"ollama", "llamacpp", "openai", "openai-compatible", "openrouter"}:
+        raise ValueError(f"Unsupported {prefix}PROVIDER: {provider}")
+    model = os.getenv(prefix + "MODEL", CHAT_MODEL)
+    default_url = OLLAMA_BASE_URL if provider == "ollama" else (
+        LLM_BASE_URL if provider == LLM_PROVIDER else
+        "https://openrouter.ai/api/v1" if provider == "openrouter" else
+        "https://api.openai.com/v1" if provider == "openai" else "http://localhost:8000/v1"
+    )
+    base_url = os.getenv(prefix + "BASE_URL", default_url)
+    default_key = (OPENROUTER_API_KEY if provider == "openrouter" else
+                   OPENAI_API_KEY if provider == "openai" else LLM_API_KEY)
+    effort_default = (
+        _DEFAULT_EFFORT[name] if model in {"openai/gpt-6-luna", "gpt-6-luna"} else
+        "minimal" if model in {"openai/gpt-5-nano", "gpt-5-nano"} else ""
+    )
+    effort = os.getenv(prefix + "REASONING_EFFORT", effort_default).lower() or None
+    if effort is not None and effort not in _VALID_EFFORT:
+        raise ValueError(f"Unsupported {prefix}REASONING_EFFORT: {effort}")
+    timeout = float(os.getenv(prefix + "TIMEOUT_SEC", str(LLM_TIMEOUT_SEC)))
+    max_tokens_raw = os.getenv(prefix + "MAX_TOKENS", "")
+    max_tokens = int(max_tokens_raw) if max_tokens_raw else None
+    temperature_raw = os.getenv(prefix + "TEMPERATURE", "")
+    temperature = float(temperature_raw) if temperature_raw else None
+    if timeout <= 0 or (max_tokens is not None and max_tokens <= 0):
+        raise ValueError(f"{prefix}TIMEOUT_SEC and MAX_TOKENS must be positive")
+    return LLMTaskSettings(
+        provider=provider, model=model, base_url=base_url, timeout_sec=timeout,
+        reasoning_effort=effort,
+        think_enabled=os.getenv(prefix + "THINK_ENABLED", str(THINK_ENABLED)).lower() == "true",
+        temperature=temperature, max_tokens=max_tokens,
+        api_key=os.getenv(prefix + "API_KEY", default_key),
+    )
+
+
 EMBED_MODEL: str     = os.getenv("EMBED_MODEL", "qwen3-embedding:4b")  # 임베딩
 EMBEDDING_PROVIDER: str = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
 EMBEDDING_BASE_URL: str = os.getenv("EMBEDDING_BASE_URL", OLLAMA_BASE_URL)
@@ -42,6 +113,9 @@ EMBEDDING_V2_PROVIDER: str = os.getenv("EMBEDDING_V2_PROVIDER", "llamacpp").lowe
 EMBEDDING_V2_BASE_URL: str = os.getenv("EMBEDDING_V2_BASE_URL", "http://llama_embedding:8080/v1")
 EMBEDDING_V2_MODEL: str = os.getenv("EMBEDDING_V2_MODEL", "qwen3-embedding:4b-gguf")
 THINK_ENABLED: bool  = os.getenv("THINK_ENABLED", "false").lower() == "true"  # 기본 비활성화
+
+# Call sites select a fixed task name; arbitrary request input cannot choose a provider.
+LLM_TASK_SETTINGS: dict[str, LLMTaskSettings] = {name: _task_settings(name) for name in LLM_TASK_NAMES}
 
 # 모든 chat 모델 호출에서 동일한 num_ctx를 사용해야 함 — 값이 다르면
 # Ollama가 요청마다 모델을 리로드하여 호출당 4~10초가 추가됨

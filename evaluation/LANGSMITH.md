@@ -1,8 +1,8 @@
 # LangSmith 평가 결과·검수
 
 자체 evaluation_dashboard 대신 LangSmith를 사용합니다. 기존 평가셋·scoring·CLI·실행 결과는 유지합니다.
-이번 연결은 **저장된 결과를 LangSmith 실험으로 가져오는 기능**입니다. 새로운 LLM 추론이나
-실서비스 추적을 실행하지 않으며, LangSmith 평가 모델 호출 비용을 발생시키지 않습니다.
+이 문서의 평가 CLI는 **저장된 결과를 LangSmith 실험으로 가져오는 기능**입니다. 평가 CLI 자체는
+새로운 LLM 추론을 실행하지 않습니다. 실서비스 채팅 추적은 `CHAT_TRACING_ENABLED=true`로 별도 활성화합니다.
 LangSmith 자체 이용·보관 비용과 검수 기능 제공 범위는 계정 플랜을 확인하세요.
 
 ## 1. 계정 설정
@@ -10,11 +10,12 @@ LangSmith 자체 이용·보관 비용과 검수 기능 제공 범위는 계정 
 1. LangSmith 계정/워크스페이스를 준비하고 API key를 생성합니다.
 2. 프로젝트 루트의 `.env.example`에 `LANGSMITH_API_KEY=` 값을 입력합니다.
    사용자 요청에 따라 이 파일에서 직접 읽습니다. 실제 키가 든 상태로 Git에 커밋하지 마세요.
-3. 평가 키는 publish 명령에서 읽습니다. 프로세스 환경변수 전체로 로드하지 않으며 `.env.example`은 Docker 빌드에서 제외합니다. 제품 `.env`와 Compose에는 키/추적 설정을 추가하지 않습니다.
+3. 평가 키는 publish 명령에서 읽습니다. 채팅 추적은 실제 `.env`의 `LANGSMITH_API_KEY`와 `CHAT_TRACING_ENABLED`를 사용합니다. `.env.example`은 Docker 빌드에서 제외합니다.
 4. 계정 리전에 맞춰 prepare의 `--region us` 또는 `--region eu`를 사용합니다.
 
-`TAX_EVAL_LANGSMITH_API_KEY` 환경변수로 키를 전달할 수도 있습니다. 일반 서비스의
-LANGSMITH_TRACING/LANGCHAIN_TRACING_V2는 켜지 않습니다. SDK는 langsmith==0.12.1로 고정했습니다.
+`TAX_EVAL_LANGSMITH_API_KEY` 환경변수로 평가 키를 전달할 수도 있습니다. 채팅 추적을 켜면
+LangSmith에 질문·검색 근거·답변이 기록됩니다. SDK는 langsmith==0.12.1로 고정했습니다.
+추적량 한도는 계정 단위이며 소진 시 새 기록의 원격 저장을 보장할 수 없습니다.
 
 ## 2. 전송 계획 생성 (네트워크 없음)
 

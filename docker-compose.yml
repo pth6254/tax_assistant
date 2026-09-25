@@ -82,6 +82,9 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
+      # Production chat tracing is explicit opt-in, independent of evaluation CLI.
+      LANGSMITH_TRACING: ${CHAT_TRACING_ENABLED:-false}
+      LANGCHAIN_TRACING_V2: ${CHAT_TRACING_ENABLED:-false}
       # Docker 내부에서는 서비스명(postgres)으로 접속
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-tax_db}
       # WSL 실행 스크립트가 현재 Windows 게이트웨이를 아래 별칭에 연결한다.

@@ -41,6 +41,7 @@ import json
 import sys
 
 from dotenv import dotenv_values
+from config import LLM_TASK_SETTINGS
 
 tags_path = sys.argv[1]
 settings = dotenv_values(".env")
@@ -56,12 +57,12 @@ available = {
 required = [
     settings.get("EMBED_MODEL", "qwen3-embedding:4b"),
 ]
-if settings.get("LLM_PROVIDER", "ollama").lower() == "ollama":
-    required.insert(0, settings.get("CHAT_MODEL", "qwen3.5:9b"))
+required.extend(task.model for task in LLM_TASK_SETTINGS.values() if task.provider == "ollama")
 rerank_model = settings.get("RERANK_MODEL", "")
 if rerank_model:
     required.append(rerank_model)
 
+required = list(dict.fromkeys(required))
 missing = [model for model in required if model not in available]
 if missing:
     print("[ERROR] Ollama 필수 모델이 없습니다:", file=sys.stderr)

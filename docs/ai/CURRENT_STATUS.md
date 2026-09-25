@@ -1,5 +1,62 @@
 # 현재 구현 상태
 
+## 2026-09-25 AI 호출 작업별 설정
+
+- 기존 routing/answer 2단계 설정을 6개 호출 작업별 `LLM_TASK_<NAME>_*` 설정으로 일반화했다. 모든 작업은 기본 GPT-6 Luna를 사용하고 필요할 때 각각 Ollama·OpenRouter·OpenAI 호환 endpoint 등으로 바꿀 수 있다.
+- 원격 reasoning effort와 로컬 thinking, provider·model·URL·API key·timeout·temperature·최대 출력 토큰을 작업별로 설정한다. 알려지지 않은 작업명과 잘못된 설정값은 거부한다. health에는 6개 작업 상태를 표시한다.
+- 합성 실호출에서 Luna 도구 선택은 성공했다. 최초 검색어 분류 `none`/512토큰은 JSON 파싱 실패 후 폴백하여 `low`/1024토큰으로 조정했고 재호출에서 3개 검색어가 생성됐다. 이는 세무 정확도 검증이 아니다.
+- WSL 가상환경으로 backend 최신 이미지를 재빌드했고 컨테이너 전체 테스트는 676 passed/2 skipped였다. `/api/health/dependencies`는 6개 LLM 작업 모두 OpenRouter/Luna `ok`, 전체 `ready`였다.
+
+## 2026-09-25 채팅 모델 역할 분리 — 이전 실험 기록, 현재는 작업별 설정으로 대체
+
+- 최종 답변·과거법령 비교·인용 구조화는 OpenRouter Luna, 도구 선택·법령 분류·검색어 생성은 GPT-5 nano로 분리했다. 모델별 provider를 독립 생성·종료하며 `/api/health/dependencies`에서 둘 다 확인한다.
+- 실제 OpenRouter nano의 일반·스트리밍·JSON Schema 응답이 성공했고, 합성 질문에서 계산기 선택과 검색어 생성이 동작했다. 이는 전체 세무 답변 품질 평가를 의미하지 않는다.
+- 로컬 Ollama Qwen3.5 9B routing 옵션은 설정·단위 테스트로 검증했으나 이번 작업에서 실서비스 품질 비교는 수행하지 않았다. 기존 LangSmith 월간 trace 한도 429는 별개로 남아 있다.
+- WSL 가상환경을 사용해 backend 이미지를 재빌드했고 `docker exec tax_backend pytest -q`는 666 passed/2 skipped였다. `/api/health/dependencies`는 Luna·nano·임베딩 모두 ok, 전체 ready였다.
+
+## 2026-09-25 장문 답변·LangSmith 채팅 추적
+
+- 원격 1회 8,192토큰 출력 제한은 유지하고 `length` 종료 시 최대 2회 이어 생성한다. 일반/SSE 모두 겹치는 문장을 합치고 정상 완료 후 기존 인용·계산 검증 및 저장을 수행한다. 반복 또는 횟수 초과 시 미완료 오류로 처리한다. 프런트엔드 Nginx의 비스트리밍 read timeout은 900초로 확장했다.
+- 채팅 `chat_request`/`chat_stream` 루트 LangSmith 추적을 설정하고 Compose `.env`에서 `CHAT_TRACING_ENABLED=true`로 활성화했다. 실제 키는 `.env`에 있으며 값은 문서·로그에 복사하지 않는다. 스트림 사용자 중단 시 도구 작업 취소 회귀 테스트 통과.
+- 최신 이미지 661 passed/2 skipped. 합성 추적의 LangSmith 원격 읽기 검사는 **월간 unique traces 한도 429로 실패**했다. 설정은 켜졌으나 현재 계정에서 새 채팅 추적의 원격 저장은 확인되지 않았다. 할당량 복구 또는 증액 후 `dev/probe_langsmith_chat.py`를 다시 실행해야 한다.
+
+## 2026-09-25 유료 생성 경로 안전장치
+
+- Luna 추론 정책을 출력 길이 추정에서 호출 목적(ContextVar) 기반으로 변경: 도구 선택·분류·인용 추출은 none, 답변은 low. 도구 1024/분류 512/인용 2048/과거법령 4096, 원격 전체 출력 상한 기본 8192. 입력 컨텍스트 상한이나 질문당 총 비용 제한은 아니다.
+- OpenAI 호환 요청에 전체 응답 deadline을 적용하고 HTTP 429만 응답 전 최대 2회 재시도한다. 긴 Retry-After, 402, 시간 초과, 중간 스트림 실패는 자동 재호출하지 않는다. 일반·SSE·재생성 API는 안전한 오류 code/message를 전달한다.
+- 전체가 단일 법령 참조인 원문 요청은 선택 LLM을 생략한다. 일반적인 '그럼/다시'만으로 도구 선택하지 않으며 실제 계산 뒤 금액 변경 후속 질문은 유지한다. 연도 자체를 금액으로 취급하지 않는다.
+- 사용량 숫자 메타데이터를 기록하고 채팅 입구의 질문 원문 로그를 제거했다. 당시 Compose backend의 LangSmith 자동 tracing은 opt-in 기본 false였으며, 위 채팅 추적 요청으로 실제 `.env`에서 활성화했다. 테스트는 tracing을 강제 비활성화한다.
+- WSL 재빌드 후 실모델 일반·스트리밍·JSON Schema·도구 인자·CitationList·과거법령 Answer 스키마 검증 6종 성공. 합성 입력만 사용했으며 세무 정답률 검증은 아니다. health ready, OpenRouter/Luna·Ollama 임베딩 정상.
+- 최종 최신 이미지 테스트: 652 passed, 2 skipped(선택형 Neo4j 통합 테스트), 5 subtests passed. backend healthy, 3002 경유 dependencies ready, runtime tracing 두 플래그 false. git diff --check 통과. 실제 사용자 UI 클릭·세무 골든셋은 이번 검증 범위가 아니다.
+
+## 2026-09-25 OpenRouter GPT-6 Luna 생성 전환
+
+- 사용자 요청으로 실제 `.env`와 공개 `.env.example`의 생성 모델을 `openai/gpt-6-luna`로 변경했다. Ollama 임베딩과 DB 벡터는 유지한다.
+- 최초 전환 시에는 출력 상한 400토큰 이하를 추론 none으로 분류했으며, 이후 위 호출 목적 기반 정책으로 대체했다. Luna의 temperature 제외는 유지한다.
+- WSL 가상환경에서 비식별 일반 생성·스트리밍·JSON Schema 실호출이 모두 성공했다. `dev/docker-up-wsl.sh backend`로 재빌드·배포했고 `/api/health/dependencies`는 OpenRouter/Luna와 Ollama 임베딩 모두 ok, backend는 healthy다. 최신 이미지 전체 pytest는 632 passed/2 skipped. 세무 정답률·장기 429 발생률은 아직 평가하지 않았다.
+- 전체 테스트 종료 후 LangSmith의 월간 추적 한도 429 경고가 별도로 관찰됐다. OpenRouter 생성 검증 성공과는 별개이며 추적 수집 개선은 후속 작업이다.
+
+## 2026-09-25 Qwen3.8 27B 무료 모델 직접 채팅 실험
+
+- 사용자 요청으로 로컬 `.env`의 생성 모델을 Qwen3.8 27B 무료 엔드포인트로 변경했다. 공개 `.env.example`과 기본 모델 추천은 변경하지 않았다.
+- WSL 가상환경에서 backend 이미지만 재빌드·재기동했고, 실행 중인 설정 일치·backend/frontend health·프런트엔드 HTTP 200을 확인했다. 추가 생성 호출은 하지 않았다. 직전 비식별 실호출의 일반/스트리밍/구조화 응답은 모두 HTTP 429였으므로 실제 채팅도 제한될 수 있다.
+- 다른 모델로 자동 fallback하지 않는다. 실험 종료 후 Dots3로 되돌리려면 로컬 모델 설정을 복구하고 backend를 재기동한다.
+
+## 2026-09-25 재생성 스트리밍 오류 수정·Gemma 무료 모델 호환성 실험
+
+- 답변 재생성 마지막 저장 단계의 `UnboundLocalError(get_pool)`는 함수 내부 중복 import가 전역 import를 가린 것이 원인이었다. 중복 import를 제거하고 재생성 스트림이 최종 저장까지 도달하는 회귀 테스트를 추가했다.
+- 일반 채팅·재생성 SSE에서 예기치 않은 제공자/저장 예외를 안전한 `error` 이벤트로 전달하고 `[DONE]`을 보내지 않도록 했다. 내부 예외 내용은 화면에 노출하지 않는다.
+- `google/gemma-4-26b-a4b-it:free`를 기존 OpenRouter 어댑터로 비식별 실호출: 일반 생성 HTTP 429, 스트리밍 HTTP 429, 엄격한 JSON Schema 호출 HTTP 404. 당시 생성 모델은 Dots3로 유지했다. 무료 엔드포인트의 단순 JSON 출력 지원은 현재 프로젝트의 엄격한 JSON Schema 지원과 같지 않다.
+- 후속: 무료 엔드포인트의 한도/구조화 출력 지원이 변경되면 `dev/probe_openrouter_model.py`로 재검증하고, 통과 시 세무 답변·근거 품질을 별도 비교한다.
+- WSL 가상환경에서 백엔드 이미지를 재빌드·재기동했다. Alembic `20260925_0005 (head)`, 백엔드·프런트엔드 health 정상, 최신 백엔드 이미지 전체 631 passed/2 skipped. 실제 사용자 대화 내용이나 DB 레코드는 시험용으로 변경하지 않았다.
+
+## 2026-09-25 마지막 답변 버전 저장·전환
+
+- 마지막 질문 수정은 기존처럼 새 대화로 분기한다. 마지막 답변 다시 생성은 같은 대화의 같은 assistant 메시지에 버전을 추가한다. 기존 내용과 도구 결과는 `chat_answer_versions`에 보존하고 선택한 답변만 `chat_logs.message`에 표시한다.
+- 재생성 시 현재 질문 쌍을 생성 문맥에서 제외한다. 완료·DB 커밋 후에만 새 버전으로 전환하며 실패·중단 시 이전 답변을 유지한다. 소유권, 마지막 완료 턴, 예상 선택 버전을 검증한다. 일반 채팅 저장도 대화 행 잠금/트랜잭션을 사용해 버전 저장과 교차 실행을 직렬화한다.
+- UI는 마지막 답변에만 버전 선택 버튼을 제공한다. Alembic `20260925_0005`가 필요하다. 재생성·버전 전환 API 및 단위 테스트를 추가했다.
+- WSL 가상환경에서 Compose 재빌드 및 Alembic head 적용을 확인했다. 백엔드 628 passed/2 skipped, 프런트엔드 14 passed/빌드 성공, 합성 API Edge 브라우저에서 편집 분기·동일 대화 재생성·버전 이동을 확인했다.
+
 ## 2026-09-25 내 정보 화면 카드 잘림·타이포그래피 수정
 
 - 실제 브라우저에서 프로필·비밀번호·계정 삭제 카드의 내용과 버튼이 하단에서 잘리는 문제를 확인했다. 세로 flex 자식 카드의 기본 축소와 카드 `overflow:hidden`이 결합한 것이 원인이다.

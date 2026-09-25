@@ -13,6 +13,7 @@ def create_llm_provider(
     api_key: str = "",
     num_ctx: int = 4096,
     keep_alive: int = -1,
+    reasoning_effort: str | None = None,
 ) -> LLMProvider:
     if provider == "ollama":
         return OllamaLLMProvider(
@@ -22,8 +23,11 @@ def create_llm_provider(
     if provider in {"llamacpp", "openai", "openai-compatible", "openrouter"}:
         if provider == "openrouter" and not api_key:
             raise ValueError("OPENROUTER_API_KEY is required when LLM_PROVIDER=openrouter")
+        if provider == "openai" and not api_key:
+            raise ValueError("OPENAI_API_KEY is required when provider=openai")
         return OpenAICompatibleLLMProvider(
             base_url=base_url, api_key=api_key, model=model,
             timeout=timeout, thinking=thinking, provider=provider,
+            reasoning_effort=reasoning_effort,
         )
     raise ValueError(f"Unsupported LLM provider: {provider}")

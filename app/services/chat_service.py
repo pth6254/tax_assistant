@@ -22,7 +22,9 @@ from app.services.law.history_context import needs_history, route as history_rou
 from app.services.law.history_answer import answer as history_answer
 from app.services.law.lookup_service import get_law_article
 from app.services.citation_guard import apply_citation_guard, build_citation_footer, extract_citations
-from app.services.llm_client import call_llm, call_llm_structured, stream_llm
+from app.services.llm_client import call_llm, call_llm_structured
+from app.services.inference.llm.continuation import complete_answer, stream_answer
+from langsmith import trace, traceable
 from app.schemas.ai_output import CitationList, QueryClassification
 from app.services.ai_pipeline import chat_prompt, streaming_chain, structured_chain, text_chain
 from app.services.search.web_search import tavily_search
@@ -141,23 +143,25 @@ async def _save_history(
     title = query[:28].rstrip() + ("..." if len(query) > 28 else "")
     pool = await get_pool()
     async with pool.acquire() as conn:
-        await conn.executemany(
-            "INSERT INTO chat_logs (conversation_id, message) VALUES ($1, $2)",
-            [
-                (conversation_id, json.dumps({"role": "user",      "content": query},  ensure_ascii=False)),
-                (conversation_id, json.dumps({"role": "assistant", "content": answer, **({"tools": tools} if tools else {})}, ensure_ascii=False)),
-            ],
-        )
-        if is_first:
-            await conn.execute(
-                "UPDATE conversations SET title = $1, updated_at = now() WHERE id = $2",
-                title, conversation_id,
+        async with conn.transaction():
+            await conn.fetchrow('SELECT id FROM conversations WHERE id=$1 FOR UPDATE', conversation_id)
+            await conn.executemany(
+                "INSERT INTO chat_logs (conversation_id, message) VALUES ($1, $2)",
+                [
+                    (conversation_id, json.dumps({"role": "user",      "content": query},  ensure_ascii=False)),
+                    (conversation_id, json.dumps({"role": "assistant", "content": answer, **({"tools": tools} if tools else {})}, ensure_ascii=False)),
+                ],
             )
-        else:
-            await conn.execute(
-                "UPDATE conversations SET updated_at = now() WHERE id = $1",
-                conversation_id,
-            )
+            if is_first:
+                await conn.execute(
+                    "UPDATE conversations SET title = $1, updated_at = now() WHERE id = $2",
+                    title, conversation_id,
+                )
+            else:
+                await conn.execute(
+                    "UPDATE conversations SET updated_at = now() WHERE id = $1",
+                    conversation_id,
+                )
 
 # 채팅 답변 제시
 
@@ -225,8 +229,9 @@ _COMBINED_PROMPT = (
     "- 항상 마크다운으로 작성\n"
     "- 법적 근거는 조문 번호까지 명시\n"
     "- 근거 없는 내용은 절대 추정하지 말 것\n"
-    "- '## 📋 근거 출처 목록' 섹션과 [법률]/[시행령]/[시행규칙]/[유권해석] 브래킷 형식은 "
-    "모든 답변에 예외 없이 포함할 것 — 서술형 질문이라도 생략 금지\n"
+    "- '## 📋 근거 출처 목록' 섹션은 유지하되, 실제 제공된 근거가 있는 자료만 "
+    "[법률]/[시행령]/[시행규칙]/[유권해석] 형식으로 표시할 것. "
+    "근거가 없으면 '확인된 근거 없음'으로 표시하고 인용을 만들지 말 것\n"
     "- <think> 태그 내용은 출력하지 말 것\n"
 )
 
@@ -244,10 +249,8 @@ _COMBINED_CLASSIFY_PROMPT = (
     "- <think> 태그 내용은 출력하지 말 것\n"
 )
 
-# 분류/멀티쿼리 호출만 짧게 제한 — 답변 생성은 llm_client 기본값(-1, 무제한)을 쓴다.
-# (과거 num_predict=500으로 답변이 ~900자에서 잘려 "근거 출처 목록" 섹션이 통째로
-#  사라진 사례가 있어, 답변 경로에는 길이 제한을 두지 않는다)
-_MAX_TOKENS_MULTI_QUERY = 150
+# Extraction has its own budget; remote answers use LLM_REMOTE_MAX_TOKENS.
+_MAX_TOKENS_MULTI_QUERY = 1024
 
 # ── 인용 누락 답변 보정: structured output으로 근거 출처 목록 생성 ──
 # temperature 샘플링에 따라 모델이 가끔 출력 형식을 이탈해 인용을 아예 달지 않는데
@@ -346,7 +349,7 @@ async def _stream_llm_skip_think(
     in_think = False
     buf = ""   # 태그 경계 감지에만 사용 — 최대 수십 자 이내로 유지
 
-    async for chunk in stream_llm(messages, temperature=temperature):
+    async for chunk in stream_answer(messages, temperature=temperature):
         if chunk:
             buf += chunk
 
@@ -394,7 +397,7 @@ async def _build_source_list_via_structured_output(answer: str, context: str) ->
     """
     try:
         async def generate(messages):
-            return await call_llm_structured(messages, _CITATION_SCHEMA)
+            return await call_llm_structured(messages, _CITATION_SCHEMA, max_tokens=2048, purpose="citation_extraction")
 
         chain = structured_chain(
             _CITATION_PROMPT_TEMPLATE, generate, CitationList, name="citation_extraction",
@@ -471,7 +474,7 @@ async def _classify_and_generate_queries(
 
     try:
         async def generate(messages):
-            return await call_llm(messages, temperature=0.0, max_tokens=_MAX_TOKENS_MULTI_QUERY)
+            return await call_llm(messages, temperature=0.0, max_tokens=_MAX_TOKENS_MULTI_QUERY, purpose="query_classification")
 
         chain = structured_chain(
             _CLASSIFY_PROMPT_TEMPLATE, generate, QueryClassification, name="query_classification",
@@ -493,6 +496,7 @@ async def _fetch_rag_and_web_context(
     conversation_id: _uuid.UUID,
     user_id: str,
     on_tool_event=None,
+    history_override: list[dict] | None = None,
 ) -> tuple[str, str, list[dict], CalcRun | None]:
     """
     세목 분류·법령 검색·웹 검색·세금 계산기를 수행하고
@@ -503,7 +507,7 @@ async def _fetch_rag_and_web_context(
     t0 = time.perf_counter()
 
     history = [{"role": m["role"], "content": m["content"]}
-               for m in await _fetch_history(conversation_id)]
+               for m in (history_override if history_override is not None else await _fetch_history(conversation_id))]
     event_options = {"on_event": on_tool_event} if on_tool_event else {}
     tool_run = await run_tools_for_query(query, user_id=user_id, history=history, **event_options)
     calc_run = tool_run.calculation if tool_run else None
@@ -563,7 +567,22 @@ def _final_prompt_values(
 
 
 async def _generate_answer(messages):
-    return await call_llm(messages, temperature=0.3)
+    return await complete_answer(messages, temperature=0.3, generate=call_llm)
+
+
+def _trace_chat_inputs(inputs: dict) -> dict:
+    return {"query": inputs.get("query"), "conversation_id": inputs.get("conversation_id"),
+            "regeneration": inputs.get("regeneration") is not None}
+
+
+def _trace_stream_output(events: list[dict]) -> dict:
+    answer = ""
+    for event in events:
+        if event.get("type") == "chunk":
+            answer += event.get("text", "")
+        elif event.get("type") == "replace":
+            answer = event.get("text", "")
+    return {"answer": answer}
 
 
 def _calc_meta(calc_run: CalcRun | None) -> dict | None:
@@ -594,9 +613,11 @@ def _failed_tool_answer(events):
             return event.get("context", "계산을 완료하지 못했습니다.") + "\n\n세액을 산출하지 않았습니다. 계산 실패는 납부세액이 0원이라는 뜻이 아닙니다."
     return None
 
+@traceable(name="chat_request", run_type="chain", process_inputs=_trace_chat_inputs,
+           tags=["tax-assistant", "chat"])
 async def process_chat(query: str, conversation_id: str, user_id: str, *, tool_events: list | None = None) -> tuple[str, dict | None]:
     """RAG 파이프라인 실행 후 (최종 답변, 계산기 메타데이터)를 반환한다 (비스트리밍)."""
-    logger.info("[CHAT] 요청 수신: %.40s...", query)
+    logger.info("[CHAT] 요청 수신: %d자", len(query))
     t0 = time.perf_counter()
 
     conv_id = _uuid.UUID(conversation_id)
@@ -632,6 +653,29 @@ async def stream_chat_response(
     query: str,
     conversation_id: str,
     user_id: str,
+    regeneration=None,
+) -> AsyncGenerator[dict, None]:
+    """Trace the entire stream while forwarding close/cancel to its worker."""
+    async with trace("chat_stream", run_type="chain",
+                     inputs={"query": query, "conversation_id": conversation_id,
+                             "regeneration": regeneration is not None},
+                     tags=["tax-assistant", "chat"]) as run:
+        stream = _stream_chat_response_impl(query, conversation_id, user_id, regeneration)
+        observed = []
+        try:
+            async for event in stream:
+                observed.append(event)
+                yield event
+            run.end(outputs=_trace_stream_output(observed))
+        finally:
+            await stream.aclose()
+
+
+async def _stream_chat_response_impl(
+    query: str,
+    conversation_id: str,
+    user_id: str,
+    regeneration=None,
 ) -> AsyncGenerator[dict, None]:
     """RAG 파이프라인 실행 후 이벤트를 yield한다 (스트리밍).
 
@@ -639,7 +683,7 @@ async def stream_chat_response(
     {"type": "tool", "id": ..., "tool": ..., "status": ...} — 도구 진행/결과
     {"type": "calc", "tool": ..., "params": ...} — 계산기가 실행된 경우, 스트림 종료 직전 1회
     """
-    logger.info("[STREAM] 요청 수신: %.40s...", query)
+    logger.info("[STREAM] 요청 수신: %d자", len(query))
     t0 = time.perf_counter()
 
     conv_id = _uuid.UUID(conversation_id)
@@ -649,7 +693,7 @@ async def stream_chat_response(
         events.append(event)
         queue.put_nowait(event)
 
-    history = await _fetch_history(conv_id) if needs_history(query) else []
+    history = (regeneration.history if regeneration else await _fetch_history(conv_id)) if needs_history(query) else []
     archive_query = history_route(query, history)
     if archive_query is not None:
         async def prepare_history():
@@ -670,13 +714,20 @@ async def stream_chat_response(
                 task.cancel()
             await asyncio.gather(task,return_exceptions=True)
         yield {'type':'chunk','text':answer}
-        await _save_history(conv_id,query,answer,is_first=len(history)==0,tools=_terminal_tools(events))
+        if regeneration:
+            from app.services.answer_version_service import commit_regeneration
+            pool = await get_pool()
+            async with pool.acquire() as conn:
+                await commit_regeneration(conn, conv_id, regeneration, answer, _terminal_tools(events))
+        else:
+            await _save_history(conv_id,query,answer,is_first=len(history)==0,tools=_terminal_tools(events))
         return
 
     async def prepare():
         try:
             return await _fetch_rag_and_web_context(
                 query, conv_id, user_id, on_tool_event=on_tool_event,
+                **({'history_override': regeneration.history} if regeneration else {}),
             )
         finally:
             queue.put_nowait(None)
@@ -697,6 +748,8 @@ async def stream_chat_response(
 
     failure = _failed_tool_answer(events)
     if failure:
+        if regeneration:
+            raise ValueError(failure)
         yield {"type": "chunk", "text": failure}
         await _save_history(conv_id, query, failure, is_first=len(history) == 0, tools=_terminal_tools(events))
         return
@@ -731,8 +784,14 @@ async def stream_chat_response(
         yield {"type": "calc", **calc_meta}
 
     logger.info("[STREAM] 완료 — 총 %.1fs | 답변 %d자", time.perf_counter() - t0, len(answer))
-    await _save_history(conv_id, query, answer, is_first=is_first,
-                        **({"tools": _terminal_tools(events)} if events else {}))
+    if regeneration:
+        from app.services.answer_version_service import commit_regeneration
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            await commit_regeneration(conn, conv_id, regeneration, answer, _terminal_tools(events))
+    else:
+        await _save_history(conv_id, query, answer, is_first=is_first,
+                            **({"tools": _terminal_tools(events)} if events else {}))
 
 
 def _terminal_tools(events: list[dict]) -> list[dict]:

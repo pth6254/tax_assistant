@@ -72,6 +72,7 @@ async def classify_document(source: str, preview: str) -> dict:
             [{"role": "user", "content": prompt}],
             temperature=0.0,
             max_tokens=100,
+            purpose="document_classification",
         )
         result = json.loads(content)
             

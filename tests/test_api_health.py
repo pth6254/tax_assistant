@@ -1,4 +1,5 @@
 """Health endpoint tests."""
+from dataclasses import replace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -54,6 +55,27 @@ def test_dependencies_reports_embedding_degradation_without_503(client, mock_poo
     assert response.status_code == 200
     assert response.json()["status"] == "degraded"
     assert response.json()["embedding"]["connected"] is False
+    conn.fetchval.side_effect = None
+
+
+def test_dependencies_reports_routing_model_degradation(client, mock_pool, monkeypatch):
+    from app.routers import health
+    _, conn = mock_pool
+    conn.fetchval.side_effect = ["PostgreSQL 17.0 on x86_64", "20260719_0001"]
+    settings = health.LLM_TASK_SETTINGS.copy()
+    settings["tool_selection"] = replace(settings["tool_selection"], model="openai/gpt-5-nano")
+    monkeypatch.setattr(health, "LLM_TASK_SETTINGS", settings)
+    with (
+        patch("app.routers.health._embedding_status", AsyncMock(return_value={"status": "ok"})),
+        patch("app.routers.health._llm_status", AsyncMock(side_effect=[
+            {"status": "ok", "model": "openai/gpt-6-luna"},
+            {"status": "model_missing", "model": "openai/gpt-5-nano"},
+        ])),
+    ):
+        response = client.get("/api/health/dependencies")
+    assert response.status_code == 200
+    assert response.json()["status"] == "degraded"
+    assert response.json()["routing_llm"]["status"] == "model_missing"
     conn.fetchval.side_effect = None
 
 

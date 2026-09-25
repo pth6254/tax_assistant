@@ -4,6 +4,7 @@ POST /api/chat         비스트리밍 응답
 POST /api/chat/stream  SSE 스트리밍 응답
 """
 import json
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -12,10 +13,11 @@ from app.database import get_pool
 from app.schemas.chat import ChatRequest
 from app.services import chat_service
 from app.services.conversation_service import require_conversation_owner
-from app.services.inference.llm.errors import LLMGenerationIncomplete
+from app.services.inference.llm.errors import LLMGenerationIncomplete, LLMRequestError
 from app.core.security import verify_token
 
 router = APIRouter(prefix="/api", tags=["chat"])
+logger = logging.getLogger(__name__)
 _INCOMPLETE_MESSAGE = (
     "답변 생성이 끝까지 완료되지 않았습니다. 표시된 일부 내용은 검증·저장되지 않았으므로 "
     "근거로 사용하지 말고 질문을 나누어 다시 시도해주세요."
@@ -41,6 +43,8 @@ async def chat(
             user_id=user["id"],
             tool_events=tool_events,
         )
+    except LLMRequestError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.event()) from exc
     except LLMGenerationIncomplete as exc:
         raise HTTPException(status_code=502, detail={
             "code": "generation_incomplete",
@@ -73,12 +77,21 @@ async def chat_stream(
                 user_id=user["id"],
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except LLMRequestError as exc:
+            yield f"data: {json.dumps(exc.event(), ensure_ascii=False)}\n\n"
+            return
         except LLMGenerationIncomplete as exc:
             event = {
                 "type": "error", "code": "generation_incomplete",
                 "message": _INCOMPLETE_MESSAGE,
                 "reason": exc.reason,
             }
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            return
+        except Exception as exc:
+            logger.error("Chat stream failed: %s", type(exc).__name__)
+            event = {"type": "error", "code": "stream_failed",
+                     "message": "답변 생성 또는 저장에 실패했습니다. 잠시 후 다시 시도해 주세요."}
             yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
             return
         yield "data: [DONE]\n\n"

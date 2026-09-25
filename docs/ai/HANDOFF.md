@@ -1,5 +1,55 @@
 # 세션 인수인계
 
+## 2026-09-25 AI 작업별 설정 후속
+
+- 6개 작업은 기본 OpenRouter Luna. 각 작업은 `LLM_TASK_<NAME>_*`로 독립 전환 가능하며 예시는 README와 `.env.example`에 있다. 기존 `ROUTING_LLM_*`는 더 이상 사용하지 않는다.
+- 실제 세무 골든셋에서 작업별 reasoning effort·모델 변경의 도구 선택 정확도, 검색 Recall, 인용 정확도, 지연, 비용을 비교한다. 합성 스모크는 도구 선택·검색어 형식만 확인한다.
+- LangSmith 월간 추적 할당량 429는 별개 문제로 남아 있다.
+- 최신 backend 이미지 전체 676 passed/2 skipped, 6개 작업 상태 ok 확인. 실제 세무 답변 품질의 전후 비교는 아직 미실시다.
+
+## 2026-09-25 채팅 모델 역할 분리 후속 검증
+
+- `dev/probe_chat_routing.py`는 비식별 합성 질문의 smoke test일 뿐이다. 실제 세무·법령 질의 골든셋에서 Luna 단일 모델과 nano routing의 도구 선택 정확도, 검색 Recall, 지연시간, 비용을 비교한다.
+- 당시 `ROUTING_LLM_*` 옵션은 ADR-043 작업별 설정으로 대체됐다. 현재 로컬 도구 선택은 `LLM_TASK_TOOL_SELECTION_PROVIDER=ollama`와 `LLM_TASK_TOOL_SELECTION_MODEL=qwen3.5:9b`로 설정한다.
+- LangSmith 월간 추적 한도 429는 별도로 해결해야 하며, routing 점검 스크립트는 추적을 끄고 수행한다.
+- 분리 배포 후 backend 전체 테스트 666 passed/2 skipped, 두 LLM 상태 ok를 확인했다. 프런트엔드 실사용 전 과정의 품질 비교는 미실시다.
+
+## 2026-09-25 장문 이어쓰기·실서비스 LangSmith 추적
+
+- 생성 출력 `length` 이후 원문·근거를 유지한 최대 2회 이어쓰기 및 반복 방지 구현. 완결 후 인용/계산 검증·저장, 미완료는 저장하지 않는다. 일반·SSE·재생성 공통이며 Nginx 900초 read timeout을 배포했다.
+- Compose 실서비스의 `CHAT_TRACING_ENABLED=true`, LangSmith 루트 채팅 추적과 하위 단계 전송을 설정했다. SDK 스트림 장식자가 연결 종료 시 검색 작업 취소를 막아 명시적 trace 문맥으로 교체했다.
+- 최신 이미지 pytest 661 passed/2 skipped. LangSmith 합성 trace 전송/읽기 검사는 계정 월간 unique traces 초과 HTTP 429로 원격 저장 실패. 키·프로젝트·tracing 설정은 적용됐으며 한도 복구 또는 증액 전에는 새 추적이 LangSmith 이력에 보이지 않는다. 재확인: `docker exec tax_backend python -m dev.probe_langsmith_chat`. 실패 중 생성된 추적의 자동 재전송은 없다.
+
+## 2026-09-25 유료 생성 안정화
+
+- 목적별 추론/출력 예산, 제한적인 HTTP 429 재시도, deadline, 안전한 API 오류, 숫자 usage 로그, 단일 조문 선택 우회, 일반 후속 질문 오탐 완화, Compose tracing opt-in을 구현했다. 기존 DB·벡터·대화 버전 기능은 보존했다.
+- 실제 Luna 호환성 검사 6종(일반/stream/JSON/도구 인자/인용 스키마/과거법령 스키마)은 합성 입력으로 성공했다. 세무 판단·계산 정답률이나 실제 사용자 UI 전체 시나리오를 검증한 것은 아니다.
+- 최종 WSL 최신 backend 이미지: 652 passed/2 skipped, backend healthy 및 3002 dependencies ready. git diff --check 통과. LangSmith 자동 tracing 런타임 false/false를 확인했고 최종 테스트에서 월간 추적 한도 경고가 사라졌다.
+- 남은 과제: 골든셋으로 법령 적용시점·인용·계산 품질 평가, 질문당/사용자당 비용·동시 요청 제한, 민감정보의 OpenRouter 전송 정책, 혼합 의도 및 tool=none(불필요/입력부족) 분리. 긴 맥락은 입력 토큰 예산을 별도로 설계해야 한다.
+- 재검증: WSL 가상환경에서 dev/docker-up-wsl.sh backend → docker exec tax_backend pytest -q. 유료 스키마 점검은 docker exec tax_backend python -m dev.probe_openrouter_model openai/gpt-6-luna --pipeline.
+
+## 2026-09-25 GPT-6 Luna 생성 전환
+
+- 실제 `.env`와 예시 설정을 `openai/gpt-6-luna`로 변경하고 Luna 전용 요청 파라미터 및 회귀 테스트를 추가했다. 기존 대화·법령 DB는 변경하지 않았다.
+- 비식별 일반/JSON Schema/스트리밍 API 실호출은 모두 성공했고 WSL backend 재빌드·health 확인 및 전체 632 passed/2 skipped를 완료했다. 후속: 세무 골든셋 인용·계산 품질, 요청당 비용과 장기 429 발생률을 확인한다. 개인 세무 서류 외부 전송 정책은 별도 검토가 필요하다. LangSmith 월간 추적 한도 429는 별도 이슈다.
+
+## 2026-09-25 Qwen3.8 무료 모델 사용자 직접 실험
+
+- 로컬 `.env`에서만 Qwen3.8 27B 무료 생성 모델을 선택하고 WSL backend 재빌드·재시작 완료. 실행 컨테이너 설정 일치·health 확인. `.env.example`/운영 권장 모델은 변경하지 않았다.
+- 직전 비식별 실호출은 일반/스트리밍/구조화 모두 429였으며 이번 턴은 사용자 직접 채팅 실험을 위해 설정만 전환했다. 별도 실제 생성 호출은 하지 않았다. fallback 없음.
+
+## 2026-09-25 재생성 오류와 Gemma 무료 모델 실험
+
+- 재생성 저장 시 발생한 `get_pool` 지역 변수 충돌을 수정하고 스트림 최종 커밋 회귀 테스트를 추가했다. 일반·재생성 SSE의 미처리 예외는 안전한 오류 이벤트로 전달한다.
+- Gemma 4 26B-A4B 무료 엔드포인트 실호출 결과 일반/스트리밍 429, 엄격한 JSON Schema 404. `CHAT_MODEL`은 Dots3로 유지. 무료 모델 한도·구조화 출력 지원 변화 시 비식별 재검증 필요.
+- WSL `dev/docker-up-wsl.sh backend`로 재배포, 백엔드·프런트엔드 health 및 Alembic head 확인. 최신 이미지 전체 631 passed/2 skipped. 실제 사용자 대화의 재생성 버튼은 별도 수동 확인이 가능하며, 자동 테스트는 합성 데이터로 동작한다.
+
+## 2026-09-25 동일 대화 답변 버전
+
+- `20260925_0005_answer_versions` 마이그레이션, 마지막 답변 재생성 SSE/버전 선택 API 및 UI를 추가했다. 마지막 질문 수정은 기존 분기 방식 유지.
+- 새 모델 출력의 정답성 자체는 이 기능으로 검증하지 않는다. 후속 질문이 이미 작성된 턴의 버전 전환은 의도적으로 지원하지 않는다.
+- 백엔드 628 passed/2 skipped, 프런트엔드 14 passed/빌드 및 합성 API Edge 브라우저 통과. 실제 OpenRouter 생성·실제 계정 UI의 수동 클릭 검증은 별도이며 이번 자동 검증은 생성 모델의 답변 품질을 뜻하지 않는다.
+
 ## 2026-09-25 내 정보 화면 수정
 
 - `ProfileScreen.jsx`의 세로 flex 카드 축소/내용 잘림을 고치고 `profile.css`로 공통 UI 스타일에 맞췄다. WSL Compose 재빌드 완료.

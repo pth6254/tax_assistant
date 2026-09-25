@@ -17,7 +17,9 @@ from config import (
     LLM_BASE_URL,
     LLM_PROVIDER,
     LLM_DEVICE,
+    LLM_TASK_SETTINGS,
     OLLAMA_BASE_URL,
+    OPENAI_API_KEY,
     OPENROUTER_API_KEY,
 )
 
@@ -62,49 +64,57 @@ async def _ollama_status(required: list[str]) -> dict:
         }
 
 
-async def _llm_status() -> dict:
-    if LLM_PROVIDER == "ollama":
-        result = await _ollama_status([CHAT_MODEL])
-        result.update({"model": CHAT_MODEL, "device": LLM_DEVICE})
+async def _llm_status(provider: str | None = None, model: str | None = None,
+                      base_url: str | None = None, api_key: str | None = None) -> dict:
+    provider = provider or LLM_PROVIDER
+    model = model or CHAT_MODEL
+    base_url = base_url or LLM_BASE_URL
+    api_key = api_key if api_key is not None else (
+        OPENROUTER_API_KEY if provider == "openrouter" else
+        OPENAI_API_KEY if provider == "openai" else LLM_API_KEY
+    )
+    if provider == "ollama":
+        result = await _ollama_status([model])
+        result.update({"model": model, "device": LLM_DEVICE})
         return result
-    if LLM_PROVIDER == "openrouter" and not OPENROUTER_API_KEY:
+    if provider in {"openrouter", "openai"} and not api_key:
         return {
             "status": "configuration_missing",
-            "provider": LLM_PROVIDER,
+            "provider": provider,
             "device": "remote",
-            "model": CHAT_MODEL,
+            "model": model,
             "connected": False,
-            "required_models": [CHAT_MODEL],
+            "required_models": [model],
             "missing_models": [],
         }
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
             response = await client.get(
-                f"{LLM_BASE_URL.rstrip('/')}/models",
-                headers={"Authorization": f"Bearer {OPENROUTER_API_KEY if LLM_PROVIDER == 'openrouter' else LLM_API_KEY}"},
+                f"{base_url.rstrip('/')}/models",
+                headers={"Authorization": f"Bearer {api_key}"},
             )
         response.raise_for_status()
         models = {item.get("id") for item in response.json().get("data", [])}
-        missing = [] if CHAT_MODEL in models else [CHAT_MODEL]
+        missing = [] if model in models else [model]
         return {
             "status": "ok" if not missing else "model_missing",
-            "provider": LLM_PROVIDER,
-            "device": "remote" if LLM_PROVIDER == "openrouter" else LLM_DEVICE,
-            "model": CHAT_MODEL,
+            "provider": provider,
+            "device": "remote" if provider == "openrouter" else LLM_DEVICE,
+            "model": model,
             "connected": True,
-            "required_models": [CHAT_MODEL],
+            "required_models": [model],
             "missing_models": missing,
         }
     except (httpx.HTTPError, ValueError, KeyError) as exc:
         logger.warning("LLM health check failed: %s", exc)
         return {
             "status": "unreachable",
-            "provider": LLM_PROVIDER,
-            "device": "remote" if LLM_PROVIDER == "openrouter" else LLM_DEVICE,
-            "model": CHAT_MODEL,
+            "provider": provider,
+            "device": "remote" if provider == "openrouter" else LLM_DEVICE,
+            "model": model,
             "connected": False,
-            "required_models": [CHAT_MODEL],
-            "missing_models": [CHAT_MODEL],
+            "required_models": [model],
+            "missing_models": [model],
         }
 
 
@@ -159,17 +169,34 @@ async def dependencies():
     except Exception:
         logger.exception("DB dependency check failed")
         database = {"status": "unavailable"}
-    llm = await _llm_status()
+    checked = {}
+    llm_tasks = {}
+    for name, settings in LLM_TASK_SETTINGS.items():
+        key = (settings.provider, settings.model, settings.base_url, settings.api_key)
+        if key not in checked:
+            checked[key] = await _llm_status(settings.provider, settings.model,
+                                              settings.base_url, settings.api_key)
+        llm_tasks[name] = {
+            **checked[key],
+            "reasoning_effort": settings.reasoning_effort,
+            "think_enabled": settings.think_enabled if settings.provider in {"ollama", "llamacpp"} else None,
+        }
+    llm = llm_tasks["answer"]
+    routing_llm = llm_tasks["tool_selection"]
     embedding = await _embedding_status()
     ready = (
         database["status"] == "ok"
         and llm["status"] == "ok"
+        and routing_llm["status"] == "ok"
+        and all(status["status"] == "ok" for status in llm_tasks.values())
         and embedding["status"] == "ok"
     )
     return {
         "status": "ready" if ready else "degraded",
         "database": database,
         "llm": llm,
+        "routing_llm": routing_llm,
+        "llm_tasks": llm_tasks,
         "embedding": embedding,
     }
 

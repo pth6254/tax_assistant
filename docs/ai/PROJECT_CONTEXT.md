@@ -1,5 +1,11 @@
 # 프로젝트 공통 컨텍스트
 
+## 생성 모델 작업별 설정 (2026-09-25)
+
+- `app/services/llm_client.py`는 `answer`, `history_answer`, `citation_extraction`, `query_classification`, `tool_selection`, `document_classification`의 고정된 호출 목적별 설정을 선택한다.
+- 기본은 6개 모두 `LLM_PROVIDER`/`CHAT_MODEL`을 상속해 OpenRouter `openai/gpt-6-luna`를 사용한다. 작업별 `LLM_TASK_<NAME>_*` 설정으로 provider·모델·endpoint·추론 수준·thinking·timeout·temperature·출력 예산을 분리할 수 있다.
+- 로컬 Ollama 작업은 `THINK_ENABLED`로 thinking을 제어하며 원격 모델의 `REASONING_EFFORT`를 Ollama에 적용한다고 주장하지 않는다. 법령·계산 근거 검증은 모델 선택과 독립적으로 유지한다.
+
 마지막 구조 검토: 2026-08-01
 
 ## 1. 프로젝트 목적
@@ -58,7 +64,9 @@ React + Nginx
 `tax_llama_chat`·`tax_llama_embedding`은 선택형 overlay를 실행할 때만 생성되며 현재는 없다.
 
 생성 provider는 `LLMProvider` 규약을 구현하며 Ollama도 `ChatOllama` 없이 직접 HTTP로 연결한다.
-현재 OpenRouter 생성은 `dots-studio/dots-3-note-preview:free`를 선택하며 키가 입력되기 전에는 호출할 수 없다.
+현재 OpenRouter 생성은 유료 `openai/gpt-6-luna`를 선택하며 키와 결제 가능 상태가 필요하다.
+추출·답변 호출 목적별 추론 정책과 원격 출력 상한(`LLM_REMOTE_MAX_TOKENS`, 기본 8192)을 적용한다.
+Compose 실사용 채팅 tracing은 `.env`의 `CHAT_TRACING_ENABLED=true`로 활성화한다. LangSmith 평가 전송과 별개이며 계정 추적 할당량이 필요하다.
 외부 생성 경로는 질문·대화 이력·검색 발췌문을 제공자에게 전송한다. 임베딩과 기존 벡터는 로컬에 유지한다.
 `langchain-ollama`는 사용하지 않는다. `langchain-core`는 provider 위의 프롬프트·Runnable·Pydantic 출력 검증에 사용한다. 일반 생성·구조화 응답·스트리밍은 공통 facade를 통해 호출하며 생성 길이는 `max_tokens`로 전달한다.
 
@@ -163,7 +171,7 @@ evaluation/
 
 ## 9. 더 자세한 문서
 
-- 평가 UI는 LangSmith 사용: `evaluation/LANGSMITH.md`. 자체 대시보드는 제거했다. `scripts/evaluate.py langsmith prepare/publish`로 선택한 결과만 전송하고 원본 평가 규약은 로컬에 유지한다. 사용자 요청으로 `.env.example`에서 평가 키를 읽으며 Docker 빌드에서 해당 파일을 제외한다. 실제 키를 Git에 커밋하지 않는다. 서비스 자동 추적은 켜지 않는다.
+- 평가 UI는 LangSmith 사용: `evaluation/LANGSMITH.md`. 자체 대시보드는 제거했다. `scripts/evaluate.py langsmith prepare/publish`로 선택한 결과만 전송하고 원본 평가 규약은 로컬에 유지한다. 서비스 채팅은 별도 루트 실행으로 LangSmith 추적을 활성화한다. 실제 키를 Git에 커밋하지 않는다.
 
 - 전체 기능·실행·트러블슈팅: `README.md`
 - 배치 CLI: `scripts/README.md`

@@ -14,6 +14,53 @@ UID = str(uuid4())
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("query,law,article", [
+    ("소득세법 제59조의4 제1항 원문 보여줘", "소득세법", "제59조의4 제1항"),
+    ("부가가치세법 시행령 제1조", "부가가치세법 시행령", "제1조"),
+])
+async def test_exact_law_reference_skips_paid_planner(monkeypatch, query, law, article):
+    generate = AsyncMock()
+    monkeypatch.setattr(planner, "call_llm", generate)
+    assert await planner.select_tool(query) == ("law_lookup", {"law_name": law, "article_no": article})
+    generate.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("query", ["그럼 어떤 점을 주의해야 해?", "다시 설명해줘"])
+async def test_generic_followup_does_not_require_tool(monkeypatch, query):
+    select = AsyncMock()
+    monkeypatch.setattr(planner, "select_tool", select)
+    assert await planner.run_tools_for_query(query, user_id=UID, history=[{"role": "user", "content": "소득세란?"}]) is None
+    select.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_comparison_keeps_llm_planner(monkeypatch):
+    generate = AsyncMock(return_value='{"tool":"none"}')
+    monkeypatch.setattr(planner, "call_llm", generate)
+    await planner.select_tool("소득세법 제1조와 부가가치세법 제1조 비교해줘")
+    generate.assert_awaited_once()
+    assert generate.call_args.kwargs["purpose"] == "tool_selection"
+
+
+def test_year_is_not_an_amount_but_missing_input_calculation_is_routed():
+    assert not planner.has_calculation_intent("2025년 세금은 얼마나 달라졌어?")
+    assert planner.has_calculation_intent("2025년 귀속 종합소득세 계산해줘")
+    assert planner.has_calculation_intent("소득 5000만원이면 세금 얼마야?")
+    assert not planner.has_calculation_intent("종합소득세 계산 방법을 알려줘")
+
+
+@pytest.mark.asyncio
+async def test_amount_followup_after_calculation_still_uses_tool(monkeypatch):
+    select = AsyncMock(return_value=None)
+    monkeypatch.setattr(planner, "select_tool", select)
+    await planner.run_tools_for_query("그럼 6000만원이면?", user_id=UID, history=[
+        {"role": "user", "content": "소득 5000만원 종합소득세 계산해줘"},
+    ])
+    select.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("tool,params", [
     ("delete_document", {}),
     ("document_search", {"query": "계약", "user_id": str(uuid4())}),

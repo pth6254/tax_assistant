@@ -84,7 +84,7 @@ async def answer(query, on_event=None):
         '검색된 발췌에 없는 조건·부칙 적용례를 추측하지 않는다. JSON claims만 반환한다.',
         '질문: {query}\n자료: {evidence}')
     async def generate(messages):
-        return await call_llm_structured(messages,Answer.model_json_schema(),max_tokens=1600)
+        return await call_llm_structured(messages,Answer.model_json_schema(),max_tokens=4096,purpose="history_answer")
     try:
         result=await structured_chain(prompt,generate,Answer,name='history_answer').ainvoke({'query':query,'evidence':payload(selected)})
     except Exception:
