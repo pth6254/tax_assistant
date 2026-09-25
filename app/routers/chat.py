@@ -5,16 +5,21 @@ POST /api/chat/stream  SSE 스트리밍 응답
 """
 import json
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.database import get_pool
 from app.schemas.chat import ChatRequest
 from app.services import chat_service
 from app.services.conversation_service import require_conversation_owner
+from app.services.inference.llm.errors import LLMGenerationIncomplete
 from app.core.security import verify_token
 
 router = APIRouter(prefix="/api", tags=["chat"])
+_INCOMPLETE_MESSAGE = (
+    "답변 생성이 끝까지 완료되지 않았습니다. 표시된 일부 내용은 검증·저장되지 않았으므로 "
+    "근거로 사용하지 말고 질문을 나누어 다시 시도해주세요."
+)
 
 
 @router.post("/chat")
@@ -29,12 +34,19 @@ async def chat(
         )
 
     tool_events = []
-    answer, calculator = await chat_service.process_chat(
-        query=body.query,
-        conversation_id=str(conversation_id),
-        user_id=user["id"],
-        tool_events=tool_events,
-    )
+    try:
+        answer, calculator = await chat_service.process_chat(
+            query=body.query,
+            conversation_id=str(conversation_id),
+            user_id=user["id"],
+            tool_events=tool_events,
+        )
+    except LLMGenerationIncomplete as exc:
+        raise HTTPException(status_code=502, detail={
+            "code": "generation_incomplete",
+            "message": _INCOMPLETE_MESSAGE,
+            "reason": exc.reason,
+        }) from exc
     return {"output": answer, "calculator": calculator,
             "tools": [e for e in tool_events if e["status"] not in {"selecting", "running"}]}
 
@@ -54,12 +66,21 @@ async def chat_stream(
         )
 
     async def generate():
-        async for event in chat_service.stream_chat_response(
-            query=body.query,
-            conversation_id=str(conversation_id),
-            user_id=user["id"],
-        ):
+        try:
+            async for event in chat_service.stream_chat_response(
+                query=body.query,
+                conversation_id=str(conversation_id),
+                user_id=user["id"],
+            ):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except LLMGenerationIncomplete as exc:
+            event = {
+                "type": "error", "code": "generation_incomplete",
+                "message": _INCOMPLETE_MESSAGE,
+                "reason": exc.reason,
+            }
             yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            return
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(

@@ -1,5 +1,89 @@
 # 현재 구현 상태
 
+## 2026-09-25 Dots3 Note Preview 무료 모델 전환·실행 확인
+
+- Qwen3.8 무료 엔드포인트가 제공자 측 429 제한을 지속하여 사용자 요청으로 `dots-studio/dots-3-note-preview:free`에 수동 전환했다. `.env`/`.env.example`과 README·설계 문서를 동기화하고 WSL venv에서 backend 재빌드·재기동 완료. 다른 모델이나 유료 모델로 자동 fallback하지 않는다.
+- 사전 후보 점검에서 Dots3와 Nex Mini 모두 비식별 일반·JSON Schema 요청 HTTP 200과 비어 있지 않은 출력에 성공했다. 범용 설명용 Dots3를 선택했다. 재배포 후 health 전체 ready/생성 Dots3 ok/임베딩 Ollama ok, 비식별 일반·구조화·SSE 실호출 모두 성공.
+- 최신 backend 이미지 전체 pytest 619 passed/2 skipped. 이는 제공자 연결·형식 확인이며 실제 세무 질문의 법률적 정확도·인용 품질 또는 장기 가용성을 보증하지 않는다. 무료 Preview 제공자 제한과 외부 전송 정책을 계속 고려한다.
+
+## 2026-09-25 Qwen3.8 27B 무료 모델 고정 — 재기동 후 생성 429
+
+- 실제 `.env`와 `.env.example`의 생성 모델을 `qwen/qwen3.8-27b:free`로 변경하고 WSL venv에서 `dev/docker-up-wsl.sh backend`로 최신 backend를 재빌드·재시작했다. 비밀 키 값은 출력하지 않았다.
+- `/api/health/dependencies`는 전체 ready, 생성 `openrouter`/`qwen/qwen3.8-27b:free` ok, 임베딩 `ollama` ok를 반환했다. 이 상태 검사는 모델 카탈로그 조회이지 실제 생성 가능성 검사가 아니다.
+- 비식별 일반 생성 실호출은 OpenRouter HTTP 429로 거절됐고 재시도도 429였다. 오류 메타데이터의 `provider_name=ModelRun`과 `raw`에서 해당 무료 모델의 upstream 일시 rate limit을 확인했다. 같은 키의 `/key`는 200, 무료 계정이며 키의 금액 한도 잔여 0은 아니었다. 구조화·스트리밍 생성 실호출은 이번 모델에서 아직 미검증이다.
+- 최신 Docker 이미지 전체 pytest 619 passed/2 skipped. 테스트 통과와 health ok를 실제 Qwen 답변 성공으로 해석하지 않는다.
+
+## 2026-09-25 OpenRouter 무료 생성 실제 전환·검증
+
+- 사용자가 실제 `.env`에 API 키를 입력한 뒤 WSL venv와 `dev/docker-up-wsl.sh backend`로 최신 backend를 재빌드·재기동했다. 키 값은 출력·문서화하지 않았다.
+- 실제 `/api/health/dependencies`에서 전체 ready, 생성 `openrouter`/`openrouter/free` ok, 임베딩 `ollama` ok 확인. 비식별 요청의 일반 생성과 SSE 스트리밍이 완료됐다.
+- `openrouter/free`가 요청마다 서로 다른 무료 모델로 라우팅됨을 관찰했다. 구조화 JSON 요청은 일부 선택 모델에서 HTTP 200/stop이어도 빈 본문 또는 잘못된 JSON을 반환했다. OpenRouter 구조화 요청에 `require_parameters`를 적용하고 유효하지 않은 출력만 1회 재시도하며, 2회 실패는 `invalid_structured_output` 미완료로 처리한다. 재빌드 후 비식별 구조화·스트리밍 실호출 통과.
+- 최신 Docker 이미지 전체 pytest 619 passed/2 skipped. 무료 모델의 선택·품질·한도는 변동 가능하며, 세무 답변/인용의 정답률이나 실제 민감 자료 처리 적합성은 이번 스모크로 검증되지 않았다.
+
+## 2026-09-25 OpenRouter 무료 생성 provider 준비 — 키 입력/실호출 대기
+
+- `.env`와 `.env.example`에 `LLM_PROVIDER=openrouter`, `LLM_BASE_URL=https://openrouter.ai/api/v1`, `CHAT_MODEL=openrouter/free`, 빈 `OPENROUTER_API_KEY`를 추가했다. 실제 키 값은 기록하지 않는다.
+- OpenAI 호환 어댑터에서 llama.cpp 전용 `chat_template_kwargs`를 OpenRouter에 보내지 않고, 일반·JSON Schema·SSE 호출의 종료 사유를 검사한다. WSL 시작 스크립트는 OpenRouter 선택 시 로컬 채팅 모델 설치를 요구하지 않고 Ollama 임베딩만 검사한다. health는 키 누락을 `configuration_missing`으로 보고한다.
+- 키가 없으므로 실제 OpenRouter 생성과 모델 품질/무료 한도는 미검증. 현재 실행 중인 Docker 컨테이너는 재배포하지 않아 기존 Ollama 경로를 유지한다. 키 입력 후 WSL venv에서 `dev/docker-up-wsl.sh backend`로 재빌드·기동하고 실제 일반·구조화·스트리밍 답변 및 인용 평가가 필요하다.
+- WSL venv 전체 테스트 617 passed/2 skipped(추적 비활성), 스크립트 구문·Compose 설정 검증 통과. 공개 모델 목록에서 `openrouter/free` ID 존재를 확인했다. Windows Git의 `git diff --check`도 통과했다.
+
+## 2026-09-25 8,192토큰 일회성 실험 — 정상 종료, 품질/메모리 한계
+
+- 사용자 요청으로 운영 설정 파일·DB·대화 저장을 바꾸지 않고 격리된 backend 프로세스에서 생성 `num_ctx=8192`를 주입해 직전과 동일한 비식별 복합 질문을 실제 검색·Ollama 스트리밍으로 1회 실행했다. 웹 검색·LangSmith 추적은 비활성화했다.
+- 최종 생성 `prompt_eval_count=3815`, `eval_count=1220`, `done_reason=stop`, 약 2,240자, 총 23.8초. 직전 4,096 실험의 3,815+281=`length` 중단과 달리 생성은 끝났다. 단일 샘플이며 다른 질문/동시 요청의 안정성은 미검증.
+- 종료 후 `ollama ps`에서 생성 5.7GB·임베딩 4.4GB 모두 100% GPU, 전체 VRAM 11,825/12,227MiB(여유 120MiB). 메모리 여유가 매우 작아 상시 8,192 기본값 전환은 보류한다. 답변의 근거 목록이 요청한 제59조의4/시행령·시행규칙이 아니라 다른 소득세법 조문으로 흐르는 품질 실패도 관찰했다.
+- 실험 후 생성 모델에 4,096 요청을 보내 `ollama ps CONTEXT=4096` 복구를 확인했다. backend 환경설정은 원래 4,096으로 유지. 복구 후 GPU 7,361/12,227MiB 사용(임베딩 모델은 언로드 상태).
+
+## 2026-09-25 복합 질문 실제 스트리밍 재현
+
+- 비식별 복합 질문: 소득세법 제59조의4 제1항 제1호 요건과 관련 시행령·시행규칙 추가 요건, 적용/유보 경우, 조문 근거를 함께 요청했다. 실제 `tax_backend` 서비스 파이프라인에서 대화 저장·웹 검색·LangSmith 추적만 차단하고 Ollama·DB·검색은 그대로 사용했다.
+- 분류 호출 `stop`(입력 235/출력 46토큰). 최종 생성은 입력 3,815/출력 281토큰에서 `done_reason=length`로 종료했다. 합계 4,096은 현재 `OLLAMA_NUM_CTX`와 일치한다. 약 518자/256청크의 미완성 텍스트 뒤 `LLMGenerationIncomplete`가 발생했고 저장하지 않았다.
+- 같은 준비 경로의 입력은 검색 근거 5건·4,326자(모두 소득세법), 시스템 프롬프트 2,300자였다. 시행령·시행규칙 근거는 이 실행의 최종 검색 컨텍스트에 포함되지 않아, 종료 문제와 별도로 복합 질문 근거 선택 실패도 확인했다. 실제 사용자 질문 전체가 이 경로와 동일하다고 일반화하지 않는다.
+- 후속: 필수 조문 우선 검색, 다법령/위계 근거 수집, 4,096토큰 내 입력/출력 예산 분리, 실패 시 보수적 유보를 설계·평가한다. 컨텍스트 증설 또는 모델 교체만으로 해결됐다고 주장하지 않는다.
+
+## 2026-09-25 생성 중단 사유 감지
+
+- Ollama `/api/chat`의 `done_reason`과 입력·출력 토큰 수를 원문 없이 로깅한다. `length` 등 비정상 종료를 성공으로 처리하지 않는다. 스트리밍은 일부 내용 뒤 오류 이벤트만 보내고 `[DONE]`을 보내지 않으며, 비스트리밍은 502를 반환한다. 일부 내용은 검증·저장되지 않았음을 UI에 알린다.
+- 실제 Windows Ollama `qwen3.5:9b`에 `num_predict=2`로 요청하여 `done_reason=length`, `eval_count=2`를 확인했다. 이는 종료 신호 재현이며 사용자가 보고한 복합 질문의 실제 원인을 확정한 것은 아니다.
+- 컨텍스트 4,096토큰/12GB GPU 설정은 유지했다. 복합 질문 재현 후 토큰 계측과 근거 선택 예산을 검토해야 한다. 모델 교체, 재임베딩, DB 변경은 하지 않았다.
+- 현재 Ollama 구성으로 backend 이미지를 재빌드·배포했고 `tax_backend` healthy 확인. 최신 이미지 전체 pytest 612 passed/2 skipped(추적 비활성), 프런트엔드 12 passed. 처음 테스트 실행에서는 기존 LangSmith 추적 설정으로 원격 전송 429 경고가 발생했으며, 추적을 끈 재검증에서 경고 없이 통과했다.
+
+## 2026-09-25 국제세무 공식자료 1차 파일럿 수집
+
+- 한–미·한–일·한–중 확장을 위한 미국·일본·중국 법령/안내문과 양자 조약 **17/17건 원본 수집**, SHA-256·크기 검수 통과, 실패 0. 원본 총 21,549,949 bytes. `evaluation/sources/international-tax/pilot-2026-09-25/`(Git/Docker 제외)에 원본·텍스트·manifest·review.html 보존.
+- 법적 효력·적용 시점·번역·HTML 본문 선택은 아직 미검수. 한–일 조약 원본 PDF는 스캔본이라 OCR 필요. 미국 법전은 2024년 판본, 일본 안내는 2025년판으로 구분했다. **정답셋/프로덕션 DB/임베딩/Graph/채팅에는 미연결**.
+- 수집기 `evaluation/international_sources.py`, CLI `scripts/collect_international_tax.py` 및 재개/읽기 전용 감사. 최신 Ollama backend 이미지 전체 테스트 608 passed/2 skipped, `git diff --check` 통과. 실행·출처·후속 검수: `docs/evaluation/international-tax-pilot-2026-09-25.md`.
+
+## 2026-09-25 국세청 공식 세무일정 캘린더
+
+- 인증 사용자용 `/api/tax-schedule/official`이 국세청 공개 월별 표를 읽어 게시 날짜·제목·비고·원문 URL·확인 시각을 반환한다. 30분 메모리 캐시, 확인 실패 시 24시간 이내 이전 조회만 stale 표시, 그 외 503. 표 구조/요청 연월 불일치는 실패로 처리한다.
+- 프런트엔드 사이드바에 세무일정 달력을 추가했다. 이전·다음 달과 달력 아이콘/native 연월 선택(2000-01~다음 연도 12월), 일별 목록·원문 연결·재확인·미게시/오류/오래된 자료 안내 포함. 프로필의 고정 규칙 일정 목록은 공식 캘린더 진입 링크로 교체했다. 개인별 의무 자동판정은 구현하지 않았다.
+- 현재 Ollama 구성으로 backend/frontend 재빌드·배포. 실제 인증 API에서 2026년 10월 국세청 실데이터 7건 조회(부가가치세 예정신고 10월 26일), 최신 이미지 전체 테스트 603 passed/2 skipped, 프런트엔드 11 passed/build(직접 연월 선택 포함), 웹 HTTP 200 및 미인증 API 401 확인.
+
+## 2026-09-25 웹 접속 포트 3002로 변경
+
+- Compose frontend 호스트 포트 3000 → 3002, FastAPI CORS 허용 origin·브라우저 테스트/실제 UI 캡처 기본 주소·README 동기화. Nginx 내부 80, Vite 개발 5173은 유지.
+- 기존 Ollama 구성으로 backend/frontend 재빌드·배포. Windows `http://localhost:3002`와 `/api/health/ready` HTTP 200, CORS preflight origin 확인. 최신 이미지 pytest 595 passed/2 skipped. DB/벡터와 다른 프로젝트 컨테이너는 변경하지 않음.
+
+## 2026-09-25 런타임 결함 6건 수정·배포
+
+- 역사 라우팅을 의도+시점으로 변경, 계산/문서 연도 오분기 수정. XML structure 기반 항·호·목 조회, 상위 도입 조건 보존, 필수 근거 우선 예산 및 요청 범위 밖 Graph 인용 제외.
+- JSON 도구 메타데이터에 법령/버전/기준일/조항을 저장하여 일반/SSE 후속 질문에 사용. 명시 법령명과 버전 ID 소속 검증. 생성/인용 검증 완료 전 ok 금지 및 프런트엔드 실패 구분.
+- 현재 Ollama 구성으로 backend/frontend 재빌드·배포, 최신 이미지 595 passed/2 skipped, frontend 8 passed/build, HTTP ready/frontend 200 및 healthy 확인. 원본·임베딩·Graph 데이터 변경/재백필 없음.
+- 실제 버전 309 제59조의4 제1항 제1호 추출·필수 근거 유지, 529+부가가치세법 충돌 거부, 529 제1조→제2조 시점 유지, 생성 실패 error 확인. 그래프 범위 제한 후 309 제1항 실제 생성·인용 검증 ok.
+- 모델 인용 불일치에 의한 유보는 여전히 가능하다. 연도별 계산 세율 선택(tax_year)은 이번 라우팅 수정과 별개로 미지원. 상세 범위/한계: `docs/evaluation/2026-09-25-history-runtime-fixes.md`.
+
+## 2026-09-25 채팅·과거 법령 런타임 결함 발견 (수정 전 기록)
+
+- 임베딩 누락은 없지만 항·호 파싱, 연도 기반 의도 분기, 긴 조문 근거 선택, 대화 시점 유지에 재현되는 문제가 있다. 입력 법령명/버전 충돌과 생성 실패 상태 표시도 보완 필요.
+- 이전 소규모 검색/전수 저장 감사 통과가 이 동작까지 보장하지 않는다. 제품 수정 없이 검토 결과를 `docs/evaluation/2026-09-25-history-runtime-review.md`에 기록했다.
+
+## 2026-09-25 완료 임베딩 실제 검증
+
+- DB 벡터 127,838/127,838·2,560차원, 누락 텍스트-청크 매핑 0. 과거 검색 관련 회귀 테스트 31 passed.
+- 소규모 실제 의미 검색 3/3 기대 조문 top-5 포함(모두 1위), 없는 조문/연도만 지정 2/2 유보. GraphRAG 채팅 스모크에서 명시적 인용 1개 확장.
+- PostgreSQL/Neo4j 전체 5,400 스냅샷 소속 감사 오류 0, `embedding_complete=true`, MENTIONS 86,552. 세부 방법·한계: `docs/evaluation/2026-09-25-history-embedding-validation.md`.
+
 ## 2026-09-25 과거 법령 임베딩 백필 완료
 
 - DB 검증: 127,838/127,838 청크 임베딩, 실패 0, 미준비 텍스트 0. Graph 적재도 5,400/5,400 스냅샷.

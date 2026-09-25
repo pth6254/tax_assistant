@@ -5,6 +5,8 @@ import pytest
 import uuid
 from unittest.mock import AsyncMock, patch
 
+from app.services.inference.llm.errors import LLMGenerationIncomplete
+
 
 # ── 인증 검사 ────────────────────────────────────────────────────
 
@@ -84,6 +86,39 @@ def test_chat_stream_emits_chunk_and_calc_events(client, auth_cookie, mock_pool)
     assert '"type": "calc"' in resp.text
     assert '"tool": "income_tax"' in resp.text
     assert "[DONE]" in resp.text
+
+
+def test_truncated_stream_emits_error_without_done(client, auth_cookie, mock_pool):
+    _, conn = mock_pool
+    conn.fetchval.return_value = uuid.uuid4()
+
+    async def fake_stream(query, conversation_id, user_id):
+        yield {"type": "chunk", "text": "답변 일부"}
+        raise LLMGenerationIncomplete("length")
+
+    with patch("app.services.chat_service.stream_chat_response", fake_stream):
+        resp = client.post(
+            "/api/chat/stream",
+            json={"query": "복합 질문", "conversation_id": "00000000-0000-0000-0000-000000000001"},
+            cookies=auth_cookie,
+        )
+    assert resp.status_code == 200
+    assert '"type": "error"' in resp.text
+    assert '"code": "generation_incomplete"' in resp.text
+    assert "[DONE]" not in resp.text
+
+
+def test_truncated_nonstream_is_502(client, auth_cookie, mock_pool):
+    _, conn = mock_pool
+    conn.fetchval.return_value = uuid.uuid4()
+    with patch("app.services.chat_service.process_chat", AsyncMock(side_effect=LLMGenerationIncomplete("length"))):
+        resp = client.post(
+            "/api/chat",
+            json={"query": "복합 질문", "conversation_id": "00000000-0000-0000-0000-000000000001"},
+            cookies=auth_cookie,
+        )
+    assert resp.status_code == 502
+    assert resp.json()["detail"]["code"] == "generation_incomplete"
 
 
 @pytest.mark.parametrize("path", ["/api/chat", "/api/chat/stream"])

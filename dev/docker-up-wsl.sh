@@ -54,9 +54,10 @@ available = {
     if model.get("name")
 }
 required = [
-    settings.get("CHAT_MODEL", "qwen3.5:9b"),
     settings.get("EMBED_MODEL", "qwen3-embedding:4b"),
 ]
+if settings.get("LLM_PROVIDER", "ollama").lower() == "ollama":
+    required.insert(0, settings.get("CHAT_MODEL", "qwen3.5:9b"))
 rerank_model = settings.get("RERANK_MODEL", "")
 if rerank_model:
     required.append(rerank_model)

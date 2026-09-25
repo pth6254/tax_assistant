@@ -52,7 +52,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",   # Vite dev server
         "http://localhost:4173",   # Vite preview
-        "http://localhost:3000",   # Docker nginx
+        "http://localhost:3002",   # Docker nginx
     ],
     allow_credentials=True,
     allow_methods=["*"],

@@ -2,9 +2,14 @@ import { TOOL_LABELS, STATUS_LABELS, isPendingTool } from './toolState'
 import Icon from '../ui/Icon'
 export default function ToolCallCard({ tool, onCitationClick, onOpenCalculator, onRetry }) {
   const pending = isPendingTool(tool), success = tool.status === 'ok'
+  const historyStatus = tool.tool === 'history_lookup' && (
+    tool.error_code === 'history_generation_failed' ? '답변 생성 실패' :
+    tool.error_code === 'history_quote_validation_failed' ? '인용 검증 실패' :
+    success ? '조회·인용 검증 완료' : null
+  )
   const calculator = !['none','law_lookup','document_search','history_lookup'].includes(tool.tool)
   return <section className={'tool-card ' + (pending ? 'pending' : success ? 'success' : 'failed')} aria-label={TOOL_LABELS[tool.tool] || '도구'}>
-    <div className="tool-heading" role="status" aria-live="polite"><span className="tool-name">{pending ? <span className="spinner" /> : <Icon name={calculator ? 'calculator' : tool.tool === 'document_search' ? 'file' : 'book'} size={17} />}{TOOL_LABELS[tool.tool] || '도구'}</span><span className="status-text">{STATUS_LABELS[tool.status] || '확인 필요'}</span></div>
+    <div className="tool-heading" role="status" aria-live="polite"><span className="tool-name">{pending ? <span className="spinner" /> : <Icon name={calculator ? 'calculator' : tool.tool === 'document_search' ? 'file' : 'book'} size={17} />}{TOOL_LABELS[tool.tool] || '도구'}</span><span className="status-text">{historyStatus || STATUS_LABELS[tool.status] || '확인 필요'}</span></div>
     {tool.context && <details open={!success && !pending}><summary>{success ? '실행 결과 보기' : '상세 안내'}</summary><pre>{tool.context}</pre></details>}
     <div className="tool-actions">
       {success && tool.tool === 'law_lookup' && tool.params?.law_name && tool.params?.article_no && onCitationClick && <button className="tool-action" onClick={() => onCitationClick(tool.params.law_name, tool.params.article_no)}>조문 원문 열기 →</button>}

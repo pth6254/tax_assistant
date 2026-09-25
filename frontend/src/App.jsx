@@ -8,6 +8,7 @@ import ChatArea from './components/Chat/ChatArea'
 import CalculatorScreen from './components/Calculator/CalculatorScreen'
 import DocumentsScreen from './components/Documents/DocumentsScreen'
 import ProfileScreen from './components/Profile/ProfileScreen'
+import TaxCalendarScreen from './components/TaxCalendar/TaxCalendarScreen'
 import Icon from './components/ui/Icon'
 import Notice from './components/ui/Notice'
 export default function App() {
@@ -45,7 +46,8 @@ function Workspace({ user, onLogout }) {
       <div className="view-host">
         {view === 'documents' ? <DocumentsScreen library={library} onAsk={ask} />
           : view === 'calculator' ? <CalculatorScreen initial={prefill} onInitialConsumed={() => setPrefill(null)} onAskAboutResult={ask} />
-          : view === 'profile' ? <ProfileScreen onLogout={onLogout} />
+          : view === 'calendar' ? <TaxCalendarScreen />
+          : view === 'profile' ? <ProfileScreen onLogout={onLogout} onOpenCalendar={() => changeView('calendar')} />
           : <ChatArea user={user} conversationId={currentId} conversationTitle={current?.title} onMessageSent={refresh}
               onRevisionCreated={fork => { select(fork.id); setPendingQuestion({ id: fork.id, query: fork.query }); refresh() }}
               onOpenCalculator={(tool, params) => { setPrefill({ tool, params }); changeView('calculator') }}

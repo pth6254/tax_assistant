@@ -12,6 +12,7 @@ from config import (
     OLLAMA_BASE_URL,
     OLLAMA_KEEP_ALIVE,
     OLLAMA_NUM_CTX,
+    OPENROUTER_API_KEY,
     THINK_ENABLED,
 )
 
@@ -24,7 +25,7 @@ def _get_provider() -> LLMProvider:
         _provider_instance = create_llm_provider(
             LLM_PROVIDER,
             base_url=OLLAMA_BASE_URL if LLM_PROVIDER == "ollama" else LLM_BASE_URL,
-            api_key=LLM_API_KEY,
+            api_key=OPENROUTER_API_KEY if LLM_PROVIDER == "openrouter" else LLM_API_KEY,
             model=CHAT_MODEL,
             timeout=LLM_TIMEOUT_SEC,
             thinking=THINK_ENABLED,

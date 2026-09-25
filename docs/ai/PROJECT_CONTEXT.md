@@ -18,7 +18,7 @@
 - PostgreSQL·pgvector 기반 법령 및 사용자 PDF 하이브리드 검색
 - 법률 → 시행령 → 시행규칙 → 유권해석 → 사용자 문서 순의 근거 우선순위
 - 내부 검색 품질이 부족할 때만 공공기관 중심 웹 검색
-- 현재 Ollama 기반 로컬 생성·v1 임베딩, 향후 재도입 가능한 llama.cpp provider 코드
+- 로컬 Ollama 생성·v1 임베딩과 선택형 OpenRouter 원격 생성, 향후 재도입 가능한 llama.cpp provider 코드
 - DB 세율표 기반 세금 계산기 tool calling
 - 답변의 법령 인용과 계산 금액을 검증하는 citation guard
 - JWT httpOnly 쿠키 인증, 대화 관리, 세무 일정, PDF 업로드
@@ -36,10 +36,10 @@ React + Nginx
             ├─ calculator: 결정론적 세금 계산
             ├─ document: PDF 추출·청킹
             ├─ chat_service: RAG 오케스트레이션
-            ├─ llm_client: llama.cpp OpenAI 호환 API·Ollama 어댑터
+            ├─ llm_client: Ollama·llama.cpp·OpenRouter 생성 어댑터
             └─ citation_guard: 생성 결과 검증
         → PostgreSQL + pgvector
-        → 현재 Ollama 생성·v1 임베딩 / 선택형 llama.cpp 생성·v2 임베딩
+        → Ollama v1 임베딩 / 생성은 설정에 따라 Ollama·OpenRouter·llama.cpp
 ```
 
 주요 컨테이너:
@@ -53,11 +53,13 @@ React + Nginx
 | `tax_neo4j` | 공식 조문 인용·계열·관측 시점 그래프, 선택형 GraphRAG |
 | `tax_law_history_worker` | 선택형 history profile 배치: 미수집 구법 재개 → 전체 무결성 검수 → 종료 |
 | `tax_law_history_indexer` | 선택형 history-index 배치: 파생 색인·History* 그래프·중복 제거 임베딩 |
-| Windows Ollama | 현재 Qwen3.5-9B 생성·Qwen3 Embedding 4B v1 임베딩 서빙 |
+| Windows Ollama | Qwen3 Embedding 4B v1 임베딩 서빙, 로컬 생성 선택 시 Qwen3.5-9B |
 
 `tax_llama_chat`·`tax_llama_embedding`은 선택형 overlay를 실행할 때만 생성되며 현재는 없다.
 
 생성 provider는 `LLMProvider` 규약을 구현하며 Ollama도 `ChatOllama` 없이 직접 HTTP로 연결한다.
+현재 OpenRouter 생성은 `dots-studio/dots-3-note-preview:free`를 선택하며 키가 입력되기 전에는 호출할 수 없다.
+외부 생성 경로는 질문·대화 이력·검색 발췌문을 제공자에게 전송한다. 임베딩과 기존 벡터는 로컬에 유지한다.
 `langchain-ollama`는 사용하지 않는다. `langchain-core`는 provider 위의 프롬프트·Runnable·Pydantic 출력 검증에 사용한다. 일반 생성·구조화 응답·스트리밍은 공통 facade를 통해 호출하며 생성 길이는 `max_tokens`로 전달한다.
 
 ## 4. 코드 책임

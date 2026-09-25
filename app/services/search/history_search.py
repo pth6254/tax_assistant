@@ -10,19 +10,17 @@ from app.services.embedding_service import embed_texts
 from app.services.graph.store import connect
 from app.services.law.history_index import model_key
 from app.services.law.reference_parser import extract_law_reference, format_article_no, parse_law_reference
-from app.services.law.structure_parser import resolve_reference_target
+from app.services.law.history_context import temporal_request
+from app.services.law.history_structure import article_excerpt, HistoricalStructureError
 
 NOTICE = ('아래 자료는 공포일·시행일을 기준으로 조회한 법령 버전의 원문 근거입니다. '
           '사건·귀속기간에 적용되는 법령을 확정한 것은 아닙니다. 부칙의 적용례·경과조치와 사실관계에 대한 별도 검토가 필요합니다.')
 
 
 class HistoryUnavailable(ValueError):
-    pass
-
-
-def temporal_request(query):
-    return bool(re.search(r'법령\s*버전\s*\d+|\d{4}[-./]\d{1,2}[-./]\d{1,2}|'
-                          r'\d{4}\s*년|과거\s*법|구법|종전|개정\s*전|당시',query))
+    def __init__(self, message, *, history_context=None):
+        super().__init__(message)
+        self.history_context = history_context
 
 
 def requested_date(query):
@@ -55,6 +53,19 @@ async def with_snapshot(version):
     return version | {'snapshot_id':snapshot['id'],'source_url':snapshot['source_url'],'snapshot_hash':snapshot['content_hash']}
 
 
+async def named_law_ids(pool, query):
+    names = await pool.fetch('SELECT DISTINCT law_id,law_name FROM law_history.versions')
+    compact = ''.join(query.split())
+    spans = []
+    for row in names:
+        name = ''.join(row['law_name'].split())
+        for match in re.finditer(re.escape(name), compact):
+            spans.append((match.start(), match.end(), row['law_id']))
+    # Longest match per occurrence: 시행령 must not also match its parent 법.
+    return {law_id for start, end, law_id in spans if not any(
+        a <= start and b >= end and b-a > end-start for a, b, _ in spans)}
+
+
 async def query_version(query):
     pool=await get_pool()
     explicit=re.findall(r'법령\s*버전\s*(\d+)',query)
@@ -64,6 +75,12 @@ async def query_version(query):
         row=await pool.fetchrow('SELECT * FROM law_history.versions WHERE id=$1',int(explicit[0]))
         if not row:
             raise HistoryUnavailable('해당 법령버전이 없습니다.')
+        ids = await named_law_ids(pool, query)
+        if ids and ids != {row['law_id']}:
+            raise HistoryUnavailable(f'입력한 법령명과 법령버전 {row["id"]}의 소속({row["law_name"]})이 다릅니다. 법령명 또는 버전을 확인해 주세요.')
+        reference = extract_law_reference(query)
+        if not ids and reference and reference.law_name:
+            raise HistoryUnavailable('입력한 법령명을 수집 목록에서 확인하지 못했습니다. 버전의 소속 법령명을 확인해 주세요.')
         version=await with_snapshot(dict(row))
         if re.search(r'\d{4}[-./]\d|\d{4}\s*년',query):
             day=requested_date(query)
@@ -72,12 +89,7 @@ async def query_version(query):
             return version,day
         return version, version['effective_date']
     day=requested_date(query)
-    names=await pool.fetch('SELECT DISTINCT law_id,law_name FROM law_history.versions')
-    compact=''.join(query.split())
-    found=[r for r in names if ''.join(r['law_name'].split()) in compact]
-    found=[r for r in found if not any(len(t['law_name'].replace(' ',''))>len(r['law_name'].replace(' ',''))
-             and r['law_name'].replace(' ','') in t['law_name'].replace(' ','') for t in found)]
-    ids={r['law_id'] for r in found}
+    ids=await named_law_ids(pool, query)
     if len(ids)!=1:
         raise HistoryUnavailable('조회할 법령명을 하나 지정해 주세요. 예: 2010-01-01 기준 소득세법 제1조 원문')
     return await select_version(ids.pop(),day),day
@@ -98,10 +110,15 @@ async def direct_article(version, reference):
         version['snapshot_id'],str(reference.article),str(reference.article_branch or ''),'조문')
     if len(rows)!=1:
         raise HistoryUnavailable('해당 버전에서 요청한 조문을 유일하게 확인하지 못했습니다.')
-    target=resolve_reference_target(rows[0]['body'],reference)
-    if target is not None and not target.exists:
-        raise HistoryUnavailable('해당 버전에 요청한 항·호·목이 없습니다. 현행 조문으로 대체하지 않습니다.')
-    return evidence(rows[0],version)
+    try:
+        content = article_excerpt(rows[0].get('structure'), rows[0]['body'], reference)
+    except HistoricalStructureError as exc:
+        raise HistoryUnavailable(str(exc) + ' 현행 조문으로 대체하지 않습니다.') from None
+    item = evidence(rows[0], version)
+    item['content'] = content
+    item['requested_reference'] = ' '.join(filter(None, (
+        reference.article_no, reference.paragraph_no, reference.item_no, reference.subitem_no)))
+    return item
 
 
 async def semantic(version,query):
@@ -157,6 +174,10 @@ async def expand(results, day):
                 ORDER BY law_name,reference LIMIT 12''',timeout=2),sid=seed['snapshot_id'],key=seed['text_key'],hash=snapshot_hash,
                 database_=config.NEO4J_DATABASE,routing_='r')
             for ref in records:
+                # A whole-article edge may belong to an excluded paragraph. Only
+                # expand citations actually present in the requested XML excerpt.
+                if ref['evidence'] not in seed['content']:
+                    continue
                 ids=await pool.fetch('SELECT DISTINCT law_id FROM law_history.versions WHERE replace(law_name,\' \',\'\')=$1',ref['law_name'])
                 if len(ids)!=1:
                     continue
@@ -182,9 +203,21 @@ async def expand(results, day):
 async def retrieve(query):
     version,day=await query_version(query)
     ref=extract_law_reference(query)
-    results=[await direct_article(version,ref)] if ref and ref.article is not None else await semantic(version,query)
-    if not results:
-        raise HistoryUnavailable('해당 버전에서 충분한 검색 근거를 찾지 못했습니다. 규정이 없다는 의미는 아닙니다.')
+    state = dict(law_id=version['law_id'], law_name=version['law_name'], version_id=version['id'],
+                 snapshot_id=version['snapshot_id'], as_of=str(day))
+    if ref:
+        state.update({key: getattr(ref, key) for key in
+                      ('article', 'article_branch', 'paragraph', 'item', 'item_branch', 'subitem')})
+    try:
+        results=[await direct_article(version,ref)] if ref and ref.article is not None else await semantic(version,query)
+        if not results:
+            raise HistoryUnavailable('해당 버전에서 충분한 검색 근거를 찾지 못했습니다. 규정이 없다는 의미는 아닙니다.')
+    except HistoryUnavailable as exc:
+        # Even a missing paragraph must not make the next turn fall back to today.
+        exc.history_context = state
+        raise
+    # The requested article (or first semantic hit) cannot be displaced by graph extras.
+    results[0]['required'] = True
     graph_status='disabled'
     if config.HISTORY_GRAPH_RAG_ENABLED:
         pool=await get_pool()
@@ -198,4 +231,5 @@ async def retrieve(query):
         else:
             graph_status='index_pending'
     return {'results':results,'graph_status':graph_status,'as_of':str(day),'notice':NOTICE,
+            'history_context':state,
             'legal_applicability_verified':False}

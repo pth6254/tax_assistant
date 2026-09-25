@@ -3,7 +3,8 @@ import Icon from '../ui/Icon'
 import Notice from '../ui/Notice'
 
 const NAV = [{ key: 'chat', label: '채팅', icon: 'chat' }, { key: 'documents', label: '내 문서', icon: 'file' },
-  { key: 'calculator', label: '세금계산기', icon: 'calculator' }, { key: 'profile', label: '내 정보', icon: 'user' }]
+  { key: 'calculator', label: '세금계산기', icon: 'calculator' }, { key: 'calendar', label: '세무일정', icon: 'calendar' },
+  { key: 'profile', label: '내 정보', icon: 'user' }]
 export default function Sidebar({ user, onLogout, view, onViewChange, conversations, currentConversationId, onSelectConversation, onCreateConversation, onDeleteConversation, collapsed, onToggle, error, onRetry }) {
   const [busy, setBusy] = useState(false)
   const [localError, setLocalError] = useState('')

@@ -7,7 +7,7 @@ const path = require('node:path')
 const assert = require('node:assert/strict')
 
 ;(async () => {
-  const base = process.env.UI_TEST_URL || 'http://localhost:3000'
+  const base = process.env.UI_TEST_URL || 'http://localhost:3002'
   if (!['localhost', '127.0.0.1'].includes(new URL(base).hostname)) throw new Error('Local service only')
   const browser = await chromium.launch({ channel: 'msedge', headless: true })
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 })

@@ -40,6 +40,17 @@ test('unexpected EOF never reports successful completion', async t => {
   assert.equal(completed, false)
 })
 
+test('generation incomplete event retains partial text but never reports completion', async t => {
+  const body = 'data: {"type":"chunk","text":"일부"}\n\n' +
+    'data: {"type":"error","code":"generation_incomplete","message":"답변 생성이 중단되었습니다."}\n\n'
+  t.mock.method(globalThis, 'fetch', async () => new Response(body))
+  const chunks = []
+  let completed = false
+  await assert.rejects(streamChat('q', 'id', v => chunks.push(v), () => { completed = true }), /중단/)
+  assert.deepEqual(chunks, ['일부'])
+  assert.equal(completed, false)
+})
+
 test('abort signal reaches fetch', async t => {
   const controller = new AbortController()
   controller.abort()
@@ -78,5 +89,17 @@ test('tool card escapes document markup and exposes only valid actions', async (
     }))
     assert.ok(history.includes('과거 법령·GraphRAG 조회'))
     assert.ok(!history.includes('<button'))
+    for (const [error_code, label] of [
+      ['history_generation_failed', '답변 생성 실패'],
+      ['history_quote_validation_failed', '인용 검증 실패'],
+    ]) {
+      const failure = renderToStaticMarkup(createElement(Card, {
+        tool: { tool: 'history_lookup', status: 'error', error_code,
+          retrieval_status: 'ok', context: '조회 성공 / 요약 보류', retryable: true },
+        onRetry: () => {},
+      }))
+      assert.ok(failure.includes(label) && failure.includes('질문 다시 실행'))
+      assert.ok(!failure.includes('완료'))
+    }
   } finally { await server.close() }
 })

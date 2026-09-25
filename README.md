@@ -29,6 +29,10 @@
 
 ## 1. 프로젝트 소개
 
+### 국제세무 자료 수집 파일럿 (서비스 미연결)
+
+한–미·한–일·한–중 국제세무 확장을 위한 미국·일본·중국의 공식 법령·안내문과 양자 조약 원문 17건을 별도 파일럿으로 수집했다. 원본·SHA-256·출처·검토용 텍스트는 서비스 DB/임베딩에 넣지 않고 `evaluation/sources/international-tax/`에 보존한다. 적용 시점 및 정답 검수 전이라 현재 채팅은 **한국 세무 서비스**이며 국외 세무를 확정 답변하지 않는다. [수집 결과 및 검수 한계](docs/evaluation/international-tax-pilot-2026-09-25.md).
+
 ### 마지막 질문 수정·답변 재생성
 
 완료된 마지막 질문 옆의 `✎ 질문 수정`, 마지막 답변 아래의 `↻ 다시 답변`을 사용할 수 있습니다.
@@ -45,6 +49,8 @@
 
 과거 버전 전용 임베딩·Neo4j 관계·채팅 경로도 분리했습니다.
 `법령버전 1063 제16조 원문을 설명해줘`처럼 버전을 지정하거나 법령명과 정확한 기준일을 입력합니다.
+연도만 들어간 계산·문서 검색은 기존 도구 경로를 유지합니다. 과거 법령 조회 후 `그럼 제2조는?`은 저장된 법령·버전·기준일을 이어받고, `현행`을 명시하면 현재 법령 경로로 전환합니다.
+항·호·목은 보존 XML 구조에서 추출하며 요청한 근거를 우선 확보합니다. 법령명/버전 충돌은 조회를 중단하고, 생성·인용 검증 실패는 완료가 아닌 실패 상태로 표시합니다.
 수집한 과거 법령의 전용 벡터 백필은 완료됐습니다(127,838/127,838, 실패 0). 미수집·미준비 버전의 의미 검색은 현행법으로 대체하지 않습니다.
 [역사 GraphRAG 구조·검증 기록](docs/HISTORY_RAG.md).
 
@@ -469,13 +475,17 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5433/tax_db
 JWT_SECRET=your-long-random-secret-here
 JWT_EXPIRE_MIN=1440
 
-# Ollama — 실행 환경에 따라 아래 "Ollama 연결 설정" 참고
+# 생성 LLM: OpenRouter Dots3 Note Preview 무료 모델 (키는 실제 .env에만 입력)
+LLM_PROVIDER=openrouter
+LLM_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_API_KEY=
+CHAT_MODEL=dots-studio/dots-3-note-preview:free
+
+# Ollama 임베딩 — 실행 환경에 따라 아래 "Ollama 연결 설정" 참고
 OLLAMA_BASE_URL=http://localhost:11434
-CHAT_MODEL=qwen3.5:9b
 EMBED_MODEL=qwen3-embedding:4b
-# 모든 chat 호출에서 동일해야 함 — 값이 다르면 Ollama가 호출마다 모델을 리로드함
+# 아래 두 값은 생성 LLM을 Ollama로 되돌릴 때만 적용
 OLLAMA_NUM_CTX=4096
-# 유휴 시 모델 언로드 방지 (-1 = 무제한 유지, 콜드 스타트 방지)
 OLLAMA_KEEP_ALIVE_SEC=-1
 
 # 외부 API (선택)
@@ -485,15 +495,27 @@ LAW_API_KEY=your-law-api-key-here
 
 > JWT_SECRET 생성: `python -c "import secrets; print(secrets.token_hex(32))"`
 
-### 2단계: Ollama 모델 설치
+OpenRouter 키를 발급받아 **실제 `.env`의 `OPENROUTER_API_KEY`에만** 입력한 후 WSL에서
+`source venv-wsl/bin/activate`와 `bash dev/docker-up-wsl.sh backend`를 실행합니다.
+키가 비어 있으면 LLM 상태는 `configuration_missing`이며 답변 생성은 사용할 수 없습니다.
+`dots-studio/dots-3-note-preview:free`는 생성 모델을 고정합니다. 이전
+`qwen/qwen3.8-27b:free`는 제공자 측 일시적 429 제한으로 교체했습니다. 무료·프리뷰
+엔드포인트의 가용성과 요청 한도는 달라질 수 있으므로
+[OpenRouter 모델 페이지](https://openrouter.ai/dots-studio/dots-3-note-preview:free)를 확인하세요.
+구조화 응답이 비어 있거나 유효한 JSON이 아니면 한 번만 재시도하고, 두 번 모두 실패하면
+완료된 답변으로 취급하지 않습니다. 이는 법령 인용·계산 결과의 정확도 보증을 뜻하지 않습니다.
+질문·대화 이력·검색된 법령/사용자 문서 발췌문은 외부 제공자에게 전송되므로 민감한 실사용자
+세무 자료는 제공자 데이터 정책을 검토하기 전에는 보내지 마세요. 임베딩은 기존 Ollama와
+2560차원 DB 벡터를 그대로 사용하며, 생성 LLM만 전환합니다.
+
+### 2단계: Ollama 임베딩 모델 설치
 
 ```bash
-ollama pull qwen3.5:9b
 ollama pull qwen3-embedding:4b
 ```
 
 생성 모델은 llama.cpp가 최초 실행 시 Qwen3.5-9B GGUF를 내려받습니다. Ollama의
-`qwen3.5:9b`는 fallback 생성 환경도 유지할 때만 설치합니다.
+`qwen3.5:9b`는 `LLM_PROVIDER=ollama`, `CHAT_MODEL=qwen3.5:9b`로 되돌릴 때만 설치합니다.
 
 #### 실행 환경별 Ollama 연결 설정
 
@@ -588,6 +610,8 @@ bash dev/docker-up-llamacpp-wsl.sh
 export OLLAMA_WINDOWS_IP="$(ip -4 route show default | awk 'NR == 1 { print $3 }')"
 docker compose -f docker-compose.yml -f docker-compose.llamacpp.yml up -d --build
 ```
+
+Docker 실행 후 웹 서비스는 **http://localhost:3002**에서 접속합니다. 호스트 3002 포트를 프런트엔드 Nginx의 80 포트에 연결하며 `/api` 요청은 내부 백엔드로 전달합니다. Vite 개발 서버 포트는 기존 5173을 유지합니다.
 
 백엔드는 시작 전에 자동으로 `alembic upgrade head`를 실행합니다. 새 DB에는 전체 스키마와
 세율 시드가 생성되고, 기존 DB에는 적용되지 않은 revision만 반영됩니다. 마이그레이션이
@@ -764,6 +788,9 @@ python scripts/evaluate.py suite --mode live --include-draft --output evaluation
 | `COOKIE_SECURE` | — | `false` | `true` 설정 시 HTTPS 전용 쿠키 (운영 환경에서 활성화) |
 | `OLLAMA_BASE_URL` | — | `http://localhost:11434` | FastAPI 기준 Ollama 주소. WSL2 Docker 개발환경은 Windows 게이트웨이, 운영 Compose는 `http://ollama:11434` 권장 |
 | `CHAT_MODEL` | — | `qwen3.5:9b` | 답변 생성 LLM 모델명 |
+| `LLM_PROVIDER` | — | `ollama` | `ollama`, `llamacpp`, `openrouter` 등 생성 provider |
+| `LLM_BASE_URL` | — | provider별 기본값 | OpenRouter 사용 시 `https://openrouter.ai/api/v1` |
+| `OPENROUTER_API_KEY` | OpenRouter 사용 시 | — | OpenRouter 인증 키. 실제 `.env`에만 입력 |
 | `EMBED_MODEL` | — | `qwen3-embedding:4b` | 임베딩 모델명 |
 | `EMBEDDING_PROVIDER` | — | `ollama` | 임베딩 provider. `ollama` 또는 `llamacpp` |
 | `EMBEDDING_BASE_URL` | — | Ollama 주소 | 활성 임베딩 provider 주소 |
@@ -811,9 +838,12 @@ python scripts/evaluate.py suite --mode live --include-draft --output evaluation
 | POST | `/api/calculator/gift` | 증여세 계산 | ✅ 필요 |
 | GET | `/api/law-articles/lookup` | 법령명·조문번호로 조문 원문 조회 (조문 뷰어) | ✅ 필요 |
 | GET | `/api/tax-schedule` | 사업자 유형 기준 다가오는 신고·납부 기한 | ✅ 필요 |
+| GET | `/api/tax-schedule/official?year=2026&month=10` | 국세청 월별 공식 게시 일정(출처·확인시각·최신 확인 실패 여부 포함) | ✅ 필요 |
 | GET | `/api/health` | 서버·DB 상태 확인 | 불필요 |
 
 > 자동 생성 API 문서: `http://localhost:8000/docs`
+
+웹 사이드바의 **세무일정**에서 국세청 [월별 세무일정](https://www.nts.go.kr/nts/ad/taxSchdul/selectList.do?mi=135747)을 달력으로 조회할 수 있습니다. 이전·다음 달 버튼 외에도 달력 아이콘 또는 연월 입력으로 원하는 시점을 직접 선택할 수 있습니다(2000년 1월~다음 연도 12월). 백엔드는 해당 월의 공개 표를 30분 동안 캐시하고, 화면에 마지막 확인 시각과 원문 링크를 표시합니다. 재확인에 실패하면 24시간 이내의 이전 조회 결과만 경고와 함께 보여주며, 그 밖에는 오류로 처리합니다. 일정이 0건이면 미게시 가능성을 안내합니다. 기존 `/api/tax-schedule`의 사업자 유형별 고정 날짜 계산은 레거시 API이며 공식 일정이나 개인별 신고 의무로 사용하지 않습니다. 국세청 사이트 구조 변경·게시 지연·납세자별 예외는 자동 보정되지 않습니다.
 
 `/api/law-articles/lookup`의 `article_no`에는 `59조의4`, `제59조의4 제9항 제1호 가목`처럼
 공백이나 하위 단위가 포함된 표기도 전달할 수 있습니다. 조회에는 정규화된 조 번호
@@ -1403,6 +1433,11 @@ LLM 생성과 무관) 회귀 없음. 답변 품질 자체의 변화를 노린 �
 ---
 
 ## 16. 한계 및 개선 과제
+
+### 복합 질문의 답변이 중간에 끝나는 경우
+
+Ollama가 `done=true`와 함께 `done_reason=length`를 반환하면 정상 완료가 아니다. 현재 채팅은 이를 미완료로 표시하고 스트리밍 `[DONE]`을 보내지 않으며, 일부 출력은 검증·저장하지 않는다. 백엔드 로그의 `Ollama completion`에는 종료 사유와 입력·출력 토큰 수만 남고 질문·답변 원문은 남기지 않는다. 실제 원인이 컨텍스트 한계인지, 추론 서버 오류인지 재현 질문의 로그로 먼저 구분한다. 현재 4,096토큰 컨텍스트는 12GB GPU의 생성·임베딩 공존을 위해 유지하며 무조건 증설하지 않는다.
+
 
 | 한계 | 개선 방향 |
 |------|-----------|

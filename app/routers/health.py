@@ -18,6 +18,7 @@ from config import (
     LLM_PROVIDER,
     LLM_DEVICE,
     OLLAMA_BASE_URL,
+    OPENROUTER_API_KEY,
 )
 
 logger = logging.getLogger(__name__)
@@ -66,11 +67,21 @@ async def _llm_status() -> dict:
         result = await _ollama_status([CHAT_MODEL])
         result.update({"model": CHAT_MODEL, "device": LLM_DEVICE})
         return result
+    if LLM_PROVIDER == "openrouter" and not OPENROUTER_API_KEY:
+        return {
+            "status": "configuration_missing",
+            "provider": LLM_PROVIDER,
+            "device": "remote",
+            "model": CHAT_MODEL,
+            "connected": False,
+            "required_models": [CHAT_MODEL],
+            "missing_models": [],
+        }
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
             response = await client.get(
                 f"{LLM_BASE_URL.rstrip('/')}/models",
-                headers={"Authorization": f"Bearer {LLM_API_KEY}"},
+                headers={"Authorization": f"Bearer {OPENROUTER_API_KEY if LLM_PROVIDER == 'openrouter' else LLM_API_KEY}"},
             )
         response.raise_for_status()
         models = {item.get("id") for item in response.json().get("data", [])}
@@ -78,7 +89,7 @@ async def _llm_status() -> dict:
         return {
             "status": "ok" if not missing else "model_missing",
             "provider": LLM_PROVIDER,
-            "device": LLM_DEVICE,
+            "device": "remote" if LLM_PROVIDER == "openrouter" else LLM_DEVICE,
             "model": CHAT_MODEL,
             "connected": True,
             "required_models": [CHAT_MODEL],
@@ -89,7 +100,7 @@ async def _llm_status() -> dict:
         return {
             "status": "unreachable",
             "provider": LLM_PROVIDER,
-            "device": LLM_DEVICE,
+            "device": "remote" if LLM_PROVIDER == "openrouter" else LLM_DEVICE,
             "model": CHAT_MODEL,
             "connected": False,
             "required_models": [CHAT_MODEL],

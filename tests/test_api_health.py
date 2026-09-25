@@ -1,6 +1,9 @@
 """Health endpoint tests."""
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
+
 
 def test_liveness_does_not_require_dependencies(client):
     response = client.get("/api/health/live")
@@ -52,3 +55,15 @@ def test_dependencies_reports_embedding_degradation_without_503(client, mock_poo
     assert response.json()["status"] == "degraded"
     assert response.json()["embedding"]["connected"] is False
     conn.fetchval.side_effect = None
+
+
+@pytest.mark.asyncio
+async def test_openrouter_without_key_reports_configuration_missing(monkeypatch):
+    from app.routers import health
+    monkeypatch.setattr(health, "LLM_PROVIDER", "openrouter")
+    monkeypatch.setattr(health, "CHAT_MODEL", "openrouter/free")
+    monkeypatch.setattr(health, "OPENROUTER_API_KEY", "")
+    result = await health._llm_status()
+    assert result["status"] == "configuration_missing"
+    assert result["connected"] is False
+    assert result["device"] == "remote"

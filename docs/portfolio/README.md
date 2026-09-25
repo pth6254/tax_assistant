@@ -40,7 +40,7 @@
 node docs/portfolio/build-standalone.cjs
 ```
 
-실제 UI를 다시 캡처하려면 WSL venv 활성화 후 dev/docker-up-wsl.sh로 서비스를 실행합니다. UI_TEST_URL 기본값은 http://localhost:3000이며 localhost만 허용합니다. 실행마다 임시 계정·대화가 생성되고 종료 시 삭제됩니다. Playwright 별도 설치 경로는 PLAYWRIGHT_MODULE로 지정합니다. 비밀번호는 실행 중 메모리에서만 생성·사용하며 저장하지 않습니다.
+실제 UI를 다시 캡처하려면 WSL venv 활성화 후 dev/docker-up-wsl.sh로 서비스를 실행합니다. UI_TEST_URL 기본값은 http://localhost:3002이며 localhost만 허용합니다. 실행마다 임시 계정·대화가 생성되고 종료 시 삭제됩니다. Playwright 별도 설치 경로는 PLAYWRIGHT_MODULE로 지정합니다. 비밀번호는 실행 중 메모리에서만 생성·사용하며 저장하지 않습니다.
 
 ```powershell
 node docs/portfolio/capture-live-ui.cjs

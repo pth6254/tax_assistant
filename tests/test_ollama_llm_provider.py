@@ -6,6 +6,7 @@ import pytest
 import pytest_asyncio
 
 from app.services.inference.llm.factory import create_llm_provider
+from app.services.inference.llm.errors import LLMGenerationIncomplete
 
 
 @pytest_asyncio.fixture
@@ -76,6 +77,29 @@ async def test_stream_ndjson_excludes_thinking_and_keeps_final_content(provider)
 
     await mock_http(provider, handler)
     assert [part async for part in provider.stream([], 0.3, 64)] == ["안녕", "하세요"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stream", [False, True])
+async def test_length_limited_response_is_not_success(provider, stream):
+    def handler(request):
+        if stream:
+            return httpx.Response(200, text=(
+                '{"message":{"content":"일부 답변"},"done":false}\n'
+                '{"message":{"content":""},"done":true,"done_reason":"length",'
+                '"prompt_eval_count":3900,"eval_count":196}\n'
+            ))
+        return httpx.Response(200, json={
+            "message": {"content": "일부 답변"}, "done": True,
+            "done_reason": "length", "prompt_eval_count": 3900, "eval_count": 196,
+        })
+
+    await mock_http(provider, handler)
+    with pytest.raises(LLMGenerationIncomplete, match="length"):
+        if stream:
+            _ = [part async for part in provider.stream([], 0.0, -1)]
+        else:
+            await provider.complete([], 0.0, -1)
 
 
 @pytest.mark.asyncio

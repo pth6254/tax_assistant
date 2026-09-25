@@ -1,7 +1,12 @@
 import json
+import logging
 from typing import AsyncGenerator
 
 import httpx
+
+from app.services.inference.llm.errors import LLMGenerationIncomplete
+
+logger = logging.getLogger(__name__)
 
 
 class OllamaLLMProvider:
@@ -38,11 +43,22 @@ class OllamaLLMProvider:
         if "error" in data:
             raise RuntimeError(f"Ollama generation failed: {data['error']}")
 
+    @staticmethod
+    def _check_completion(data: dict) -> None:
+        reason = data.get("done_reason")
+        logger.info(
+            "Ollama completion: reason=%s prompt_tokens=%s output_tokens=%s",
+            reason or "unspecified", data.get("prompt_eval_count"), data.get("eval_count"),
+        )
+        if reason and reason != "stop":
+            raise LLMGenerationIncomplete(reason)
+
     async def _complete(self, payload: dict) -> str:
         response = await self._client.post(f"{self.base_url}/api/chat", json=payload)
         response.raise_for_status()
         data = response.json()
         self._check_error(data)
+        self._check_completion(data)
         return data["message"]["content"]
 
     async def complete(self, messages: list[dict], temperature: float, max_tokens: int) -> str:
@@ -71,6 +87,7 @@ class OllamaLLMProvider:
                 if content:
                     yield content
                 if data.get("done"):
+                    self._check_completion(data)
                     return
             raise RuntimeError("Ollama stream ended before completion")
 

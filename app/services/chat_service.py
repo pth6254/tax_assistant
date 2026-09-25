@@ -18,7 +18,7 @@ from config import (
 )
 from app.services.calculator.engine import CALCULATORS, CalcRun
 from app.services.tools.planner import run_tools_for_query
-from app.services.search.history_search import temporal_request
+from app.services.law.history_context import needs_history, route as history_route
 from app.services.law.history_answer import answer as history_answer
 from app.services.citation_guard import apply_citation_guard, build_citation_footer, extract_citations
 from app.services.llm_client import call_llm, call_llm_structured, stream_llm
@@ -121,7 +121,11 @@ async def _fetch_history(conversation_id: _uuid.UUID) -> list[dict]:
     for r in reversed(rows):
         msg = r["message"]
         msg = json.loads(msg) if isinstance(msg, str) else msg
-        history.append({"role": msg["role"], "content": msg["content"]})
+        entry = {"role": msg["role"], "content": msg["content"]}
+        for tool in msg.get("tools", []):
+            if tool.get("tool") == "history_lookup" and tool.get("history_context"):
+                entry["history_context"] = tool["history_context"]
+        history.append(entry)
     return history
 
 
@@ -440,7 +444,8 @@ async def _fetch_rag_and_web_context(
     """
     t0 = time.perf_counter()
 
-    history = await _fetch_history(conversation_id)
+    history = [{"role": m["role"], "content": m["content"]}
+               for m in await _fetch_history(conversation_id)]
     event_options = {"on_event": on_tool_event} if on_tool_event else {}
     tool_run = await run_tools_for_query(query, user_id=user_id, history=history, **event_options)
     calc_run = tool_run.calculation if tool_run else None
@@ -538,9 +543,10 @@ async def process_chat(query: str, conversation_id: str, user_id: str, *, tool_e
 
     conv_id = _uuid.UUID(conversation_id)
     events = tool_events if tool_events is not None else []
-    if temporal_request(query):
-        history = await _fetch_history(conv_id)
-        answer = await history_answer(query, events.append)
+    history = await _fetch_history(conv_id) if needs_history(query) else []
+    archive_query = history_route(query, history)
+    if archive_query is not None:
+        answer = await history_answer(archive_query, events.append)
         await _save_history(conv_id,query,answer,is_first=len(history)==0,tools=_terminal_tools(events))
         return answer,None
     context, web_results, history, calc_run = await _fetch_rag_and_web_context(
@@ -584,11 +590,12 @@ async def stream_chat_response(
         events.append(event)
         queue.put_nowait(event)
 
-    if temporal_request(query):
-        history = await _fetch_history(conv_id)
+    history = await _fetch_history(conv_id) if needs_history(query) else []
+    archive_query = history_route(query, history)
+    if archive_query is not None:
         async def prepare_history():
             try:
-                return await history_answer(query,on_tool_event)
+                return await history_answer(archive_query,on_tool_event)
             finally:
                 queue.put_nowait(None)
         task = asyncio.create_task(prepare_history())

@@ -13,10 +13,14 @@ DATABASE_URL: str = os.getenv(
     "postgresql://postgres:postgres@localhost:5432/tax_db",
 )
 
-# ── 생성 LLM (Ollama 또는 llama.cpp OpenAI 호환 서버) ─────────
+# ── 생성 LLM (Ollama, llama.cpp 또는 OpenRouter) ───────────────
 LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "ollama").lower()
-LLM_BASE_URL: str = os.getenv("LLM_BASE_URL", "http://localhost:8000/v1")
+LLM_BASE_URL: str = os.getenv(
+    "LLM_BASE_URL",
+    "https://openrouter.ai/api/v1" if LLM_PROVIDER == "openrouter" else "http://localhost:8000/v1",
+)
 LLM_API_KEY: str = os.getenv("LLM_API_KEY", "local-llamacpp")
+OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
 LLM_TIMEOUT_SEC: float = float(os.getenv("LLM_TIMEOUT_SEC", "180"))
 LLM_DEVICE: str = os.getenv("LLM_DEVICE", "auto").lower()
 
