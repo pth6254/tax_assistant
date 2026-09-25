@@ -52,7 +52,8 @@ export const useChat = (conversationId) => {
         () => { if (request.current === controller) onDone?.() },
         calc => update(m => ({ ...m, calc })),
         event => update(m => ({ ...m, tools: mergeTool(m.tools, event) })),
-        controller.signal)
+        controller.signal,
+        text => update(m => ({ ...m, content: text })))
       update(m => ({ ...m, status: 'complete' }))
       // Refresh server IDs only after DONE (the server has committed the turn).
       try {

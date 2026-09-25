@@ -33,6 +33,18 @@ test('SSE handles split UTF-8, tool, calc and chunk events in order', async t =>
   assert.deepEqual(events, ['running', 'ok', '답변', 'vat', 'done'])
 })
 
+test('SSE replacement swaps the generated answer with corrected citations', async t => {
+  const body = [
+    { type: 'chunk', text: '[법률] 소득세법 제101조 - 부당 Lerer계산' },
+    { type: 'replace', text: '[법률] 소득세법 제101조 - 양도소득의 부당행위계산' },
+  ].map(e => 'data: ' + JSON.stringify(e) + '\n\n').join('') + 'data: [DONE]\n\n'
+  t.mock.method(globalThis, 'fetch', async () => new Response(body))
+  let answer = ''
+  await streamChat('질문', 'id', chunk => { answer += chunk }, () => {}, null, null, null,
+    corrected => { answer = corrected })
+  assert.equal(answer, '[법률] 소득세법 제101조 - 양도소득의 부당행위계산')
+})
+
 test('unexpected EOF never reports successful completion', async t => {
   t.mock.method(globalThis, 'fetch', async () => new Response('data: {"type":"chunk","text":"일부"}\n\n'))
   let completed = false

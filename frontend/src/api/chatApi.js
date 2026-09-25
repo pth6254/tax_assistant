@@ -10,7 +10,7 @@ export const sendChat = async (query, conversationId) => {
   return data
 }
 
-export const streamChat = async (query, conversationId, onChunk, onDone, onCalc, onTool, signal) => {
+export const streamChat = async (query, conversationId, onChunk, onDone, onCalc, onTool, signal, onReplace) => {
   const res = await fetch('/api/chat/stream', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     credentials: 'include', signal,
@@ -37,6 +37,7 @@ export const streamChat = async (query, conversationId, onChunk, onDone, onCalc,
         if (event.type === 'tool') onTool?.(event)
         else if (event.type === 'calc') onCalc?.({ tool: event.tool, params: event.params })
         else if (event.type === 'chunk') onChunk(event.text)
+        else if (event.type === 'replace') onReplace?.(event.text)
         else if (event.type === 'error') throw new Error(event.message || '응답 생성에 실패했습니다.')
       }
     }

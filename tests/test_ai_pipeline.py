@@ -168,3 +168,24 @@ async def test_streaming_chat_keeps_footer_events_and_saved_answer(monkeypatch):
         {"type": "chunk", "text": " footer"},
     ]
     save.assert_awaited_once_with(conv_id, "질문", "hello world footer", is_first=True)
+
+
+@pytest.mark.asyncio
+async def test_streaming_chat_replaces_generated_source_title_before_save(monkeypatch):
+    monkeypatch.setattr(chat_service, "_fetch_rag_and_web_context", AsyncMock(return_value=("자료", "웹 검색 생략", [], None)))
+    original = "## 📋 근거 출처 목록\n[법률] 소득세법 제101조 - 부당 Lerer계산"
+    corrected = "## 📋 근거 출처 목록\n[법률] 소득세법 제101조 - 양도소득의 부당행위계산"
+
+    async def stream(*args, **kwargs):
+        yield original
+
+    monkeypatch.setattr(chat_service, "_stream_llm_skip_think", stream)
+    monkeypatch.setattr(chat_service, "_append_source_list_if_missing", AsyncMock(side_effect=lambda answer, _: answer))
+    monkeypatch.setattr(chat_service, "_correct_source_titles", AsyncMock(return_value=corrected))
+    monkeypatch.setattr(chat_service, "build_citation_footer", lambda *args: "")
+    save = AsyncMock()
+    monkeypatch.setattr(chat_service, "_save_history", save)
+    conv_id = uuid4()
+    events = [event async for event in chat_service.stream_chat_response("질문", str(conv_id), "test-user")]
+    assert events == [{"type": "chunk", "text": original}, {"type": "replace", "text": corrected}]
+    save.assert_awaited_once_with(conv_id, "질문", corrected, is_first=True)

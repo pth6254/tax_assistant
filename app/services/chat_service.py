@@ -20,6 +20,7 @@ from app.services.calculator.engine import CALCULATORS, CalcRun
 from app.services.tools.planner import run_tools_for_query
 from app.services.law.history_context import needs_history, route as history_route
 from app.services.law.history_answer import answer as history_answer
+from app.services.law.lookup_service import get_law_article
 from app.services.citation_guard import apply_citation_guard, build_citation_footer, extract_citations
 from app.services.llm_client import call_llm, call_llm_structured, stream_llm
 from app.schemas.ai_output import CitationList, QueryClassification
@@ -254,6 +255,63 @@ _MAX_TOKENS_MULTI_QUERY = 150
 # 인용 목록을 재추출해 답변 끝에 덧붙인다. pattern 제약이 '제 55 조'류 표기 변형과
 # 마크다운/URL 혼입을 디코딩 단계에서 차단한다.
 _CITATION_SCHEMA = CitationList.model_json_schema()
+
+# 생성 모델이 출처 목록의 조문 제목을 오타·이상한 문자로 다시 쓰는 경우가 있다.
+# 제목은 생성 문구가 아니라 저장된 현행 조문을 기준으로 표시한다.
+_SOURCE_HEADING_RE = re.compile(r"(?m)^#{1,6}\s*(?:📋\s*)?근거 출처 목록\s*$")
+_SOURCE_LINE_RE = re.compile(
+    r"^(?P<reference>\s*(?:[-*]\s*)?\[(?:법률|시행령|시행규칙)\]\s*.+?\s+"
+    r"제\s*\d+\s*조(?:\s*의\s*\d+)?)(?:\s*[-–—]\s*.*)?$"
+)
+_SOURCE_MARKER_RE = re.compile(r"\[(?:법률|시행령|시행규칙)\]")
+
+
+async def _correct_source_titles(answer: str) -> str:
+    """현행 법령 출처 목록의 제목만 DB 원문으로 교정한다.
+
+    과거 법령 답변은 별도 경로를 사용하므로 현행 제목으로 덮어쓰지 않는다.
+    조문을 찾지 못하면 생성된 제목을 사실처럼 남기지 않고 번호만 남긴다.
+    """
+    heading = _SOURCE_HEADING_RE.search(answer)
+    if not heading:
+        return answer
+    before, section = answer[:heading.end()], answer[heading.end():]
+    corrected = []
+    for line in section.splitlines(keepends=True):
+        body = line.rstrip("\r\n")
+        ending = line[len(body):]
+        markers = list(_SOURCE_MARKER_RE.finditer(body))
+        if not markers:
+            corrected.append(line)
+            continue
+        parts = []
+        for index, marker in enumerate(markers):
+            start = 0 if index == 0 else marker.start()
+            end = markers[index + 1].start() if index + 1 < len(markers) else len(body)
+            segment = body[start:end]
+            trailing = segment[len(segment.rstrip()):]
+            match = _SOURCE_LINE_RE.fullmatch(segment.rstrip())
+            citations = extract_citations(segment) if match else []
+            if len(citations) != 1:
+                parts.append(segment)
+                continue
+            label, law_name, article_no = citations[0]
+            try:
+                article = await get_law_article(law_name, article_no)
+            except Exception:
+                logger.warning("[CITATION] 출처 제목 조회 실패", exc_info=True)
+                parts.append(segment)
+                continue
+            reference = match.group("reference")
+            matches_label = bool(article) and (
+                (label == "법률" and article.law_type == "법률")
+                or (label == "시행령" and article.law_name.endswith("시행령"))
+                or (label == "시행규칙" and article.law_name.endswith("시행규칙"))
+            )
+            title = article.article_title.strip() if matches_label else ""
+            parts.append(reference + (f" - {title}" if title else "") + trailing)
+        corrected.append("".join(parts) + ending)
+    return before + "".join(corrected)
 
 _CITATION_EXTRACT_PROMPT = (
     "답변이 근거로 삼은 법령 조문을 검색 자료와 대조하여 전부 나열하라.\n"
@@ -561,6 +619,7 @@ async def process_chat(query: str, conversation_id: str, user_id: str, *, tool_e
     chain = text_chain(_FINAL_PROMPT_TEMPLATE, _generate_answer, name="tax_answer")
     answer = await chain.ainvoke(_final_prompt_values(query, context, web_results, history, calc_run))
     answer   = await _append_source_list_if_missing(answer, context)
+    answer   = await _correct_source_titles(answer)
     answer   = apply_citation_guard(answer, context, calc_run.context if calc_run else None)
 
     await _save_history(conv_id, query, answer, is_first=len(history) == 0,
@@ -657,6 +716,10 @@ async def stream_chat_response(
     if patched != answer:
         yield {"type": "chunk", "text": patched[len(answer):]}
         answer = patched
+    corrected = await _correct_source_titles(answer)
+    if corrected != answer:
+        yield {"type": "replace", "text": corrected}
+        answer = corrected
     calc_context = calc_run.context if calc_run else None
     footer = build_citation_footer(answer, context, calc_context)
     if footer:
