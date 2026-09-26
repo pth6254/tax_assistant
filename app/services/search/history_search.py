@@ -216,9 +216,12 @@ async def expand_reviewed_citations(version, results, day):
         if not any(seed['version_id'] == version['id'] and seed['article_no'] == p['article_no']
                    and a['quote'] in seed['content'] for seed in results):
             continue
-        original = await pool.fetchrow('''SELECT body,structure,content_hash FROM law_history.articles
+        originals = await pool.fetch('''SELECT body,structure,content_hash FROM law_history.articles
             WHERE snapshot_id=$1 AND article_number=$2 AND article_branch=$3 AND unit_kind='조문' ''',
             version['snapshot_id'], p['article_number'], p['article_branch'])
+        if len(originals) != 1:
+            continue
+        original = originals[0]
         if (not original or original['content_hash'] != p['article_hash']
                 or sha(original['body']) != original['content_hash'] or p['quote'] not in original['body']):
             continue

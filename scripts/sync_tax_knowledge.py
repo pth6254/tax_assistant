@@ -8,7 +8,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.database import close_pool
-from app.services.graph.knowledge_service import audit_all, candidates, review, sync, sync_all, validate_all_sources
+from app.services.graph.knowledge_service import (audit_all, candidates, repair_duplicate_provisions,
+    review, sync, sync_all, validate_all_sources)
 
 
 async def main(args):
@@ -27,6 +28,11 @@ async def main(args):
                 if report['checked'] % 250 == 0 or report['checked'] == report['total']:
                     print(json.dumps(report, ensure_ascii=False), flush=True)
             result = await validate_all_sources(limit=args.limit, progress=progress)
+        elif args.command == 'repair-duplicates':
+            def progress(report):
+                if report['scanned'] % 250 == 0 or report['scanned'] == report['total']:
+                    print(json.dumps(report, ensure_ascii=False), flush=True)
+            result = await repair_duplicate_provisions(apply=args.apply, progress=progress)
         elif args.command == 'candidates':
             result = await candidates(args.version_id, args.article)
         else:
@@ -51,6 +57,8 @@ if __name__ == '__main__':
     commands.add_parser('audit', help='Read-only source/graph coverage audit')
     command = commands.add_parser('validate', help='Read-only source XML/body/hash audit')
     command.add_argument('--limit', type=int)
+    command = commands.add_parser('repair-duplicates', help='Preview or repair ambiguous source references')
+    command.add_argument('--apply', action='store_true')
     command = commands.add_parser('review')
     command.add_argument('--key', required=True)
     command.add_argument('--reviewer', required=True)
@@ -60,5 +68,6 @@ if __name__ == '__main__':
     try:
         asyncio.run(main(parser.parse_args()))
     except Exception as error:
-        print(f'Knowledge graph operation failed ({type(error).__name__}); check scope and source.', file=sys.stderr)
+        detail = str(error) if isinstance(error, ValueError) else type(error).__name__
+        print(f'Knowledge graph operation failed: {detail}', file=sys.stderr)
         raise SystemExit(1)

@@ -11,7 +11,7 @@
 - `python scripts/collect_law_history.py discover|collect|status|versions|show|diff`: 현재 수집 법령의 과거 버전 아카이브. 기존 검색 데이터와 분리하며 실행·재개·한계는 [과거 법령 관리](../docs/LAW_HISTORY.md)를 참고한다.
 - 독립 수집·자동 전수 검수는 `bash dev/law-history-wsl.sh start`로 기동한다. `scripts/run_law_history_worker.py`는 해당 컨테이너의 배치 진입점이며 보고서는 `evaluation/runs/law-history/`에 보존한다.
 - 역사 임베딩/그래프는 `scripts/index_law_history.py prepare|graph|embed|all|status`와 `dev/history-index-wsl.sh`로 별도 실행한다. 실행·준비 상태·재개 규칙은 [역사 GraphRAG](../docs/HISTORY_RAG.md)를 참고한다.
-- 버전별 조·항·호·목 및 정의·명시적 인용 후보는 실행 중인 backend에서 `python scripts/sync_tax_knowledge.py sync|all|audit|validate|candidates|review`로 관리한다. 기본 미리보기, 범위 지정 `--apply`, 버전별 재개 체크포인트, 읽기 전용 전수 감사를 제공한다. 검수된 관계만 과거 법령 검색에 사용한다. [검수 절차](../docs/TAX_KNOWLEDGE_GRAPH.md).
+- 버전별 조·항·호·목 및 정의·명시적 인용 후보는 실행 중인 backend에서 `python scripts/sync_tax_knowledge.py sync|all|audit|validate|repair-duplicates|candidates|review`로 관리한다. 기본 미리보기, 범위 지정 `--apply`, 버전별 재개 체크포인트, 읽기 전용 전수 감사를 제공한다. 검수된 관계만 과거 법령 검색에 사용한다. [검수 절차](../docs/TAX_KNOWLEDGE_GRAPH.md).
 
 | 명령 | 용도 | 실행 시점 |
 |---|---|---|

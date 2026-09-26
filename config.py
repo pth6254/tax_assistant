@@ -117,6 +117,52 @@ THINK_ENABLED: bool  = os.getenv("THINK_ENABLED", "false").lower() == "true"  # 
 # Call sites select a fixed task name; arbitrary request input cannot choose a provider.
 LLM_TASK_SETTINGS: dict[str, LLMTaskSettings] = {name: _task_settings(name) for name in LLM_TASK_NAMES}
 
+
+@dataclass(frozen=True)
+class KGJudgeSettings:
+    provider: str
+    model: str
+    base_url: str
+    api_key: str = field(repr=False)
+    reasoning_effort: str | None = None
+    timeout_sec: float = 120
+    max_tokens: int = 512
+    input_budget_bytes: int = 6000
+    num_ctx: int = 8192
+
+
+def _kg_judge_settings() -> KGJudgeSettings:
+    provider = os.getenv('KG_JUDGE_PROVIDER', LLM_PROVIDER).lower()
+    if provider not in {'ollama', 'llamacpp', 'openai', 'openai-compatible', 'openrouter'}:
+        raise ValueError('Unsupported KG_JUDGE_PROVIDER')
+    default_url = (OLLAMA_BASE_URL if provider == 'ollama' else
+                   LLM_BASE_URL if provider == LLM_PROVIDER else
+                   'https://openrouter.ai/api/v1' if provider == 'openrouter' else
+                   'https://api.openai.com/v1' if provider == 'openai' else
+                   'http://localhost:8000/v1')
+    default_key = (OPENROUTER_API_KEY if provider == 'openrouter' else
+                   OPENAI_API_KEY if provider == 'openai' else LLM_API_KEY)
+    effort = os.getenv('KG_JUDGE_REASONING_EFFORT', '').lower() or None
+    if effort is not None and effort not in _VALID_EFFORT:
+        raise ValueError('Unsupported KG_JUDGE_REASONING_EFFORT')
+    settings = KGJudgeSettings(
+        provider=provider, model=os.getenv('KG_JUDGE_MODEL', CHAT_MODEL),
+        base_url=os.getenv('KG_JUDGE_BASE_URL', default_url),
+        api_key=os.getenv('KG_JUDGE_API_KEY') or default_key,
+        reasoning_effort=effort,
+        timeout_sec=float(os.getenv('KG_JUDGE_TIMEOUT_SEC', '120')),
+        max_tokens=int(os.getenv('KG_JUDGE_MAX_TOKENS', '512')),
+        input_budget_bytes=int(os.getenv('KG_JUDGE_INPUT_BUDGET_BYTES', '6000')),
+        num_ctx=int(os.getenv('KG_JUDGE_NUM_CTX', '8192')),
+    )
+    if min(settings.timeout_sec, settings.max_tokens,
+           settings.input_budget_bytes, settings.num_ctx) <= 0:
+        raise ValueError('KG_JUDGE limits must be positive')
+    return settings
+
+
+KG_JUDGE_SETTINGS: KGJudgeSettings = _kg_judge_settings()
+
 # 모든 chat 모델 호출에서 동일한 num_ctx를 사용해야 함 — 값이 다르면
 # Ollama가 요청마다 모델을 리로드하여 호출당 4~10초가 추가됨
 OLLAMA_NUM_CTX: int = int(os.getenv("OLLAMA_NUM_CTX", "4096"))

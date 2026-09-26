@@ -55,6 +55,7 @@
 [역사 GraphRAG 구조·검증 기록](docs/HISTORY_RAG.md).
 버전별 조·항·호·목, 명시적 정의·인용을 검수한 뒤 과거 법령 검색에만 사용하는
 [Knowledge Graph 적재·검수 절차](docs/TAX_KNOWLEDGE_GRAPH.md)도 제공합니다.
+수집 완료된 5,400개 과거 스냅샷의 구조 노드·관계 **후보**는 적재했으며, 답변 근거로 쓰는 관계는 별도 승인한 3개뿐입니다. 자동 원문 대조를 법적 의미 검수로 간주하지 않습니다.
 
 ### 선택형 GraphRAG
 
@@ -801,6 +802,8 @@ pytest --lf
 > API 테스트는 실제 DB·Ollama 없이 실행됩니다. 서비스 레이어를 mock으로 대체하여 HTTP 계층의 동작을 검증합니다.
 
 ### 요소별 품질 평가 및 hard negative 검증
+
+과거 법령 Knowledge Graph 관계 후보에는 [관계 전용 LLM Judge 절차](evaluation/KG_RELATION_REVIEW.md)를 적용할 수 있습니다. 원본 재대조 → 관계 문구 판정 → 인간 확정 라벨과 비교를 분리하며, 모델 판정만으로 Neo4j 관계를 승인하지 않습니다.
 
 ```bash
 # 합성 파싱·관계·산술 계약과 오답 반례 — DB/모델 불필요

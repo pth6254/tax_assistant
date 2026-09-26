@@ -4,7 +4,7 @@
 
 - PostgreSQL `law_history`의 보존 XML이 원본이다. Neo4j의 `TaxProvision`은 스냅샷별 조·항·호·목을 식별하고 `CHILD_OF`로 계층을 보존한다.
 - 명시적 따옴표 정의와 정식 법령명 조문 인용은 `KnowledgeAssertion` 후보로 추출한다. `reviewed` 관계만 과거 법령 RAG에 연결하며 검색 시 원문 해시와 실제 발췌를 재확인한다. 법적 의미·사건 적용시점의 자동 검증은 아니다.
-- 현재 현행 채팅은 기존 CITES GraphRAG, 버전 지정/기준일 과거 채팅은 검수된 Knowledge Graph 보충을 사용한다. 전체 버전 백필은 하지 않았다. 상세 운영은 `docs/TAX_KNOWLEDGE_GRAPH.md`.
+- 현재 현행 채팅은 기존 CITES GraphRAG, 버전 지정/기준일 과거 채팅은 검수된 Knowledge Graph 보충을 사용한다. 수집 완료된 과거 5,400개 스냅샷의 구조·관계 후보 백필은 끝났지만, 자동 추출 후보는 법적 검수 완료 관계가 아니다. 상세 운영은 `docs/TAX_KNOWLEDGE_GRAPH.md`.
 
 ## 생성 모델 작업별 설정 (2026-09-25)
 

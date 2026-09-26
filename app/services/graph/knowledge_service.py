@@ -22,14 +22,19 @@ def _key(*parts):
     return hashlib.sha256('|'.join(map(str, parts)).encode('utf-8')).hexdigest()
 
 
-def _walk(node, reference, snapshot_id, parent=None):
+def _walk(node, reference, snapshot_id, parent=None, seen=None):
     """Only numbered XML units become provisions; no text-only guessed units."""
+    if seen is None:
+        seen = {}
     own = lead(node)
     if not own.strip():
         return
-    key = _key('provision', snapshot_id, reference)
+    natural_key = _key('provision', snapshot_id, reference)
+    occurrence = seen.get(natural_key, 0)
+    seen[natural_key] = occurrence + 1
+    key = natural_key if occurrence == 0 else _key('provision-occurrence', natural_key, occurrence)
     yield dict(key=key, parent=parent, reference=reference, quote=own,
-               source_hash=sha(own), snapshot_id=snapshot_id)
+               source_hash=sha(own), snapshot_id=snapshot_id, occurrence=occurrence)
     for kind in _KINDS:
         for child in units(node, kind):
             value = number(child, kind)
@@ -41,12 +46,13 @@ def _walk(node, reference, snapshot_id, parent=None):
                 label = f'제{value[0]}호' + (f'의{value[1]}' if value[1] else '')
             else:
                 label = f'{value}목'
-            yield from _walk(child, f'{reference} {label}', snapshot_id, key)
+            yield from _walk(child, f'{reference} {label}', snapshot_id, key, seen)
 
 
 def build(version, articles):
     """Extract explicit definitions and named citations as review candidates."""
     provisions, concepts, references, assertions = [], {}, {}, []
+    seen = {}
     for row in articles:
         if row['unit_kind'] != '조문' or not row['article_number'].isdigit():
             continue
@@ -54,11 +60,12 @@ def build(version, articles):
             raise ValueError('Source article body hash mismatch')
         article_no = format_article_no(int(row['article_number']), int(row['article_branch'] or 0) or None)
         structure = json.loads(row['structure']) if isinstance(row['structure'], str) else row['structure']
-        for provision in _walk(structure, article_no, version['snapshot_id']):
+        for provision in _walk(structure, article_no, version['snapshot_id'], seen=seen):
             provision.update(version_id=version['id'], law_id=version['law_id'],
                              law_name=version['law_name'], article_no=article_no,
                              article_number=row['article_number'], article_branch=row['article_branch'],
-                             article_hash=row['content_hash'], source_url=version['source_url'])
+                             article_hash=row['content_hash'], source_url=version['source_url'],
+                             source_article_id=row['id'], source_order=row['source_order'])
             provisions.append(provision)
             quote = provision['quote']
             for match in _DEFINITION.finditer(quote):
@@ -79,15 +86,16 @@ def build(version, articles):
     return provisions, list(concepts.values()), list(references.values()), assertions
 
 
-async def source_version(version_id, article_no=None):
+async def source_version(version_id, article_no=None, *, allow_empty=False):
     pool = await get_pool()
-    version = await pool.fetchrow('''SELECT v.id,v.law_id,v.law_name,s.id AS snapshot_id,s.source_url
+    version = await pool.fetchrow('''SELECT v.id,v.law_id,v.law_name,v.law_type,
+        v.effective_date,v.promulgation_date,s.id AS snapshot_id,s.source_url
         FROM law_history.versions v JOIN law_history.snapshots s ON s.version_id=v.id
         WHERE v.id=$1 AND v.fetch_status='complete' ORDER BY s.collected_at DESC,s.id DESC LIMIT 1''', version_id)
     if not version:
         raise ValueError('Completed law version with snapshot required')
     version = dict(version)
-    sql = '''SELECT article_number,article_branch,unit_kind,body,content_hash,structure
+    sql = '''SELECT id,source_order,article_number,article_branch,unit_kind,body,content_hash,structure
         FROM law_history.articles WHERE snapshot_id=$1 AND unit_kind='조문' '''
     args = [version['snapshot_id']]
     if article_no:
@@ -96,9 +104,9 @@ async def source_version(version_id, article_no=None):
             raise ValueError('Select one complete article, without a subdivision')
         sql += ' AND article_number=$2 AND article_branch=$3'
         args.extend([str(ref.article), str(ref.article_branch or '')])
-    sql += ' ORDER BY article_number,article_branch'
+    sql += ' ORDER BY article_number,article_branch,source_order,id'
     articles = [dict(r) for r in await pool.fetch(sql, *args)]
-    if not articles:
+    if not articles and not allow_empty:
         raise ValueError('No source articles in selected scope')
     return version, articles
 
@@ -113,9 +121,24 @@ async def _ensure_constraints(driver):
         database_=config.NEO4J_DATABASE)
 
 
-async def _write(driver, version, provisions, concepts, references, assertions, counts, *, complete):
+async def _write(driver, version, provisions, concepts, references, assertions, counts,
+                 *, complete, replace=False):
     async with driver.session(database=config.NEO4J_DATABASE) as session:
         async def write(tx):
+            if replace:
+                result = await tx.run('''MATCH (s:HistorySnapshot {id:$snapshot})
+                    -[:HAS_KG_PROVISION]->(p:TaxProvision)
+                    -[:SUBJECT_OF]->(a:KnowledgeAssertion {review_status:'reviewed'})
+                    RETURN count(a) AS total''', snapshot=version['snapshot_id'])
+                if (await result.single())['total']:
+                    raise ValueError(f'Snapshot {version["snapshot_id"]} has reviewed relations')
+                await (await tx.run('''MATCH (s:HistorySnapshot {id:$snapshot})
+                    -[:HAS_KG_PROVISION]->(p:TaxProvision)
+                    -[:SUBJECT_OF]->(a:KnowledgeAssertion) DETACH DELETE a''',
+                    snapshot=version['snapshot_id'])).consume()
+                await (await tx.run('''MATCH (s:HistorySnapshot {id:$snapshot})
+                    -[:HAS_KG_PROVISION]->(p:TaxProvision)
+                    DETACH DELETE p''', snapshot=version['snapshot_id'])).consume()
             await (await tx.run('''UNWIND $rows AS row
                 MATCH (s:HistorySnapshot {id:row.snapshot_id})
                 MERGE (p:TaxProvision {key:row.key}) SET p += row
@@ -142,9 +165,12 @@ async def _write(driver, version, provisions, concepts, references, assertions, 
                 await (await tx.run('''MERGE (m:KnowledgeSync {snapshot_id:$snapshot})
                     SET m.version_id=$version,m.article_count=$articles,
                         m.provision_count=$provisions,m.assertion_count=$assertions,
+                        m.unique_assertion_count=$unique_assertions,
+                        m.duplicate_repaired=$replaced,
                         m.completed_at=datetime()''', snapshot=version['snapshot_id'],
                     version=version['id'], articles=counts['articles'],
-                    provisions=counts['provisions'], assertions=counts['assertions'])).consume()
+                    provisions=counts['provisions'], assertions=counts['assertions'],
+                    unique_assertions=len({a['key'] for a in assertions}), replaced=replace)).consume()
         await session.execute_write(write)
 
 
@@ -180,24 +206,82 @@ async def sync_all(*, apply=False, limit=None, progress=None):
         selected = pending[:limit] if limit is not None else pending
         report = dict(total=len(versions), already_complete=len(done.intersection(
             row['snapshot_id'] for row in versions)), pending=len(pending), selected=len(selected),
-            completed=0, articles=0, provisions=0, assertions=0)
+            next_version_id=selected[0]['id'] if selected else None,
+            completed=0, empty_article_snapshots=0, articles=0, provisions=0, assertions=0)
         if not apply:
             return report
         await _ensure_constraints(driver)
         for row in selected:
-            version, articles = await source_version(row['id'])
-            provisions, concepts, references, assertions = build(version, articles)
+            try:
+                version, articles = await source_version(row['id'], allow_empty=True)
+                provisions, concepts, references, assertions = build(version, articles)
+            except ValueError as exc:
+                raise ValueError(f'Version {row["id"]} source validation: {exc}') from exc
             counts = dict(snapshot_id=version['snapshot_id'], articles=len(articles),
                           provisions=len(provisions), concepts=len(concepts),
                           references=len(references), assertions=len(assertions))
             await _write(driver, version, provisions, concepts, references, assertions,
                          counts, complete=True)
             report['completed'] += 1
+            if not articles:
+                report['empty_article_snapshots'] += 1
             for name in ('articles', 'provisions', 'assertions'):
                 report[name] += counts[name]
             if progress is not None:
                 progress(report)
         return report
+
+
+async def repair_duplicate_provisions(*, apply=False, progress=None):
+    """Rebuild only snapshots where source references collide; reconcile assertion counts."""
+    pool = await get_pool()
+    rows = await pool.fetch('''SELECT v.id FROM law_history.versions v
+        WHERE v.fetch_status='complete' ORDER BY v.id''')
+    report = dict(total=len(rows), scanned=0, ambiguous_snapshots=0, duplicate_provisions=0,
+                  repaired=0, already_repaired=0, reconciled=0)
+    async with connect() as driver:
+        done_rows, _, _ = await driver.execute_query(Query('''MATCH (m:KnowledgeSync)
+            WHERE m.duplicate_repaired=true RETURN m.snapshot_id AS snapshot_id''', timeout=10),
+            database_=config.NEO4J_DATABASE, routing_='r')
+        done = {record['snapshot_id'] for record in done_rows}
+        if apply:
+            await _ensure_constraints(driver)
+        updates = []
+        for row in rows:
+            version, articles = await source_version(row['id'], allow_empty=True)
+            provisions, concepts, references, assertions = build(version, articles)
+            duplicates = sum(bool(p['occurrence']) for p in provisions)
+            report['scanned'] += 1
+            if duplicates:
+                report['ambiguous_snapshots'] += 1
+                report['duplicate_provisions'] += duplicates
+                if version['snapshot_id'] in done:
+                    report['already_repaired'] += 1
+                elif apply:
+                    counts = dict(articles=len(articles), provisions=len(provisions),
+                                  assertions=len(assertions))
+                    await _write(driver, version, provisions, concepts, references,
+                                 assertions, counts, complete=True, replace=True)
+                    report['repaired'] += 1
+            elif apply:
+                updates.append(dict(snapshot=version['snapshot_id'],
+                                    unique=len({a['key'] for a in assertions})))
+                if len(updates) >= 250:
+                    await driver.execute_query('''UNWIND $rows AS row
+                        MATCH (m:KnowledgeSync {snapshot_id:row.snapshot})
+                        SET m.unique_assertion_count=row.unique''',
+                        rows=updates, database_=config.NEO4J_DATABASE)
+                    report['reconciled'] += len(updates)
+                    updates.clear()
+            if progress is not None:
+                progress(report)
+        if apply and updates:
+            await driver.execute_query('''UNWIND $rows AS row
+                MATCH (m:KnowledgeSync {snapshot_id:row.snapshot})
+                SET m.unique_assertion_count=row.unique''',
+                rows=updates, database_=config.NEO4J_DATABASE)
+            report['reconciled'] += len(updates)
+    return report
 
 
 async def audit_all():
@@ -211,7 +295,8 @@ async def audit_all():
     async with connect() as driver:
         rows, _, _ = await driver.execute_query(Query('''MATCH (m:KnowledgeSync)
             RETURN m.snapshot_id AS snapshot_id,m.article_count AS article_count,
-                   m.provision_count AS provision_count,m.assertion_count AS assertion_count''', timeout=10),
+                   m.provision_count AS provision_count,m.assertion_count AS assertion_count,
+                   m.unique_assertion_count AS unique_assertion_count''', timeout=10),
             database_=config.NEO4J_DATABASE, routing_='r')
         markers = {row['snapshot_id']: dict(row) for row in rows}
         counts = {}
@@ -227,15 +312,22 @@ async def audit_all():
     missing = sorted(source_ids - markers.keys())
     extra = sorted(markers.keys() - source_ids)
     expected_provisions = sum(markers[s]['provision_count'] for s in source_ids & markers.keys())
-    expected_assertions = sum(markers[s]['assertion_count'] for s in source_ids & markers.keys())
+    expected_assertions = sum(markers[s]['unique_assertion_count']
+                              if markers[s]['unique_assertion_count'] is not None
+                              else markers[s]['assertion_count']
+                              for s in source_ids & markers.keys())
+    unreconciled = sum(markers[s]['unique_assertion_count'] is None
+                       for s in source_ids & markers.keys())
     return dict(source_snapshots=len(source_ids), completed_snapshots=len(source_ids & markers.keys()),
                 missing_snapshots=len(missing), missing_sample=missing[:10],
                 unexpected_markers=len(extra), unexpected_sample=extra[:10],
                 source_articles=sum(markers[s]['article_count'] for s in source_ids & markers.keys()),
                 expected_provisions=expected_provisions, actual_provisions=counts['TaxProvision'],
                 expected_assertions=expected_assertions, actual_assertions=counts['KnowledgeAssertion'],
+                unreconciled_snapshots=unreconciled,
                 review_status=reviews,
-                complete=not missing and not extra and expected_provisions == counts['TaxProvision']
+                complete=not missing and not extra and not unreconciled
+                    and expected_provisions == counts['TaxProvision']
                     and expected_assertions == counts['KnowledgeAssertion'])
 
 
@@ -247,20 +339,40 @@ async def validate_all_sources(*, limit=None, progress=None):
     rows = await pool.fetch('''SELECT v.id FROM law_history.versions v
         WHERE v.fetch_status='complete' ORDER BY v.id''')
     selected = rows[:limit] if limit is not None else rows
-    report = dict(total=len(rows), checked=0, articles=0, provisions=0,
+    report = dict(total=len(rows), checked=0, empty_article_snapshots=0, articles=0, provisions=0,
+                  duplicate_provision_keys=0, conflicting_provision_keys=0,
+                  duplicate_assertion_keys=0, ambiguous_versions=0,
                   hash_or_parse_errors=0, xml_body_mismatches=0, examples=[])
     for row in selected:
         try:
-            version, articles = await source_version(row['id'])
-            provisions, _, _, _ = build(version, articles)
-            bodies = {}
-            for article in articles:
-                if article['article_number'].isdigit():
-                    key = (article['article_number'], article['article_branch'])
-                    bodies[key] = article['body']
+            version, articles = await source_version(row['id'], allow_empty=True)
+            if not articles:
+                report['empty_article_snapshots'] += 1
+            provisions, _, _, assertions = build(version, articles)
+            first_quotes = {}
+            ambiguous = False
             for provision in provisions:
-                key = (provision['article_number'], provision['article_branch'])
-                if provision['quote'] not in bodies.get(key, ''):
+                reference = provision['reference']
+                if provision['occurrence']:
+                    ambiguous = True
+                    report['duplicate_provision_keys'] += 1
+                    if first_quotes[reference] != provision['quote']:
+                        report['conflicting_provision_keys'] += 1
+                    if len(report['examples']) < 10:
+                        report['examples'].append(dict(version_id=row['id'],
+                            reference=provision['reference'], issue='duplicate_provision'))
+                else:
+                    first_quotes[reference] = provision['quote']
+            if ambiguous:
+                report['ambiguous_versions'] += 1
+            report['duplicate_assertion_keys'] += len(assertions) - len({a['key'] for a in assertions})
+            # An historical snapshot can contain an amendment directive and the
+            # consolidated article under the same number. Compare each provision
+            # with the exact source row that produced it, not the last row with
+            # that article number.
+            bodies = {article['id']: article['body'] for article in articles}
+            for provision in provisions:
+                if provision['quote'] not in bodies.get(provision['source_article_id'], ''):
                     report['xml_body_mismatches'] += 1
                     if len(report['examples']) < 10:
                         report['examples'].append(dict(version_id=row['id'],
@@ -307,9 +419,12 @@ async def review(assertion_key, *, approve, reviewer):
         record = dict(rows[0])
         provision, assertion = record['provision'], record['assertion']
         pool = await get_pool()
-        source = await pool.fetchrow('''SELECT body,structure,content_hash FROM law_history.articles
+        sources = await pool.fetch('''SELECT body,structure,content_hash FROM law_history.articles
             WHERE snapshot_id=$1 AND article_number=$2 AND article_branch=$3 AND unit_kind='조문' ''',
             provision['snapshot_id'], provision['article_number'], provision['article_branch'])
+        if len(sources) != 1:
+            raise ValueError('Source article is missing or ambiguous')
+        source = sources[0]
         if (not source or source['content_hash'] != provision['article_hash']
                 or sha(source['body']) != source['content_hash']):
             raise ValueError('Source snapshot no longer matches assertion')
@@ -365,9 +480,12 @@ async def reviewed_definitions(version, query):
         if row['term'] not in terms:
             continue
         p, a = row['provision'], row['assertion']
-        source = await pool.fetchrow('''SELECT body,structure,content_hash FROM law_history.articles
+        sources = await pool.fetch('''SELECT body,structure,content_hash FROM law_history.articles
             WHERE snapshot_id=$1 AND article_number=$2 AND article_branch=$3 AND unit_kind='조문' ''',
             version['snapshot_id'], p['article_number'], p['article_branch'])
+        if len(sources) != 1:
+            continue
+        source = sources[0]
         if (not source or source['content_hash'] != p['article_hash']
                 or sha(source['body']) != source['content_hash'] or p['quote'] not in source['body']):
             continue

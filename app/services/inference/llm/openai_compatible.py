@@ -26,6 +26,7 @@ class OpenAICompatibleLLMProvider:
         self.provider = provider
         self.reasoning_effort = reasoning_effort
         self.timeout = timeout
+        self._usage_totals: dict[str, float | int] = {}
         self._client = httpx.AsyncClient(
             base_url=base_url.rstrip("/") + "/",
             headers={"Authorization": f"Bearer {api_key}"},
@@ -104,8 +105,14 @@ class OpenAICompatibleLLMProvider:
         safe = {k: v for k, v in usage.items()
                 if k in {"prompt_tokens", "completion_tokens", "total_tokens", "cost"}
                 and type(v) in {int, float}}
+        for key, value in safe.items():
+            self._usage_totals[key] = self._usage_totals.get(key, 0) + value
         logger.info("LLM usage provider=%s model=%s purpose=%s metrics=%s",
                     self.provider, self.model, llm_purpose.get(), safe)
+
+    def usage_snapshot(self) -> dict[str, float | int]:
+        """Provider-reported totals only; a missing cost is not zero cost."""
+        return dict(self._usage_totals)
 
     async def _json_response(self, payload: dict) -> dict:
         async with self._response(payload) as response:
