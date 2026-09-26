@@ -35,7 +35,7 @@ async def get_deduction(tax_type: str, deduction_name: str, as_of: date | None =
         pool = await get_pool()
         async with pool.acquire() as conn:
             row = await conn.fetchrow("""
-                SELECT amount, rate, max_amount, source_article, condition
+                SELECT amount, rate, max_amount, source_article, condition, effective_date
                 FROM tax_deductions
                 WHERE tax_type = $1 AND deduction_name = $2 AND effective_date <= $3
                 ORDER BY effective_date DESC
@@ -48,18 +48,26 @@ async def get_deduction(tax_type: str, deduction_name: str, as_of: date | None =
         raise classify_error(exc, operation="tax_repository") from exc
 
 
-async def get_source_articles(tax_type: str) -> list[str]:
-    """해당 세목의 모든 근거 조문 목록."""
+async def get_source_articles(tax_type: str, as_of: date | None = None) -> list[str]:
+    """Return source names used by the latest available bracket and deduction rows."""
     try:
         pool = await get_pool()
         async with pool.acquire() as conn:
             rows = await conn.fetch("""
                 SELECT DISTINCT source_article FROM (
-                    SELECT source_article FROM tax_brackets WHERE tax_type = $1 AND source_article IS NOT NULL
+                    SELECT source_article FROM tax_brackets
+                    WHERE tax_type = $1 AND source_article IS NOT NULL
+                      AND effective_date = (SELECT max(effective_date) FROM tax_brackets
+                                            WHERE tax_type = $1 AND effective_date <= $2)
                     UNION
-                    SELECT source_article FROM tax_deductions WHERE tax_type = $1 AND source_article IS NOT NULL
+                    SELECT d.source_article FROM tax_deductions d
+                    WHERE d.tax_type = $1 AND d.source_article IS NOT NULL
+                      AND d.effective_date = (SELECT max(x.effective_date) FROM tax_deductions x
+                                              WHERE x.tax_type = d.tax_type
+                                                AND x.deduction_name = d.deduction_name
+                                                AND x.effective_date <= $2)
                 ) t
-            """, tax_type)
+            """, tax_type, as_of or date.today())
         return [r['source_article'] for r in rows]
     except Exception as exc:
         raise classify_error(exc, operation="tax_repository") from exc

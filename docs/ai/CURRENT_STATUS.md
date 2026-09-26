@@ -1,5 +1,11 @@
 # 현재 구현 상태
 
+## 2026-09-26 종합소득세 상담 흐름 배포
+
+- `consultation_cases` Alembic revision `20260926_0006`을 적용했다. 사용자별 상담 생성·조회·삭제, 4개 결정적 추가 질문, 문서 체크리스트 연결/자료 없음/재확인, 귀속연도별 참고 계산 스냅샷과 기존 대화 연결을 API 및 프런트엔드에 반영했다.
+- WSL 가상환경 활성화 후 `dev/docker-up-wsl.sh backend frontend`로 최신 이미지를 배포했고 backend healthy, frontend 3002 HTTP 200, Alembic head를 확인했다. 임시 계정의 실제 API 스모크, 합성 Edge 브라우저 상담 흐름, 컨테이너 전체 테스트 722 passed/2 skipped, frontend 14 passed/빌드 성공을 확인했다.
+- 현재 상담 유형은 종합소득세 1개다. 입력 4개만 쓰는 참고 계산이므로 개별 공제·세액감면·경과규정·신고서 작성/제출 및 서류 자동 검증은 미구현이다. DB 자료 시행일과 귀속연도 적용 적합성을 전문가가 검수해야 한다.
+
 ## 2026-09-26 관계 인간 검수 양식 준비
 
 - 56개 카드를 Judge 결과·구성 유형 없이 재배열한 블라인드 양식 `evaluation/sources/kg_relation_blind_review_20260926.json`을 생성했다. `evaluation/kg_relation_human_review.py prepare/finalize`로 재생성·완료 검증·골드 변환을 지원한다. 원본 카드/해시 변조, 빈 라벨·근거·검수자·날짜, 원본 미확인, 시점 미기록을 거부한다.

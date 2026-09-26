@@ -15,7 +15,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import close_pool, get_pool
-from app.routers import auth, chat, upload, calculator, law, tax_schedule, users, conversations, health
+from app.routers import auth, chat, upload, calculator, law, tax_schedule, users, conversations, health, consultation_cases
 from app.services.embedding_service import close_http_client
 from app.services.llm_client import close_llm_client
 from config import (
@@ -74,6 +74,7 @@ app.include_router(chat.router)
 app.include_router(calculator.router)
 app.include_router(law.router)
 app.include_router(tax_schedule.router)
+app.include_router(consultation_cases.router)
 
 if __name__ == "__main__":
     import uvicorn

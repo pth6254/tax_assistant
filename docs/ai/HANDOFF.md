@@ -1,5 +1,11 @@
 # 세션 인수인계
 
+## 2026-09-26 종합소득세 상담 작업 공간
+
+- Alembic `20260926_0006` 및 `/api/consultation-cases`와 React 상담 화면을 배포했다. 질문 → 4개 계산 조건 확인 → 사용자 PDF 연결/자료 없음 기록 → 귀속연도 기준 참고 계산 및 근거 질문의 첫 수직 흐름이다. `dev/probe_consultation_case.py` 실제 API 스모크는 임시 데이터만 만들고 제거했다.
+- 검증: 최신 backend 컨테이너 `722 passed, 2 skipped`, frontend 14 passed/빌드 성공, `frontend/tests/cases.browser.cjs` 합성 Edge UI 통과, Alembic head 적용, frontend 3002 HTTP 200.
+- 후속: 종합소득세 소득 유형·개별 공제 및 공제 증빙의 자격 규칙을 도메인 전문가와 설계하고, 귀속연도별 세율/공제 DB와 경과규정의 법적 적용을 검수해야 한다. 연결 문서는 파일명 기반이므로 동일 파일명 재업로드를 독립 버전으로 추적하려면 문서 ID 도입이 필요하다. 실제 신고서 자동 작성/제출과 세무 정답성 검증은 이번 범위가 아니다.
+
 ## 2026-09-26 관계 블라인드 검수 인계
 - `evaluation/sources/kg_relation_blind_review_20260926.json`에 56건 블라인드 양식을 생성했다. Judge 예측·추출/혼동 생성 유형을 포함하지 않으며 `review` 필드는 전부 비어 있다. 파일은 Git 제외이며 기존 풀·결과는 보존했다.
 - 실제 법령 검수자가 문구상 관계 라벨, 원본 확인, 대상 버전 시점 상태, 이유·검수자·날짜를 직접 기록해야 한다. 완성본을 새 파일로 저장한 뒤 `python -m evaluation.kg_relation_human_review finalize`로 엄격 검증하고 `kg_relation_score.py`로 비교한다. 정확한 명령은 `evaluation/KG_RELATION_REVIEW.md`.

@@ -11,6 +11,11 @@ class TaxStep(BaseModel):
     amount: int
 
 
+class TaxBasis(BaseModel):
+    queried_on: str
+    effective_dates: list[str]
+
+
 class CalculationResult(BaseModel):
     tax_type: str
     steps: list[TaxStep]
@@ -19,6 +24,7 @@ class CalculationResult(BaseModel):
     final_tax: int
     effective_rate: float
     source_articles: list[str]
+    basis: TaxBasis | None = None
 
 
 # ── 요청 스키마 ──────────────────────────────────────────────────────

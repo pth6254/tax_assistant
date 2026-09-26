@@ -9,6 +9,7 @@ import CalculatorScreen from './components/Calculator/CalculatorScreen'
 import DocumentsScreen from './components/Documents/DocumentsScreen'
 import ProfileScreen from './components/Profile/ProfileScreen'
 import TaxCalendarScreen from './components/TaxCalendar/TaxCalendarScreen'
+import CasesScreen from './components/Cases/CasesScreen'
 import Icon from './components/ui/Icon'
 import Notice from './components/ui/Notice'
 export default function App() {
@@ -34,6 +35,11 @@ function Workspace({ user, onLogout }) {
     if (!currentId) { await newConversation(question); return }
     setPendingQuestion(question); changeView('chat')
   }
+  const openCaseChat = (id, question) => {
+    select(id); refresh()
+    if (question) setPendingQuestion({ id, query: question })
+    changeView('chat')
+  }
   const current = conversations.find(c => c.id === currentId)
   return <div className="app-shell">
     {!collapsed && <button className="sidebar-scrim" aria-label="메뉴 닫기" onClick={() => setCollapsed(true)} />}
@@ -45,6 +51,7 @@ function Workspace({ user, onLogout }) {
       <Notice>{actionError}</Notice>
       <div className="view-host">
         {view === 'documents' ? <DocumentsScreen library={library} onAsk={ask} />
+          : view === 'cases' ? <CasesScreen library={library} onOpenDocuments={() => changeView('documents')} onOpenChat={openCaseChat} />
           : view === 'calculator' ? <CalculatorScreen initial={prefill} onInitialConsumed={() => setPrefill(null)} onAskAboutResult={ask} />
           : view === 'calendar' ? <TaxCalendarScreen />
           : view === 'profile' ? <ProfileScreen onLogout={onLogout} onOpenCalendar={() => changeView('calendar')} />
