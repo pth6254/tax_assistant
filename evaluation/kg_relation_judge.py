@@ -217,6 +217,12 @@ async def verify_pool(pool, *, max_cards=None):
             'counts': dict(Counter(row['status'] for row in results)), 'results': results}
 
 
+def count_attempts(previous_attempts, existing_keys, results):
+    """Keep spent retries in the total while counting resumed successes once."""
+    return previous_attempts + sum(len(row.get('runs', [])) for row in results
+                                   if row['assertion_key'] not in existing_keys)
+
+
 def main():
     import config
     from app.services.inference.llm import create_llm_provider
@@ -266,6 +272,8 @@ def main():
         if checkpoint.get('identity') != identity:
             parser.error('Checkpoint pool, prompt or model configuration differs')
         prior = checkpoint['results']
+        previous_attempts = checkpoint.get('attempted_calls',
+                                           sum(len(row.get('runs', [])) for row in prior))
         if args.retry_failed:
             prior = [row for row in prior if row['status'] not in
                      {'model_error', 'partial_model_error', 'source_blocked'}]
@@ -274,7 +282,9 @@ def main():
         if checkpoint_path.exists():
             parser.error('Checkpoint already exists; use --resume or a new output path')
         prior = []
+        previous_attempts = 0
         previous_usage = {}
+    prior_keys = {row['assertion_key'] for row in prior}
     provider = create_llm_provider(settings.provider,
         base_url=settings.base_url, api_key=settings.api_key, model=settings.model,
         timeout=settings.timeout_sec, thinking=False, num_ctx=settings.num_ctx,
@@ -286,11 +296,14 @@ def main():
         return {key: previous_usage.get(key, 0) + current.get(key, 0)
                 for key in previous_usage.keys() | current.keys()}
 
+    def total_attempts(results):
+        return count_attempts(previous_attempts, prior_keys, results)
+
     def save_checkpoint(results, selected_count):
         checkpoint = {'schema_version': '1.0', 'identity': identity,
                       'pool_hash': digest(pool), 'run_config': run_config,
                       'completed': len(results), 'selected': selected_count,
-                      'attempted_calls': sum(len(row.get('runs', [])) for row in results),
+                      'attempted_calls': total_attempts(results),
                       'provider_usage': observed_usage(),
                       'results': results}
         temporary = Path(str(checkpoint_path) + '.tmp')
@@ -313,7 +326,7 @@ def main():
     result['run_config'] = run_config
     result['provider'] = settings.provider
     result['model'] = settings.model
-    result['attempted_calls'] = sum(len(row.get('runs', [])) for row in result['results'])
+    result['attempted_calls'] = total_attempts(result['results'])
     result['provider_usage'] = observed_usage()
     with args.output.open('x', encoding='utf-8') as file:
         json.dump(result, file, ensure_ascii=False, indent=2)

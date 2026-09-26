@@ -144,6 +144,7 @@ async def collect_auto(*, laws_per_level=3, per_kind=3, challenge_per_kind=6,
             versions = await pool.fetch('''SELECT id,effective_date FROM law_history.versions
                 WHERE law_id=$1 AND fetch_status='complete' AND effective_date <= $2
                 ORDER BY effective_date,id''', law['law_id'], as_of)
+            versions = [row for row in versions if row['effective_date'] <= as_of]
             chosen = set()
             old_versions = [row for row in versions if row['effective_date'] < old_before]
             for era, ordered in (('old', list(reversed(old_versions))),

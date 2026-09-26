@@ -1,5 +1,11 @@
 # 세션 인수인계
 
+## 2026-09-26 관계 평가 표본·배치 확장
+- `evaluation/kg_relation_review.py --auto`로 기준일 2026-09-26 이전 시행 버전만 포함한 6개 법령·56개 후보 카드 생성. 법률/시행령/시행규칙 19/19/18, 과거/최근 27/29, DEFINES/CITES 28/28, 대상 교환 혼동 후보 8건. 결과 `evaluation/sources/kg_relation_stratified.json`은 Git 제외. 최초 초안에는 미래 시행 버전이 섞였으나 기준일 필터 추가 후 초안·해당 진단 파일을 제거했다.
+- 전체 56건 원본 재검증 결과 `source_verified=56`; 저장 결과 `evaluation/runs/kg-relation-preflight-asof-20260926.json`. OpenRouter Luna 2건 실호출 결과 `advisory_only=2`, 시도 2회, 제공자 보고 727 입력/141 출력 토큰·cost 0.0001432. 결과 `evaluation/runs/kg-relation-asof-smoke-20260926.json`. 모두 모델 의견이며 인간 골드 라벨은 0건.
+- `KG_JUDGE_*` 전용 설정과 카드별 원자적 체크포인트, 동일 설정 재개/명시적 실패 재시도, 제공자 사용량 기록을 구현했다. 아직 LangSmith 관계 평가 업로드, 전문가 라벨, 실제 법적 적용 판단 비교는 없다.
+- 2026-09-26 최신 backend 이미지를 `dev/docker-up-wsl.sh backend`로 재생성했고 `docker exec tax_backend pytest -q`: 705 passed/2 skipped. 체크포인트 중단·재개와 미래 시행 버전 배제·재시도 호출 수 회귀 테스트를 포함한다.
+
 ## 2026-09-26 관계 LLM Judge 평가 경로 추가
 - `evaluation/kg_relation_judge.py`: 원본 재대조가 통과한 미검수 관계 카드만 provider 중립 `structured()` 호출로 진단한다. 2회 기본 반복, exact 원문 인용 검증, 입력 예산·오류 유보가 있으며 결과를 로컬 JSON으로 저장한다. Neo4j 승인/채팅 경로는 변경하지 않는다.
 - `evaluation/kg_relation_score.py`: 별도 인간 검수 gold의 출처 풀 해시·검수자·날짜를 확인한 뒤에만 커버리지/정확도/정밀도/재현율/hard negative 오인율을 계산한다. 실제 인간 gold는 아직 0건이고 LangSmith 업로드도 아직 연결하지 않았다. 문서: `evaluation/KG_RELATION_REVIEW.md`.

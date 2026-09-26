@@ -1,5 +1,10 @@
 # 프로젝트 공통 컨텍스트
 
+## 관계 평가 배치 (2026-09-26)
+
+- `evaluation/kg_relation_review.py --auto`는 법률·시행령·시행규칙과 과거·최근 버전에서 관계 카드를 결정론적으로 추출한다. `--as-of` 이후 시행 버전은 제외한다. 교란 대상 카드는 미검수 후보이며 인간 정답이 아니다.
+- `evaluation/kg_relation_judge.py`는 `KG_JUDGE_*` 전용 설정으로 평가 모델을 선택하고 카드별 진행을 원자적으로 저장해 같은 입력·설정으로 재개한다. 제공자가 돌려준 사용량만 기록하며 없으면 비용을 알 수 없다고 표시한다. `kg_relation_score.py`의 품질 점수에는 독립적인 인간 골드가 필요하다.
+
 ## 버전별 법령 Knowledge Graph (2026-09-25)
 
 - PostgreSQL `law_history`의 보존 XML이 원본이다. Neo4j의 `TaxProvision`은 스냅샷별 조·항·호·목을 식별하고 `CHILD_OF`로 계층을 보존한다.

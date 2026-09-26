@@ -1,11 +1,13 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+from datetime import date
 
 import pytest
 import config
 
-from evaluation.kg_relation_judge import RelationVerdict, assess, evaluate, validate_pool, verify_card
-from evaluation.kg_relation_review import challenge_cards, make_cards
+from evaluation.kg_relation_judge import (RelationVerdict, assess, count_attempts, evaluate,
+                                          validate_pool, verify_card)
+from evaluation.kg_relation_review import challenge_cards, collect_auto, make_cards
 from evaluation.kg_relation_score import score
 from evaluation.schema import digest
 from tests.test_tax_knowledge import sample
@@ -168,6 +170,44 @@ def test_provider_usage_snapshot_preserves_missing_cost():
         'prompt_tokens': 12, 'completion_tokens': 4, 'cost': 0.001}
     provider._usage_totals.pop('cost')
     assert 'cost' not in provider.usage_snapshot()
+
+
+def test_retry_attempt_total_includes_previous_failed_call():
+    rows = [{'assertion_key': 'ok', 'runs': [{'verdict': 'supported'}]},
+            {'assertion_key': 'failed', 'runs': [{'verdict': 'supported'}]}]
+    assert count_attempts(2, {'ok'}, rows) == 3
+
+
+@pytest.mark.asyncio
+async def test_automatic_sampling_excludes_future_versions(monkeypatch):
+    from evaluation import kg_relation_review
+
+    names = ['국세기본법', '국세기본법 시행령', '국세기본법 시행규칙']
+    laws = [dict(law_id=str(index), law_name=name, first_date=date(2015, 1, 1))
+            for index, name in enumerate(names, 1)]
+    version_rows = [[dict(id=index * 100 + offset, effective_date=day)
+                     for offset, day in enumerate((date(2015, 1, 1),
+                                                   date(2026, 1, 1), date(2028, 1, 1)), 1)]
+                    for index in range(1, 4)]
+    pool = AsyncMock()
+    pool.fetch.side_effect = [laws, *version_rows]
+    monkeypatch.setattr(kg_relation_review, 'get_pool', AsyncMock(return_value=pool))
+    monkeypatch.setattr(kg_relation_review, 'close_pool', AsyncMock())
+    _, article = sample()
+    async def source(version_id, *, allow_empty=False):
+        index = version_id // 100
+        return (dict(id=version_id, law_id=str(index), law_name=names[index - 1],
+                     law_type='test', snapshot_id=version_id + 1000,
+                     source_url='https://www.law.go.kr/', effective_date=date(2015, 1, 1)
+                     if version_id % 100 == 1 else date(2026, 1, 1)), [article])
+    monkeypatch.setattr(kg_relation_review, 'source_version', source)
+    result = await collect_auto(laws_per_level=1, per_kind=1, challenge_per_kind=0,
+                                as_of=date(2026, 9, 26))
+    assert {row['version_id'] for row in result['scopes']} == {
+        101, 102, 201, 202, 301, 302}
+    assert result['coverage']['eras']['old'] > 0
+    assert result['coverage']['eras']['recent'] > 0
+    assert all(row['source']['effective_date'] <= '2026-09-26' for row in result['cards'])
 
 
 @pytest.mark.asyncio

@@ -804,6 +804,7 @@ pytest --lf
 ### 요소별 품질 평가 및 hard negative 검증
 
 과거 법령 Knowledge Graph 관계 후보에는 [관계 전용 LLM Judge 절차](evaluation/KG_RELATION_REVIEW.md)를 적용할 수 있습니다. 원본 재대조 → 관계 문구 판정 → 인간 확정 라벨과 비교를 분리하며, 모델 판정만으로 Neo4j 관계를 승인하지 않습니다.
+법령 종류·시점별 표본 생성, `KG_JUDGE_*` 평가 전용 모델 설정, 건별 진행 저장과 `--resume` 재개 방법도 같은 문서에 있습니다.
 
 ```bash
 # 합성 파싱·관계·산술 계약과 오답 반례 — DB/모델 불필요

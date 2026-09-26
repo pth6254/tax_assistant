@@ -20,11 +20,11 @@ WSL 저장소 루트에서 실행하며 PostgreSQL 접속 설정이 필요하다
 ```bash
 python -m evaluation.kg_relation_review --auto \
   --laws-per-level 2 --per-kind 2 --challenge-per-kind 4 \
-  --old-before 2016-01-01 --seed kg-relation-v1 \
+  --old-before 2016-01-01 --as-of 2026-09-26 --seed kg-relation-v1 \
   --output evaluation/sources/kg_relation_stratified.json
 ```
 
-법령명으로 법률·시행령·시행규칙을 구분하고, 각 법령에서 지정 날짜 이전의 버전과 최근 버전 중 실제 관계 후보가 있는 것을 선정한다. 선택한 버전마다 `DEFINES`/`CITES`를 결정론적으로 뽑는다. `challenge` 카드는 같은 법령의 다른 후보 대상으로 바꿔 만든 **미검수 혼동 사례**다. 실제 오답·hard negative 여부는 인간 검수로 확정한다. 결과의 `coverage`에는 종류·시점·후보 수·빈 범위가 기록된다. 파일이 이미 있으면 덮어쓰지 않는다.
+법령명으로 법률·시행령·시행규칙을 구분하고, 각 법령에서 지정 날짜 이전의 버전과 최근 버전 중 실제 관계 후보가 있는 것을 선정한다. `--as-of`보다 시행일이 늦은 버전은 제외한다. 선택한 버전마다 `DEFINES`/`CITES`를 결정론적으로 뽑는다. `challenge` 카드는 같은 법령의 다른 후보 대상으로 바꿔 만든 **미검수 혼동 사례**다. 실제 오답·hard negative 여부는 인간 검수로 확정한다. 결과의 `coverage`에는 종류·시점·후보 수·빈 범위가 기록된다. 파일이 이미 있으면 덮어쓰지 않는다.
 
 ## 사람이 확정할 기준
 
@@ -62,7 +62,7 @@ python -m evaluation.kg_relation_judge \
 
 `KG_JUDGE_PROVIDER`, `KG_JUDGE_MODEL`, `KG_JUDGE_REASONING_EFFORT`, `KG_JUDGE_BASE_URL`, `KG_JUDGE_API_KEY`, `KG_JUDGE_TIMEOUT_SEC`, `KG_JUDGE_MAX_TOKENS`, `KG_JUDGE_INPUT_BUDGET_BYTES`, `KG_JUDGE_NUM_CTX`로 채팅 모델과 독립적으로 설정한다. 설정하지 않으면 현재 채팅 provider/model을 상속한다. 예시는 `.env.example`에 있다.
 
-배치는 카드마다 `<출력파일>.progress.json`을 원자적으로 갱신한다. 중단되면 같은 입력·모델·프롬프트·실행 옵션으로 `--resume`을 지정한다. 실패 상태(`model_error`, `partial_model_error`, `source_blocked`)를 다시 실행하려면 `--resume --retry-failed`를 함께 지정한다. 완료된 파일은 재사용하거나 덮어쓰지 않는다. `--max-cards`와 `--repeats`로 최대 호출 수를 제한하며, 진행 파일과 최종 보고서에는 호출 수 및 제공자가 반환한 토큰·비용 숫자만 저장한다. 제공자가 비용을 반환하지 않으면 비용은 알 수 없는 값이며 0원으로 취급하지 않는다.
+배치는 카드마다 `<출력파일>.progress.json`을 원자적으로 갱신한다. 중단되면 같은 입력·모델·프롬프트·실행 옵션으로 `--resume`을 지정한다. 실패 상태(`model_error`, `partial_model_error`, `source_blocked`)를 다시 실행하려면 `--resume --retry-failed`를 함께 지정한다. 완료된 파일은 재사용하거나 덮어쓰지 않는다. `--max-cards`와 `--repeats`로 Judge 요청 수를 제한하며, 진행 파일과 최종 보고서에는 재시도 포함 시도 횟수 및 제공자가 반환한 토큰·비용 숫자만 저장한다. 제공자 내부 재시도 때문에 실제 HTTP 요청은 Judge 시도 횟수보다 많을 수 있다. 제공자가 비용을 반환하지 않으면 비용은 알 수 없는 값이며 0원으로 취급하지 않는다.
 
 ```bash
 python -m evaluation.kg_relation_judge \
