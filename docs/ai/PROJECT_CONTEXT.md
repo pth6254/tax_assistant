@@ -4,6 +4,7 @@
 
 - `evaluation/kg_relation_review.py --auto`는 법률·시행령·시행규칙과 과거·최근 버전에서 관계 카드를 결정론적으로 추출한다. `--as-of` 이후 시행 버전은 제외한다. 교란 대상 카드는 미검수 후보이며 인간 정답이 아니다.
 - `evaluation/kg_relation_judge.py`는 `KG_JUDGE_*` 전용 설정으로 평가 모델을 선택하고 카드별 진행을 원자적으로 저장해 같은 입력·설정으로 재개한다. 제공자가 돌려준 사용량만 기록하며 없으면 비용을 알 수 없다고 표시한다. `kg_relation_score.py`의 품질 점수에는 독립적인 인간 골드가 필요하다.
+- `evaluation/kg_relation_human_review.py`는 Judge 판정과 후보 생성 유형을 숨긴 블라인드 양식을 만든다. 인간이 명시적 관계 문구 라벨과 대상 버전 시점 상태를 별도 기록한 후에만 골드 형식으로 변환한다. 평가 결과는 Neo4j 승인과 실서비스 RAG 설정을 자동 변경하지 않는다.
 
 ## 버전별 법령 Knowledge Graph (2026-09-25)
 

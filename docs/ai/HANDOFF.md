@@ -1,5 +1,16 @@
 # 세션 인수인계
 
+## 2026-09-26 관계 블라인드 검수 인계
+- `evaluation/sources/kg_relation_blind_review_20260926.json`에 56건 블라인드 양식을 생성했다. Judge 예측·추출/혼동 생성 유형을 포함하지 않으며 `review` 필드는 전부 비어 있다. 파일은 Git 제외이며 기존 풀·결과는 보존했다.
+- 실제 법령 검수자가 문구상 관계 라벨, 원본 확인, 대상 버전 시점 상태, 이유·검수자·날짜를 직접 기록해야 한다. 완성본을 새 파일로 저장한 뒤 `python -m evaluation.kg_relation_human_review finalize`로 엄격 검증하고 `kg_relation_score.py`로 비교한다. 정확한 명령은 `evaluation/KG_RELATION_REVIEW.md`.
+- 아직 인간 골드 0건, 품질 점수 없음, Neo4j 승인/서비스 반영 없음. 모델이 스스로 인간 라벨을 채워서는 안 된다. 양식의 reviewer는 인증된 사용자 계정이 아니므로 전문가 검수·이중검수·불일치 조정은 운영 절차로 남는다.
+- 새 백엔드 이미지는 빌드했지만 실서비스 컨테이너는 교체하지 않았다. Compose 환경의 일회성 최신 이미지 컨테이너에서 전체 테스트 716 passed/2 skipped. 단독 `docker run`은 기존 DB/모델 설정 의존 테스트 3건이 실패했으나 Compose 환경에서는 통과했다.
+
+## 2026-09-26 관계 Judge 전수 진단 후 인간 검수
+- 56건 전수 2회 진단의 최종 로컬 결과는 `evaluation/runs/kg-relation-final-20260926.json`이다. 모두 `advisory_only`; 추출 48건은 `supported`, 대상 교환 혼동 8건은 `unsupported`로 합의했다. 총 Judge 시도 144회(429 및 원문 인용 검증 오류 재시도 포함), 제공자 반환 총 65,245토큰·0.0100509 USD. 성공률이나 법적 정답률로 발표하지 않는다.
+- 인간 검수자는 Judge 판정이 없는 `evaluation/sources/kg_relation_stratified.json`에서 원문·출처·시점·관계 의미를 독립 검토하고 별도 `human_relation_gold`에 검수자·날짜·이유를 기록해야 한다. 골드 0건이며 Neo4j 승인/서비스 변경은 없다. 자세한 인계는 `evaluation/KG_RELATION_REVIEW.md`.
+- 완료된 보고서의 실패 카드만 새 결과 파일에 재시도할 수 있도록 `--retry-from`과 요청별 `--delay-sec`를 추가했다. 후속 과제는 인간 라벨 확보, `kg_relation_score.py` 비교, 시점상 적용 및 실제 질문 적합성 평가다.
+
 ## 2026-09-26 관계 평가 표본·배치 확장
 - `evaluation/kg_relation_review.py --auto`로 기준일 2026-09-26 이전 시행 버전만 포함한 6개 법령·56개 후보 카드 생성. 법률/시행령/시행규칙 19/19/18, 과거/최근 27/29, DEFINES/CITES 28/28, 대상 교환 혼동 후보 8건. 결과 `evaluation/sources/kg_relation_stratified.json`은 Git 제외. 최초 초안에는 미래 시행 버전이 섞였으나 기준일 필터 추가 후 초안·해당 진단 파일을 제거했다.
 - 전체 56건 원본 재검증 결과 `source_verified=56`; 저장 결과 `evaluation/runs/kg-relation-preflight-asof-20260926.json`. OpenRouter Luna 2건 실호출 결과 `advisory_only=2`, 시도 2회, 제공자 보고 727 입력/141 출력 토큰·cost 0.0001432. 결과 `evaluation/runs/kg-relation-asof-smoke-20260926.json`. 모두 모델 의견이며 인간 골드 라벨은 0건.

@@ -111,7 +111,7 @@ def verify_card(card, version, rows):
 
 
 async def assess(provider, card, *, repeats=2, input_budget_bytes=6000,
-                 timeout_sec=120, max_tokens=512):
+                 timeout_sec=120, max_tokens=512, delay_sec=0):
     if repeats < 1:
         raise ValueError('repeats must be positive')
     source = card['source']
@@ -125,6 +125,8 @@ async def assess(provider, card, *, repeats=2, input_budget_bytes=6000,
                 'temporal_applicability': 'not_assessed'}
     runs = []
     for _ in range(repeats):
+        if delay_sec:
+            await asyncio.sleep(delay_sec)
         try:
             raw = await asyncio.wait_for(provider.structured(
                 [{'role': 'system', 'content': PROMPT},
@@ -155,7 +157,7 @@ async def assess(provider, card, *, repeats=2, input_budget_bytes=6000,
 
 async def evaluate(pool, provider, *, repeats=2, max_cards=None,
                    existing_results=(), progress=None, input_budget_bytes=6000,
-                   timeout_sec=120, max_tokens=512):
+                   timeout_sec=120, max_tokens=512, delay_sec=0):
     validate_pool(pool)
     selected = pool['cards'][:max_cards] if max_cards is not None else pool['cards']
     selected_keys = {card['assertion_key'] for card in selected}
@@ -182,7 +184,7 @@ async def evaluate(pool, provider, *, repeats=2, max_cards=None,
             else:
                 result = await assess(provider, card, repeats=repeats,
                     input_budget_bytes=input_budget_bytes, timeout_sec=timeout_sec,
-                    max_tokens=max_tokens)
+                    max_tokens=max_tokens, delay_sec=delay_sec)
                 results.append({'assertion_key': card['assertion_key'], **result})
             if progress is not None:
                 progress(results, len(selected))
@@ -223,6 +225,23 @@ def count_attempts(previous_attempts, existing_keys, results):
                                    if row['assertion_key'] not in existing_keys)
 
 
+def retry_from_report(report, pool, run_config, provider, model):
+    """Reuse completed judgments while retrying only failed cards in a new report."""
+    if (report.get('pool_hash') != digest(pool)
+            or report.get('prompt_hash') != digest(PROMPT)
+            or report.get('run_config') != run_config
+            or report.get('provider') != provider or report.get('model') != model
+            or report.get('advisory_only') is not True):
+        raise ValueError('Completed report pool, prompt or model configuration differs')
+    selected = pool['cards'][:run_config['max_cards']] if run_config['max_cards'] else pool['cards']
+    results = report.get('results', [])
+    keys = [row['assertion_key'] for row in results]
+    if len(keys) != len(selected) or keys != [card['assertion_key'] for card in selected]:
+        raise ValueError('Completed report cards differ from selected pool')
+    failed = {'model_error', 'partial_model_error', 'source_blocked'}
+    return [row for row in results if row['status'] not in failed]
+
+
 def main():
     import config
     from app.services.inference.llm import create_llm_provider
@@ -236,12 +255,18 @@ def main():
     parser.add_argument('--verify-only', action='store_true')
     parser.add_argument('--resume', action='store_true')
     parser.add_argument('--retry-failed', action='store_true')
+    parser.add_argument('--retry-from', type=Path,
+                        help='Completed report to retry into a new output file')
+    parser.add_argument('--delay-sec', type=float, default=0,
+                        help='Delay before each model request to reduce rate limits')
     args = parser.parse_args()
-    if args.repeats < 1 or (args.max_cards is not None and args.max_cards < 1):
-        parser.error('repeats and max-cards must be positive')
+    if args.repeats < 1 or (args.max_cards is not None and args.max_cards < 1) or args.delay_sec < 0:
+        parser.error('repeats and max-cards must be positive; delay-sec cannot be negative')
     if args.retry_failed and not args.resume:
         parser.error('--retry-failed requires --resume')
-    if args.verify_only and (args.resume or args.retry_failed):
+    if args.retry_from and (args.resume or args.retry_failed):
+        parser.error('--retry-from cannot be combined with --resume or --retry-failed')
+    if args.verify_only and (args.resume or args.retry_failed or args.retry_from):
         parser.error('--verify-only cannot resume a model batch')
     if args.output.exists():
         parser.error('Output already exists')
@@ -265,7 +290,17 @@ def main():
     identity = digest({'pool_hash': digest(pool), 'prompt_hash': digest(PROMPT),
                        'run_config': run_config, 'endpoint_hash': digest(settings.base_url)})
     checkpoint_path = Path(str(args.output) + '.progress.json')
-    if args.resume:
+    if args.retry_from:
+        if checkpoint_path.exists():
+            parser.error('Checkpoint already exists; choose a new output path')
+        previous = json.loads(args.retry_from.read_text(encoding='utf-8'))
+        try:
+            prior = retry_from_report(previous, pool, run_config, settings.provider, settings.model)
+        except ValueError as error:
+            parser.error(str(error))
+        previous_attempts = previous.get('attempted_calls', 0)
+        previous_usage = previous.get('provider_usage', {})
+    elif args.resume:
         if not checkpoint_path.exists():
             parser.error('No matching checkpoint to resume')
         checkpoint = json.loads(checkpoint_path.read_text(encoding='utf-8'))
@@ -318,7 +353,8 @@ def main():
             return await evaluate(pool, provider, repeats=args.repeats, max_cards=args.max_cards,
                 existing_results=prior, progress=save_checkpoint,
                 input_budget_bytes=settings.input_budget_bytes,
-                timeout_sec=settings.timeout_sec, max_tokens=settings.max_tokens)
+                timeout_sec=settings.timeout_sec, max_tokens=settings.max_tokens,
+                delay_sec=args.delay_sec)
         finally:
             await provider.close()
 
@@ -328,6 +364,9 @@ def main():
     result['model'] = settings.model
     result['attempted_calls'] = total_attempts(result['results'])
     result['provider_usage'] = observed_usage()
+    result['request_delay_sec'] = args.delay_sec
+    if args.retry_from:
+        result['retry_from'] = str(args.retry_from)
     with args.output.open('x', encoding='utf-8') as file:
         json.dump(result, file, ensure_ascii=False, indent=2)
         file.write('\n')

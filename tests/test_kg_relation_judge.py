@@ -5,8 +5,8 @@ from datetime import date
 import pytest
 import config
 
-from evaluation.kg_relation_judge import (RelationVerdict, assess, count_attempts, evaluate,
-                                          validate_pool, verify_card)
+from evaluation.kg_relation_judge import (PROMPT, RelationVerdict, assess, count_attempts,
+                                          evaluate, retry_from_report, validate_pool, verify_card)
 from evaluation.kg_relation_review import challenge_cards, collect_auto, make_cards
 from evaluation.kg_relation_score import score
 from evaluation.schema import digest
@@ -176,6 +176,39 @@ def test_retry_attempt_total_includes_previous_failed_call():
     rows = [{'assertion_key': 'ok', 'runs': [{'verdict': 'supported'}]},
             {'assertion_key': 'failed', 'runs': [{'verdict': 'supported'}]}]
     assert count_attempts(2, {'ok'}, rows) == 3
+
+
+def test_completed_report_retry_keeps_good_cards_and_checks_identity():
+    _, _, card = fixture_card()
+    other = {**card, 'assertion_key': 'failed'}
+    pool = {'cards': [card, other]}
+    config = {'max_cards': None, 'repeats': 2}
+    report = {'pool_hash': digest(pool), 'prompt_hash': digest(PROMPT),
+              'run_config': config, 'provider': 'openrouter', 'model': 'test',
+              'advisory_only': True, 'results': [
+                  {'assertion_key': card['assertion_key'], 'status': 'advisory_only'},
+                  {'assertion_key': 'failed', 'status': 'model_error'}]}
+    assert retry_from_report(report, pool, config, 'openrouter', 'test') == report['results'][:1]
+    with pytest.raises(ValueError, match='configuration differs'):
+        retry_from_report(report, pool, config, 'openrouter', 'different')
+    report['results'].reverse()
+    with pytest.raises(ValueError, match='cards differ'):
+        retry_from_report(report, pool, config, 'openrouter', 'test')
+
+
+@pytest.mark.asyncio
+async def test_request_delay_applies_before_each_judge_call(monkeypatch):
+    from evaluation import kg_relation_judge
+
+    _, _, card = fixture_card()
+    waits = []
+    async def fake_sleep(seconds):
+        waits.append(seconds)
+    monkeypatch.setattr(kg_relation_judge.asyncio, 'sleep', fake_sleep)
+    provider = SimpleNamespace(structured=AsyncMock(return_value={
+        'verdict': 'uncertain', 'reason': '검수 필요', 'evidence_quote': ''}))
+    await assess(provider, card, repeats=2, delay_sec=3)
+    assert waits == [3, 3]
 
 
 @pytest.mark.asyncio
