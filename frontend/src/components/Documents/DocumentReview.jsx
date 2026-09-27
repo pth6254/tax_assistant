@@ -23,7 +23,7 @@ export default function DocumentReview({ filename, onBack }) {
   }
   const persist = async (fields, dates = data.dates) => {
     setBusy(true); setError('')
-    try { setData(await saveDocumentReview(filename, fields, dates)) }
+    try { setData(await saveDocumentReview(filename, fields, dates, data.sha256, data.reviewed_at)) }
     catch (err) { setError(err.message) }
     finally { setBusy(false) }
   }

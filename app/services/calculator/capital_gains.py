@@ -1,7 +1,7 @@
 from datetime import date
 from app.services.calculator.errors import CalculationError, require_value
 from app.schemas.calculator import CalculationResult, TaxBasis, TaxStep
-from app.services.calculator.brackets import apply_progressive_tax
+from app.services.calculator.brackets import apply_progressive_tax, truncate_won
 from app.services.calculator.repository import get_brackets, get_deduction, get_source_articles
 
 _LONG_TERM_DEDUCTION_MAP = [
@@ -37,7 +37,7 @@ async def calculate(
             if holding_years >= min_years and (not need_one_home or is_one_home):
                 row = await get_deduction('양도소득세', deduction_name, as_of=as_of)
                 used_rows.append(row)
-                long_term_deduction = int(gain * float(require_value(row, 'rate')))
+                long_term_deduction = truncate_won(gain, require_value(row, 'rate'))
                 steps.append(TaxStep(label=f"장기보유특별공제({deduction_name})", amount=long_term_deduction))
                 break
 
@@ -63,7 +63,7 @@ async def calculate(
 
     steps.append(TaxStep(label=f"산출세액({rate_desc})", amount=calculated_tax))
 
-    local_tax = int(calculated_tax * 0.1)
+    local_tax = truncate_won(calculated_tax, '0.1')
     steps.append(TaxStep(label="지방소득세(10%)", amount=local_tax))
 
     final_tax = calculated_tax + local_tax

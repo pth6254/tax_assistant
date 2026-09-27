@@ -124,7 +124,7 @@ async def test_regeneration_stream_commits_after_final_chunk(monkeypatch):
     monkeypatch.setattr(chat_service, 'streaming_chain', lambda *args, **kwargs: Chain())
     monkeypatch.setattr(chat_service, '_append_source_list_if_missing', AsyncMock(side_effect=lambda answer, _: answer))
     monkeypatch.setattr(chat_service, '_correct_source_titles', AsyncMock(side_effect=lambda answer: answer))
-    monkeypatch.setattr(chat_service, 'build_citation_footer', lambda *args: '')
+    monkeypatch.setattr(chat_service, 'guarded_answer', lambda answer, *args, **kwargs: answer)
     commit = AsyncMock(return_value=2)
     regen = Regeneration(4, 1, 'question', [])
     with patch('app.services.answer_version_service.commit_regeneration', commit):

@@ -1,5 +1,6 @@
 """Read-only source candidates and user-confirmed fields for stored PDFs."""
 from datetime import datetime
+from decimal import Decimal
 from io import BytesIO
 import re
 import uuid
@@ -13,7 +14,11 @@ from app.services.document.extractors import extension
 
 AMOUNT_KEYS = {key for flow in CASE_KINDS.values()
                for key, _, kind, _ in flow['questions'] if kind == 'amount'}
-AMOUNT_RE = re.compile(r'(?<!\d)(\d{1,3}(?:,\d{3})+|\d{1,12})\s*(억\s*원|만\s*원|원)')
+# A decimal point must be part of the match; never turn "1.5억원" into "5억원".
+AMOUNT_RE = re.compile(
+    r'(?<![\d.,])((?:\d{1,3}(?:,\d{3})+|\d{1,12})(?:\.\d+)?)\s*'
+    r'(억\s*원|만\s*원|원)(?![\d가-힣])'
+)
 DATE_RE = re.compile(r'(?<!\d)(?:19|20)\d{2}[.\-/]\s*\d{1,2}[.\-/]\s*\d{1,2}(?!\d)')
 
 
@@ -43,9 +48,10 @@ def candidates(content):
         for match in AMOUNT_RE.finditer(text):
             unit = match[2].replace(' ', '')
             factor = 100_000_000 if unit.startswith('억') else 10_000 if unit.startswith('만') else 1
-            value = int(match[1].replace(',', '')) * factor
-            if value > 10**15:
+            exact = Decimal(match[1].replace(',', '')) * factor
+            if exact != exact.to_integral_value() or exact > 10**15:
                 continue
+            value = int(exact)
             found.append({'type': 'amount', 'value': value, 'display': match[0].strip(),
                           'page': page_no, 'context': ' '.join(text[max(0, match.start()-35):match.end()+35].split())})
         for match in DATE_RE.finditer(text):
@@ -76,7 +82,8 @@ async def review(user_id, filename):
             'reviewed_at': saved['reviewed_at'].isoformat() if valid else None}
 
 
-async def save_review(user_id, filename, fields, dates=None):
+async def save_review(user_id, filename, fields, dates=None, *, expected_sha256: str,
+                      expected_reviewed_at: str | None = None):
     if extension(filename) != '.pdf':
         raise HTTPException(422, '원본 페이지별 금액·날짜 검토는 PDF에서만 지원합니다.')
     if not set(fields) <= AMOUNT_KEYS:
@@ -90,6 +97,13 @@ async def save_review(user_id, filename, fields, dates=None):
                 WHERE user_id=$1 AND filename=$2 FOR UPDATE''', uid, filename)
             if not row:
                 raise HTTPException(404, '원본 PDF를 찾을 수 없습니다.')
+            if row['sha256'] != expected_sha256:
+                raise HTTPException(409, '문서가 교체되었습니다. 새 원본을 확인한 뒤 다시 저장하세요.')
+            current = await conn.fetchrow('''SELECT reviewed_at FROM user_document_reviews
+                WHERE user_id=$1 AND filename=$2 FOR UPDATE''', uid, filename)
+            current_revision = current['reviewed_at'].isoformat() if current else None
+            if current_revision != expected_reviewed_at:
+                raise HTTPException(409, '다른 화면에서 검토값이 변경되었습니다. 다시 조회해 주세요.')
             page_count = len(PdfReader(BytesIO(bytes(row['content']))).pages)
             if any(field['page'] > page_count for field in [*fields.values(), *dates]):
                 raise HTTPException(422, '원본에 없는 페이지 번호입니다.')

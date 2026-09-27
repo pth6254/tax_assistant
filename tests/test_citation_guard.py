@@ -106,10 +106,40 @@ def test_verify_citation_wrong_law_name_flagged():
 
 def test_verify_citation_ignores_whitespace_difference():
     """'상속세및증여세법' vs '상속세 및 증여세법' 같은 공백 차이는 무시한다."""
-    context = "제53조 [증여재산 공제]\n상속세 및 증여세법 관련 조문"
+    context = "[출처: 상속세 및 증여세법 | 상속세 및 증여세법 | 📌 법률 (law)]\n제53조 [증여재산 공제]"
     answer = "[법률] 상속세및증여세법 제53조 - 증여재산공제"
     checks = verify_citations(answer, context)
     assert checks[0].verified is True
+
+
+def test_citation_rejects_cross_law_partial_article_and_missing_paragraph():
+    from app.services.citation_guard import guarded_answer
+    context = (
+        '[출처: 소득세법 | 소득세법 | 📌 법률 (law)]\n제1조 [목적]\n① 본문\n\n---\n\n'
+        '[출처: 법인세법 | 법인세법 | 📌 법률 (law)]\n제2조 [정의]\n① 본문\n\n---\n\n'
+        '[출처: 소득세법 | 소득세법 | 📌 법률 (law)]\n제59조의4 [특별공제]\n① 본문'
+    )
+    wrong = [
+        '[법률] 소득세법 제2조',
+        '[법률] 소득세법 제59조',
+        '[법률] 소득세법 제1조 제99항',
+    ]
+    for answer in wrong:
+        assert verify_citations(answer, context)[0].verified is False
+        assert answer not in guarded_answer(answer, context)
+    assert verify_citations('[법률] 소득세법 제1조 제1항', context)[0].verified is True
+
+
+def test_document_source_does_not_trigger_official_law_requirement():
+    from app.services.citation_guard import guarded_answer
+
+    context = '[출처: 계약서.pdf | 계약서.pdf | 사용자 문서]\n계약금 1,000,000원'
+    assert guarded_answer('계약금은 1,000,000원입니다.', context) == '계약금은 1,000,000원입니다.'
+
+
+def test_named_ministerial_rule_is_accepted_as_official_source():
+    context = '[출처: 소득세법 시행규칙 | 소득세법 시행규칙 | 📌 기획재정부령 (law)]\n제1조 [목적]\n본문'
+    assert verify_citations('[시행규칙] 소득세법 시행규칙 제1조', context)[0].verified is True
 
 
 # ── verify_calc_final_amount ──────────────────────────────────────

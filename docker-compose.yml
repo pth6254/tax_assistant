@@ -80,6 +80,8 @@ services:
       dockerfile: Dockerfile
     container_name: tax_backend
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:8001:8000"
     env_file: .env
     environment:
       # Production chat tracing is explicit opt-in, independent of evaluation CLI.
@@ -114,7 +116,7 @@ services:
     container_name: tax_frontend
     restart: unless-stopped
     ports:
-      - "3002:80"
+      - "3001:80"
     depends_on:
       backend:
         condition: service_healthy

@@ -1,7 +1,7 @@
 from datetime import date
 from app.services.calculator.errors import CalculationError, require_value
 from app.schemas.calculator import CalculationResult, TaxBasis, TaxStep
-from app.services.calculator.brackets import apply_progressive_tax
+from app.services.calculator.brackets import apply_progressive_tax, truncate_won
 from app.services.calculator.repository import get_brackets, get_deduction, get_source_articles
 
 
@@ -50,7 +50,7 @@ async def calculate(
 
     steps.append(TaxStep(label=f"산출세액({rate_desc})", amount=calculated_tax))
 
-    filing_credit = int(calculated_tax * 0.03)
+    filing_credit = truncate_won(calculated_tax, '0.03')
     steps.append(TaxStep(label="신고세액공제(3%)", amount=filing_credit))
 
     final_tax = max(0, calculated_tax - filing_credit)

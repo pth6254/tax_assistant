@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     gpus: all
     ports:
-      - "127.0.0.1:8001:8080"
+      - "127.0.0.1:8004:8080"
     volumes:
       - llama_cache:/root/.cache/llama.cpp
     environment:

@@ -1,5 +1,15 @@
 """계산기별 DB 세율 구간에 공통으로 적용하는 산술 로직."""
+from decimal import Decimal
+
 from app.services.calculator.errors import CalculationError
+
+
+def truncate_won(amount: int, *rates: object) -> int:
+    """Multiply decimal rates before truncating the final won amount once."""
+    value = Decimal(amount)
+    for rate in rates:
+        value *= Decimal(str(rate))
+    return int(value)
 
 
 def apply_progressive_tax(taxable: int, brackets: list[dict]) -> tuple[int, str]:
@@ -11,6 +21,7 @@ def apply_progressive_tax(taxable: int, brackets: list[dict]) -> tuple[int, str]
         raise CalculationError("missing_tax_data")
     for b in sorted(brackets, key=lambda x: x['bracket_from'], reverse=True):
         if taxable > b['bracket_from']:
-            tax = int(taxable * float(b['rate'])) - b['progressive_deduction']
-            return max(0, tax), f"{int(float(b['rate']) * 100)}%"
+            rate = Decimal(str(b['rate']))
+            tax = truncate_won(taxable, rate) - b['progressive_deduction']
+            return max(0, tax), f"{(rate * 100).normalize():f}%"
     return 0, "0%"

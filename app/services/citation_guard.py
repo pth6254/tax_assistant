@@ -12,15 +12,43 @@ LLM이 생성한 최종 답변에서 법령 인용([법률]/[시행령]/[시행�
 import re
 from dataclasses import dataclass
 
-from app.services.law.reference_parser import normalize_article_no
+from app.services.law.reference_parser import (
+    InvalidLawReference, extract_law_reference, normalize_article_no, parse_law_reference,
+)
+from app.services.law.structure_parser import resolve_reference_target
 
 # _COMBINED_PROMPT의 "근거 출처 목록" 형식과 동일한 패턴.
 # 조문번호는 공백 변형을 허용한다 — qwen 계열 모델이 "제 50 조", "제 59 조의 4"처럼
 # 숫자 주변에 공백을 섞어 출력하는 경우가 많아, 엄격한 "제\d+조" 패턴은 실제 답변의
 # 인용 대부분을 놓쳐 검증이 조용히 무력화된다 (생성 품질 측정에서 발견된 실측 사례).
 _CITATION_RE = re.compile(
-    r"\[(법률|시행령|시행규칙)\]\s*([^\n\[]+?)\s*(제\s*\d+\s*조(?:\s*의\s*\d+)?)"
+    r"\[(법률|시행령|시행규칙)\]\s*([^\n\[]+?)\s*"
+    r"(제\s*\d+\s*조(?:\s*의\s*\d+)?"
+    r"(?:\s*(?:제\s*\d+\s*항|[①-⑳㉑-㉟]))?"
+    r"(?:\s*제\s*\d+\s*호(?:\s*의\s*\d+)?)?"
+    r"(?:\s*[가-하]\s*목)?)"
 )
+_SOURCE_RE = re.compile(r"(?m)^\[출처:\s*(.+)\]\s*$")
+_SOURCE_LABELS = {
+    "법률": "법률", "대통령령": "시행령", "총리령": "시행규칙", "부령": "시행규칙",
+}
+
+
+def _source_label(category: str) -> str | None:
+    if category.endswith("부령"):
+        return "시행규칙"
+    return _SOURCE_LABELS.get(category)
+
+
+def _official_source_markers(context: str) -> list[re.Match[str]]:
+    markers = []
+    for marker in _SOURCE_RE.finditer(context):
+        fields = [part.strip() for part in marker.group(1).split("|")]
+        if len(fields) >= 3:
+            category = fields[-1].split("(", 1)[0].replace("📌", "").strip()
+            if _source_label(category):
+                markers.append(marker)
+    return markers
 
 
 # calc_context(format_calculation_context)가 만드는 "- 라벨: 1,234,567원" 형식
@@ -54,13 +82,70 @@ def extract_citations(answer: str) -> list[tuple[str, str, str]]:
 
 
 def verify_citations(answer: str, trusted_text: str) -> list[CitationCheck]:
-    """추출한 인용이 신뢰 가능한 텍스트(RAG 컨텍스트 + 계산기 결과)에 실존하는지 확인한다."""
-    norm_trusted = _normalize(trusted_text)
+    """Match each citation to one official source article and its actual subunit."""
+    sources = []
+    markers = list(_SOURCE_RE.finditer(trusted_text))
+    for index, marker in enumerate(markers):
+        fields = [part.strip() for part in marker.group(1).split("|")]
+        if len(fields) < 3:
+            continue
+        law_name = fields[-2]
+        category = fields[-1].split("(", 1)[0].replace("📌", "").strip()
+        label = _source_label(category)
+        if not label:
+            continue  # User documents and web results are not official law evidence.
+        body = trusted_text[marker.end():markers[index + 1].start() if index + 1 < len(markers) else None]
+        article = None
+        for line in body.splitlines():
+            if line.lstrip().startswith("[") or not line.strip():
+                continue
+            reference = extract_law_reference(line)
+            if reference and reference.article_no:
+                article = reference.article_no
+                break
+        if article:
+            sources.append((label, _normalize(law_name), article, body))
+
     checks = []
-    for label, law_name, article_no in extract_citations(answer):
-        exists = _normalize(law_name) in norm_trusted and article_no in norm_trusted
-        checks.append(CitationCheck(label=label, law_name=law_name, article_no=article_no, verified=exists))
+    for match in _CITATION_RE.finditer(answer):
+        label, law_name, citation = match.groups()
+        law_name = law_name.strip(" *_")
+        article_no = normalize_article_no(citation)
+        try:
+            reference = parse_law_reference(citation)
+        except InvalidLawReference:
+            checks.append(CitationCheck(label, law_name, article_no, False))
+            continue
+        exists = False
+        for source_label, source_law, source_article, body in sources:
+            if (label, _normalize(law_name), reference.article_no) != (source_label, source_law, source_article):
+                continue
+            target = resolve_reference_target(body, reference)
+            if target is None or target.exists:
+                exists = True
+                break
+        checks.append(CitationCheck(label, law_name, article_no, exists))
     return checks
+
+
+_UNSUPPORTED_ANSWER = (
+    "확인된 공식 법령 근거와 계산 결과로 답변의 내용을 검증하지 못했습니다. "
+    "확인되지 않은 설명은 제공하지 않습니다. 질문의 법령명·조문이나 적용 시점을 구체적으로 알려주세요."
+)
+
+
+def guarded_answer(answer: str, context: str, calc_context: str | None = None,
+                   *, require_law: bool = False) -> str:
+    """Return no generated legal conclusion when its citations or final amount fail checks."""
+    checks = verify_citations(answer, context)
+    has_official_source = bool(_official_source_markers(context))
+    if any(not check.verified for check in checks):
+        return _UNSUPPORTED_ANSWER
+    if (has_official_source or require_law) and not checks and not calc_context:
+        return _UNSUPPORTED_ANSWER
+    if not verify_calc_final_amount(answer, calc_context):
+        return _UNSUPPORTED_ANSWER
+    return answer
 
 
 def verify_calc_final_amount(answer: str, calc_context: str | None) -> bool:

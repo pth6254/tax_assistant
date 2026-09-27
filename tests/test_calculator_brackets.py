@@ -46,3 +46,8 @@ def test_single_rate():
 def test_negative_tax_is_clamped():
     brackets = [{"bracket_from": 0, "rate": 0.1, "progressive_deduction": 50}]
     assert apply_progressive_tax(100, brackets) == (0, "10%")
+
+
+def test_decimal_rate_does_not_lose_one_won_to_binary_float():
+    brackets = [{"bracket_from": 0, "rate": Decimal("0.35"), "progressive_deduction": 0}]
+    assert apply_progressive_tax(180, brackets) == (63, "35%")

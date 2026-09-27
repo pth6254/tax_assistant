@@ -2,7 +2,7 @@
 main.py — 앱 진입점
 
 FastAPI 백엔드 실행:
-    uvicorn main:app --reload --port 8000
+    uvicorn main:app --reload --port 8001
 
 React 프론트엔드 실행:
     cd frontend
@@ -58,7 +58,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",   # Vite dev server
         "http://localhost:4173",   # Vite preview
-        "http://localhost:3002",   # Docker nginx
+        "http://localhost:3001",   # Docker nginx
+        "http://127.0.0.1:3001",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -79,4 +80,4 @@ app.include_router(law_explorer.router)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=True)

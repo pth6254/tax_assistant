@@ -21,7 +21,7 @@ from app.services.tools.planner import run_tools_for_query
 from app.services.law.history_context import needs_history, route as history_route
 from app.services.law.history_answer import answer as history_answer
 from app.services.law.lookup_service import get_law_article
-from app.services.citation_guard import apply_citation_guard, build_citation_footer, extract_citations
+from app.services.citation_guard import extract_citations, guarded_answer, verify_citations
 from app.services.llm_client import call_llm, call_llm_structured
 from app.services.inference.llm.continuation import complete_answer, stream_answer
 from langsmith import trace, traceable
@@ -407,7 +407,6 @@ async def _build_source_list_via_structured_output(answer: str, context: str) ->
         logger.warning("[CITATION] structured 인용 추출 실패 — 보정 생략: %s", type(e).__name__)
         return ""
 
-    norm_context = re.sub(r"\s+", "", context)
     lines: list[str] = []
     seen: set[tuple[str, str, str]] = set()
     for c in data.citations:
@@ -418,7 +417,8 @@ async def _build_source_list_via_structured_output(answer: str, context: str) ->
         if not law_name or key in seen:
             continue
         seen.add(key)
-        if key[1] in norm_context and article_no in norm_context:
+        checks = verify_citations(f"[{label}] {law_name} {article_no}", context)
+        if checks and all(check.verified for check in checks):
             lines.append(f"[{label}] {law_name} {article_no}")
 
     if not lines:
@@ -639,14 +639,16 @@ async def process_chat(query: str, conversation_id: str, user_id: str, *, tool_e
 
     chain = text_chain(_FINAL_PROMPT_TEMPLATE, _generate_answer, name="tax_answer")
     answer = await chain.ainvoke(_final_prompt_values(query, context, web_results, history, calc_run))
-    answer   = await _append_source_list_if_missing(answer, context)
     answer   = await _correct_source_titles(answer)
-    answer   = apply_citation_guard(answer, context, calc_run.context if calc_run else None)
+    validated = guarded_answer(answer, context, calc_run.context if calc_run else None,
+                               require_law=bool(_match_laws_by_keyword(query)))
+    calc_meta = _calc_meta(calc_run) if validated == answer else None
+    answer = validated
 
     await _save_history(conv_id, query, answer, is_first=len(history) == 0,
                         **({"tools": _terminal_tools(events)} if events else {}))
     logger.info("[CHAT] 응답 완료 — 총 %.1fs | 답변 %d자", time.perf_counter() - t0, len(answer))
-    return answer, _calc_meta(calc_run)
+    return answer, calc_meta
 
 
 async def stream_chat_response(
@@ -759,28 +761,23 @@ async def _stream_chat_response_impl(
     full_answer: list[str] = []
     is_first = len(history) == 0
 
-    logger.info("[STREAM] 최종 답변 스트리밍 시작")
+    logger.info("[STREAM] 답변 생성 후 근거 확인 시작")
     async for chunk in chain.astream(values):
         full_answer.append(chunk)
-        yield {"type": "chunk", "text": chunk}
 
     answer = "".join(full_answer)
-    patched = await _append_source_list_if_missing(answer, context)
-    if patched != answer:
-        yield {"type": "chunk", "text": patched[len(answer):]}
-        answer = patched
-    corrected = await _correct_source_titles(answer)
-    if corrected != answer:
-        yield {"type": "replace", "text": corrected}
-        answer = corrected
+    answer = await _correct_source_titles(answer)
     calc_context = calc_run.context if calc_run else None
-    footer = build_citation_footer(answer, context, calc_context)
-    if footer:
-        yield {"type": "chunk", "text": footer}
-        answer += footer
+    generated_answer = answer
+    validated = guarded_answer(answer, context, calc_context,
+                               require_law=bool(_match_laws_by_keyword(query)))
+    if validated != answer:
+        logger.warning("[CITATION] 생성 답변 검증 실패 — 내용 전송 보류")
+    answer = validated
+    yield {"type": "chunk", "text": answer}
 
     calc_meta = _calc_meta(calc_run)
-    if calc_meta:
+    if calc_meta and validated == generated_answer:
         yield {"type": "calc", **calc_meta}
 
     logger.info("[STREAM] 완료 — 총 %.1fs | 답변 %d자", time.perf_counter() - t0, len(answer))

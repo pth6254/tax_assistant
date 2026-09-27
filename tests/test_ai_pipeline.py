@@ -139,13 +139,33 @@ async def test_valid_tool_extraction_preserves_params(monkeypatch):
 async def test_chat_pipeline_keeps_guard_and_history_storage(monkeypatch):
     monkeypatch.setattr(chat_service, "_fetch_rag_and_web_context", AsyncMock(return_value=("자료", "웹 검색 생략", [], None)))
     monkeypatch.setattr(chat_service, "call_llm", AsyncMock(return_value="original"))
-    monkeypatch.setattr(chat_service, "_append_source_list_if_missing", AsyncMock(return_value="patched"))
-    monkeypatch.setattr(chat_service, "apply_citation_guard", lambda answer, context, calc: answer + " guarded")
+    append = AsyncMock(return_value="patched")
+    monkeypatch.setattr(chat_service, "_append_source_list_if_missing", append)
+    monkeypatch.setattr(chat_service, "guarded_answer", lambda answer, context, calc, **kwargs: answer + " guarded")
     save = AsyncMock()
     monkeypatch.setattr(chat_service, "_save_history", save)
     conv_id = uuid4()
-    assert await chat_service.process_chat("질문", str(conv_id), "test-user") == ("patched guarded", None)
-    save.assert_awaited_once_with(conv_id, "질문", "patched guarded", is_first=True)
+    assert await chat_service.process_chat("질문", str(conv_id), "test-user") == ("original guarded", None)
+    append.assert_not_awaited()
+    save.assert_awaited_once_with(conv_id, "질문", "original guarded", is_first=True)
+
+
+@pytest.mark.asyncio
+async def test_chat_pipeline_hides_calculation_metadata_when_answer_is_rejected(monkeypatch):
+    from types import SimpleNamespace
+
+    calculation = SimpleNamespace(context="- 결정세액: 1,000원")
+    monkeypatch.setattr(chat_service, "_fetch_rag_and_web_context",
+                        AsyncMock(return_value=("자료", "웹 검색 생략", [], calculation)))
+    monkeypatch.setattr(chat_service, "_final_prompt_values", lambda *args: {
+        "calc_section": "", "context": "", "history": [], "prefix": "", "query": "질문", "web_section": "",
+    })
+    monkeypatch.setattr(chat_service, "_calc_meta", lambda _: {"amount": 1000})
+    monkeypatch.setattr(chat_service, "call_llm", AsyncMock(return_value="잘못된 답변"))
+    monkeypatch.setattr(chat_service, "guarded_answer", lambda *args, **kwargs: "확인 불가")
+    monkeypatch.setattr(chat_service, "_save_history", AsyncMock())
+
+    assert await chat_service.process_chat("질문", str(uuid4()), "test-user") == ("확인 불가", None)
 
 
 @pytest.mark.asyncio
@@ -158,15 +178,12 @@ async def test_streaming_chat_keeps_footer_events_and_saved_answer(monkeypatch):
 
     monkeypatch.setattr(chat_service, "_stream_llm_skip_think", stream)
     monkeypatch.setattr(chat_service, "_append_source_list_if_missing", AsyncMock(return_value="hello world"))
-    monkeypatch.setattr(chat_service, "build_citation_footer", lambda *args: " footer")
+    monkeypatch.setattr(chat_service, "guarded_answer", lambda answer, *args, **kwargs: answer + " footer")
     save = AsyncMock()
     monkeypatch.setattr(chat_service, "_save_history", save)
     conv_id = uuid4()
     events = [e async for e in chat_service.stream_chat_response("질문", str(conv_id), "test-user")]
-    assert events == [
-        {"type": "chunk", "text": "hello "}, {"type": "chunk", "text": "world"},
-        {"type": "chunk", "text": " footer"},
-    ]
+    assert events == [{"type": "chunk", "text": "hello world footer"}]
     save.assert_awaited_once_with(conv_id, "질문", "hello world footer", is_first=True)
 
 
@@ -182,10 +199,33 @@ async def test_streaming_chat_replaces_generated_source_title_before_save(monkey
     monkeypatch.setattr(chat_service, "_stream_llm_skip_think", stream)
     monkeypatch.setattr(chat_service, "_append_source_list_if_missing", AsyncMock(side_effect=lambda answer, _: answer))
     monkeypatch.setattr(chat_service, "_correct_source_titles", AsyncMock(return_value=corrected))
-    monkeypatch.setattr(chat_service, "build_citation_footer", lambda *args: "")
+    monkeypatch.setattr(chat_service, "guarded_answer", lambda answer, *args, **kwargs: answer)
     save = AsyncMock()
     monkeypatch.setattr(chat_service, "_save_history", save)
     conv_id = uuid4()
     events = [event async for event in chat_service.stream_chat_response("질문", str(conv_id), "test-user")]
-    assert events == [{"type": "chunk", "text": original}, {"type": "replace", "text": corrected}]
+    assert events == [{"type": "chunk", "text": corrected}]
     save.assert_awaited_once_with(conv_id, "질문", corrected, is_first=True)
+
+
+@pytest.mark.asyncio
+async def test_invalid_law_citation_is_never_streamed_or_saved(monkeypatch):
+    context = (
+        '[출처: 소득세법 | 소득세법 | 📌 법률 (law)]\n제1조 [목적]\n① 본문\n\n---\n\n'
+        '[출처: 법인세법 | 법인세법 | 📌 법률 (law)]\n제2조 [정의]\n① 본문'
+    )
+    wrong_answer = '소득세법 제2조가 적용됩니다.\n[법률] 소득세법 제2조'
+    async def stream(*args, **kwargs):
+        yield wrong_answer
+    monkeypatch.setattr(chat_service, '_fetch_rag_and_web_context',
+                        AsyncMock(return_value=(context, '웹 검색 생략', [], None)))
+    monkeypatch.setattr(chat_service, '_stream_llm_skip_think', stream)
+    monkeypatch.setattr(chat_service, '_correct_source_titles', AsyncMock(side_effect=lambda answer: answer))
+    save = AsyncMock()
+    monkeypatch.setattr(chat_service, '_save_history', save)
+
+    events = [event async for event in chat_service.stream_chat_response('소득세 질문', str(uuid4()), 'test-user')]
+    assert len(events) == 1 and events[0]['type'] == 'chunk'
+    assert wrong_answer not in events[0]['text']
+    assert '검증하지 못했습니다' in events[0]['text']
+    assert save.call_args.args[2] == events[0]['text']

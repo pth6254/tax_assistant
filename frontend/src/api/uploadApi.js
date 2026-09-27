@@ -7,7 +7,10 @@ export const uploadFile = async (file) => {
     credentials: 'include',
     body: form,
   })
-  const data = await res.json()
-  if (!res.ok) throw data
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    if (res.status === 413) throw { detail: '파일 크기가 업로드 한도를 초과했습니다. (최대 50MB)' }
+    throw data
+  }
   return data
 }

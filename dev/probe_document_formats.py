@@ -59,7 +59,7 @@ def main():
                 uid = cursor.fetchone()[0]
             database.commit()
             token = create_access_token(str(uid), email)
-            with httpx.Client(base_url='http://localhost:3002',
+            with httpx.Client(base_url='http://localhost:3001',
                               cookies={'access_token': token}, timeout=180, trust_env=False) as api:
                 originals = fixtures()
                 names = {}

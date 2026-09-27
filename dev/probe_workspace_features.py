@@ -12,7 +12,7 @@ from app.core.security import create_access_token
 from config import DATABASE_URL
 
 
-BASE = 'http://localhost:3002'
+BASE = 'http://localhost:3001'
 
 
 def expect(response, status):

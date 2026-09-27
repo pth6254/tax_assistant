@@ -1,6 +1,6 @@
 # 세무 답변 품질 기준 v0.1
 
-상태: 평가 설계 초안. Judge 구현·법적 정답 승인·품질 측정 완료를 의미하지 않는다.
+상태: 평가 기준 초안. 항목별 답변 Judge와 관계 Judge는 구현돼 있으나, 아래 11항목 전체의 자동 연결·법적 정답 승인·교정된 품질 측정은 미완료다. 현재 구현과 확장안은 [2026-09-27 조사](../docs/ai/LLM_JUDGE_TAX_VALIDATION_RESEARCH_2026-09-27.md)를 참고한다.
 대표 카드: [answer_pilot.json](datasets/answer_pilot.json). 모두 dev/draft이며 기존 Dataset 규약을 사용한다.
 
 ## 1. 판정 단위와 책임

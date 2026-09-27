@@ -1,5 +1,33 @@
 # 현재 구현 상태
 
+## 2026-09-27 운영자 평가 화면 결정
+
+- 운영자 평가는 LangSmith로 확정했다. 서비스 내부 관리자 대시보드는 구현 범위에서 제외하고, 사용자 채팅에는 근거와 확인 상태 패널을 연결한다.
+- 다음 구현 순서: 백엔드 구조화 검사 결과 → SSE 진행/최종 결과 → 채팅 근거 패널 → LangSmith 항목별 feedback·실험 연결. 이번 변경은 설계 기록이며 연결 완료를 의미하지 않는다.
+
+## 2026-09-27 기존 LLM Judge 활용 연구
+
+- `evaluation/judge.py`의 항목별 답변 판정과 KG 전용 배치가 이미 구현돼 있음을 확인했다. 저장 결과는 합성 1개/3항목 pass, 판례 5개/10항목 pass 6·fail 3·error 1, 관계 56개 supported 48·unsupported 8이다. 서로 다른 과제·모델의 진단값이며 세무 정답률이 아니다.
+- 실제 컨텍스트/필수 주장 전달, 서비스와 고정 근거 평가기의 guard 일치, 답변 Judge 독립 설정·재개, 항목별 교정 지표가 보완 대상이다. 상세 설계: `docs/ai/LLM_JUDGE_TAX_VALIDATION_RESEARCH_2026-09-27.md`.
+- 관련 기존 회귀 테스트 82 passed. 이번 작업은 연구·문서 보완이며 새 LLM 평가·외부 전송·서비스 변경은 수행하지 않았다.
+
+## 2026-09-27 검증 경계·금액·업로드 개선 (배포 전)
+
+- 일반/SSE 채팅의 공식 법령 인용을 같은 출처의 법령명·조·항과 대조하고, 불일치 답변은 생성 내용 전송 전에 보류 문구로 교체한다. 인용 누락에 사후 출처 목록을 붙이는 경로도 제거했다. 답변을 보류할 때 계산 메타데이터도 전송하지 않는다. SSE 최종 답변은 생성 완료 후 검사하므로 첫 답변 지연이 늘 수 있다. 이 검사는 법적 의미·적용 시점의 참을 증명하지 않는다.
+- 계산기 비율 곱셈을 Decimal로 통일하고 문서 금액 후보의 소수점 부분 매칭을 수정했다. 검토값 저장은 클라이언트가 본 원본 SHA-256/검토 리비전을 요구한다. Nginx 업로드 요청 제한은 multipart 여유를 포함한 51m로 설정했다.
+- 최신 Docker 백엔드 이미지 전체 테스트 761 passed/2 skipped, 프런트 단위 16 passed·빌드 및 최신 Nginx 설정 검사 통과. 실행 중 Docker 서비스에는 아직 반영하지 않았다. 세무 정확성 검수 설계는 `docs/ai/TAX_ACCURACY_GATE.md`에 정리했다.
+
+## 2026-09-27 프로젝트 분석 — 수정 제안, 구현 미수행
+
+- 상세 검토: `docs/ai/PROJECT_REVIEW_2026-09-27.md`. 인용 검증 교차/부분 일치 오탐, Decimal→float 산술 오차, 소수 단위 금액 부분 추출, frontend 프록시 2MiB 업로드 413을 재현했다. 검토값 저장 요청의 원본 버전 검사 누락은 코드로 확인했다.
+- 실행 중 backend 테스트 753 passed/2 skipped, frontend 16 passed. 주요 코드 6개 파일의 작업 폴더/컨테이너 hash 일치 확인. 새 빌드·서비스 코드 수정·데이터 보정은 수행하지 않았다.
+- GraphRAG 설정은 true였으나 tax_neo4j는 Exited(137), OOMKilled=false였다. 종료 원인은 미확정이며 재기동하지 않았다. 의존성 health에 그래프 상태가 포함되지 않는 점을 개선 과제로 기록했다.
+
+## 2026-09-27 호스트 포트 변경
+
+- Compose 프런트엔드 호스트 3001, 백엔드 로컬 호스트 8001로 변경했다. 백엔드 컨테이너 내부 8000/Nginx 프록시는 유지한다. 선택형 llama.cpp 생성 호스트 포트는 8004로 분리했다. 개발 Vite 프록시·CORS·스모크/브라우저 테스트 기본 주소·README를 동기화했다.
+- WSL 가상환경에서 `dev/docker-up-wsl.sh backend frontend`로 재빌드·기동 후 컨테이너 둘 다 healthy. Windows `localhost:3001/`, `localhost:3001/api/health/ready`, `localhost:8001/docs` HTTP 200과 `Origin: http://localhost:3001` CORS preflight HTTP 200을 확인했다. 최신 backend 이미지 753 passed/2 skipped, frontend 16 passed/빌드 성공, 3001 경유 문서 5종 업로드·검색 스모크 통과. llama.cpp 선택형 overlay는 이번에 기동하지 않았다.
+
 ## 2026-09-26 내 문서 업로드 화면 보강
 
 - 프런트 업로드 훅의 PDF 전용 차단을 제거하고 PDF·DOCX·HWPX·PPTX·HTML/HTM을 허용했다. 선택/끌어놓기, 클라이언트 확장자·빈 파일·50MB 검사, 처리 상태·청크 수·OCR 쪽 수를 화면에 추가했다.

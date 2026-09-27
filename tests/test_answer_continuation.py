@@ -96,7 +96,7 @@ async def test_completed_continuation_is_saved_once(monkeypatch):
     monkeypatch.setattr(chat_service, "call_llm", generate)
     monkeypatch.setattr(chat_service, "_append_source_list_if_missing", AsyncMock(side_effect=lambda answer, _: answer))
     monkeypatch.setattr(chat_service, "_correct_source_titles", AsyncMock(side_effect=lambda answer: answer))
-    monkeypatch.setattr(chat_service, "apply_citation_guard", lambda answer, *_: answer)
+    monkeypatch.setattr(chat_service, "guarded_answer", lambda answer, *args, **kwargs: answer)
     save = AsyncMock()
     monkeypatch.setattr(chat_service, "_save_history", save)
     answer, _ = await chat_service.process_chat("질문", str(uuid4()), "test-user")

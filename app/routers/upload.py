@@ -29,6 +29,8 @@ class ReviewedDate(BaseModel):
 
 class DocumentReviewUpdate(BaseModel):
     model_config = ConfigDict(extra='forbid')
+    expected_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    expected_reviewed_at: str | None = None
     fields: dict[str, ReviewedAmount] = Field(max_length=40)
     dates: list[ReviewedDate] = Field(default_factory=list, max_length=20)
 
@@ -84,7 +86,9 @@ async def save_review(filename: str, payload: DocumentReviewUpdate,
                       user: dict = Depends(verify_token)):
     return await document_review_service.save_review(
         user['id'], filename, {key: value.model_dump() for key, value in payload.fields.items()},
-        [item.model_dump(mode='json') for item in payload.dates])
+        [item.model_dump(mode='json') for item in payload.dates],
+        expected_sha256=payload.expected_sha256,
+        expected_reviewed_at=payload.expected_reviewed_at)
 
 
 @router.delete("/documents/{filename:path}")

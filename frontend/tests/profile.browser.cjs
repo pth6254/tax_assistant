@@ -24,7 +24,7 @@ const os = require('node:os')
       }
       await route.fulfill({ json: body })
     })
-    await page.goto(process.env.UI_TEST_URL || 'http://localhost:3002')
+    await page.goto(process.env.UI_TEST_URL || 'http://localhost:3001')
     await page.getByLabel('이메일').fill('demo@example.test')
     await page.locator('input[type=password]').fill('synthetic-password')
     await page.getByRole('button', { name: '로그인', exact: true }).last().click()

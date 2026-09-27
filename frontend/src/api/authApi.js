@@ -1,4 +1,4 @@
-// Vite proxy를 통해 /api 요청이 FastAPI(8000)로 전달됨
+// Vite proxy를 통해 /api 요청이 로컬 FastAPI(8001)로 전달됨
 // credentials: 'include' 로 httpOnly 쿠키 자동 전송
 
 export const login = async (email, password) => {

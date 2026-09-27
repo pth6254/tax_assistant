@@ -34,7 +34,7 @@ async def test_stream_emits_progress_before_preparation_finishes_and_saves_termi
     monkeypatch.setattr(chat_service, "_fetch_rag_and_web_context", prepare)
     monkeypatch.setattr(chat_service, "_stream_llm_skip_think", tokens)
     monkeypatch.setattr(chat_service, "_append_source_list_if_missing", AsyncMock(side_effect=lambda a, _: a))
-    monkeypatch.setattr(chat_service, "build_citation_footer", lambda *args: "")
+    monkeypatch.setattr(chat_service, "guarded_answer", lambda answer, *args, **kwargs: answer)
     save = AsyncMock()
     monkeypatch.setattr(chat_service, "_save_history", save)
     stream = chat_service.stream_chat_response("내 문서", str(uuid4()), str(uuid4()))

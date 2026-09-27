@@ -13,7 +13,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 
 from app.services.consultation_report_service import build_report
-from app.services.document_review_service import candidates
+from app.services.document_review_service import AMOUNT_RE, candidates, save_review
 from app.services import personal_tax_calendar_service as calendar
 
 
@@ -31,6 +31,27 @@ def test_document_candidates_keep_original_page_and_require_human_choice():
     assert any(row['value'] == 12_345_000 and row['page'] == 1 for row in rows)
     assert any(row['type'] == 'date' and row['page'] == 1 for row in rows)
     assert any(row['value'] == 500_000 and row['page'] == 2 for row in rows)
+
+
+def test_decimal_amount_candidate_never_matches_only_the_fractional_tail():
+    matches = list(AMOUNT_RE.finditer('증여액 1.5억원, 납부액 2.75만원'))
+    assert [match.group(0) for match in matches] == ['1.5억원', '2.75만원']
+    from decimal import Decimal
+    assert [int(Decimal(match[1]) * (100_000_000 if match[2].startswith('억') else 10_000))
+            for match in matches] == [150_000_000, 27_500]
+
+
+@pytest.mark.asyncio
+async def test_review_refuses_values_from_an_old_document_version(mock_pool, monkeypatch):
+    from app.services import document_review_service
+    pool, conn = mock_pool
+    conn.reset_mock()
+    monkeypatch.setattr(conn, 'fetchrow', AsyncMock(return_value={'sha256': 'b' * 64, 'content': b'new file'}))
+    monkeypatch.setattr(document_review_service, 'get_pool', AsyncMock(return_value=pool))
+    with pytest.raises(HTTPException) as error:
+        await save_review(str(uuid.uuid4()), 'same.pdf', {}, expected_sha256='a' * 64)
+    assert error.value.status_code == 409
+    conn.execute.assert_not_awaited()
 
 
 def test_report_contains_saved_calculation_and_source_labels():
