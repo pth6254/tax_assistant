@@ -67,9 +67,36 @@ def main():
                 refreshed = expect(api.get(f'/api/consultation-cases/{case_id}'), 200)
                 assert refreshed['checklist'][0]['status'] == 'needs_recheck'
                 expect(api.delete(f'/api/consultation-cases/{case_id}'), 200)
+                scenarios = {
+                    'capital_gains': {'transfer_price': 500000000, 'acquisition_price': 300000000,
+                                      'expenses': 10000000, 'holding_years': 5,
+                                      'asset_type': '부동산', 'is_one_home': False},
+                    'inheritance': {'estate_value': 1000000000, 'debts': 100000000,
+                                    'spouse_inheritance': 200000000, 'children_count': 2},
+                    'gift': {'gift_amount': 100000000, 'relation': '직계존비속',
+                             'is_minor': False, 'prior_gifts_10y': 0},
+                    'vat': {'sales': 100000000, 'purchases': 30000000,
+                            'exempt_sales': 0, 'is_simplified': False, 'business_type': '소매업'},
+                    'penalty_tax': {'unpaid_tax': 1000000, 'penalty_type': '무신고',
+                                    'is_negligent': False, 'days_late': 0},
+                }
+                for kind, answers in scenarios.items():
+                    created = expect(api.post('/api/consultation-cases', json={
+                        'kind': kind, 'title': f'검증용 {kind}', 'question': '계산과 근거를 확인해 주세요.',
+                        'tax_year': 2024, 'reference_date': '2024-12-31'}), 201)
+                    other_kind_field = 'income' if kind != 'income_tax' else 'gift_amount'
+                    expect(api.patch(f"/api/consultation-cases/{created['id']}/facts",
+                                     json={other_kind_field: 1}), 422)
+                    updated = expect(api.patch(f"/api/consultation-cases/{created['id']}/facts",
+                                                   json=answers), 200)
+                    assert updated['next_question'] is None, kind
+                    calculated = expect(api.post(f"/api/consultation-cases/{created['id']}/calculate"), 200)
+                    assert isinstance(calculated['calculation']['result']['final_tax'], int), kind
+                    assert calculated['calculation']['result']['basis']['queried_on'] == '2024-12-31', kind
+                    expect(api.delete(f"/api/consultation-cases/{created['id']}"), 200)
                 assert not expect(api.get('/api/consultation-cases'), 200)
-            print('consultation case API: create, ownership, clarification, document, '
-                  'calculation basis, stale document and deletion passed')
+            print('six consultation case kinds: ownership, questions, field boundaries, '
+                  'calculation date, document state and cleanup passed')
         finally:
             with database.cursor() as cursor:
                 cursor.execute('DELETE FROM consultation_cases WHERE user_id=%s', (user_id,))

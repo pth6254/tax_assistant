@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from app.schemas.calculator import CalculationResult
 from app.schemas.consultation_case import CaseCreate, CaseDocumentUpdate
 from app.services import consultation_case_service as cases
+from app.services.consultation_catalog import CASE_KINDS
 
 
 def test_case_questions_require_explicit_zero_and_checklist_detects_changed_document():
@@ -73,14 +74,16 @@ async def test_case_calculation_uses_selected_year_and_saves_exact_facts(monkeyp
     response = await cases.calculate_case(str(cid), str(uid))
     assert response['calculation']['result']['final_tax'] == 0
     assert calculate.await_args.kwargs['as_of'] == date(2024, 12, 31)
-    assert conn.fetchrow.call_args.args[-1] == facts
+    assert conn.fetchrow.call_args.args[-2] == facts
+    assert conn.fetchrow.call_args.args[-1] == date(2024, 12, 31)
 
 
 @pytest.mark.asyncio
 async def test_missing_fact_prevents_any_calculation(monkeypatch):
     uid, cid = uuid.uuid4(), uuid.uuid4()
     conn = AsyncMock()
-    conn.fetchrow.return_value = {'id': cid, 'user_id': uid, 'facts': {'income': 0}}
+    conn.fetchrow.return_value = {'id': cid, 'user_id': uid, 'kind': 'income_tax',
+                                  'facts': {'income': 0}}
     monkeypatch.setattr(cases, 'get_pool', AsyncMock(return_value=fake_pool(conn)))
     calculate = AsyncMock()
     monkeypatch.setattr(cases, 'calculate_income_tax', calculate)
@@ -94,3 +97,33 @@ async def test_missing_fact_prevents_any_calculation(monkeypatch):
 def test_case_endpoints_require_auth(client):
     assert client.get('/api/consultation-cases').status_code == 401
     assert client.post('/api/consultation-cases', json={}).status_code == 401
+
+
+@pytest.mark.parametrize('kind', list(CASE_KINDS))
+def test_each_case_kind_has_distinct_questions_and_documents(kind):
+    questions = cases._questions({}, kind)
+    checklist = cases._checklist({}, {}, {}, kind)
+    assert questions and checklist
+    assert len({item['key'] for item in questions}) == len(questions)
+    assert len({item['key'] for item in checklist}) == len(checklist)
+    assert all(not item['answered'] for item in questions)
+    assert all(item['status'] == 'pending' for item in checklist)
+
+
+def test_non_income_case_date_and_choices_are_validated():
+    from app.schemas.consultation_case import CaseFactsPatch
+    with pytest.raises(ValidationError):
+        CaseCreate(kind='gift', title='x', question='x', tax_year=2024,
+                   reference_date=date(2025, 1, 1))
+    with pytest.raises(ValidationError):
+        CaseFactsPatch(relation='unsupported')
+    assert CaseFactsPatch(is_minor=False).model_dump(exclude_unset=True) == {'is_minor': False}
+
+
+def test_conditional_questions_only_ask_relevant_calculator_inputs():
+    assert 'is_minor' not in {q['key'] for q in cases._questions({'relation': '배우자'}, 'gift')}
+    assert 'is_minor' in {q['key'] for q in cases._questions({'relation': '직계존비속'}, 'gift')}
+    assert 'business_type' not in {q['key'] for q in cases._questions({'is_simplified': False}, 'vat')}
+    assert 'business_type' in {q['key'] for q in cases._questions({'is_simplified': True}, 'vat')}
+    assert 'days_late' in {q['key'] for q in cases._questions({'penalty_type': '납부지연'}, 'penalty_tax')}
+    assert 'is_negligent' not in {q['key'] for q in cases._questions({'penalty_type': '납부지연'}, 'penalty_tax')}

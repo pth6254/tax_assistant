@@ -1,5 +1,6 @@
+from datetime import date
 from app.services.calculator.errors import CalculationError, require_value
-from app.schemas.calculator import CalculationResult, TaxStep
+from app.schemas.calculator import CalculationResult, TaxBasis, TaxStep
 from app.services.calculator.brackets import apply_progressive_tax
 from app.services.calculator.repository import get_brackets, get_deduction, get_source_articles
 
@@ -16,6 +17,7 @@ async def calculate(
     relation: str = '기타',
     is_minor: bool = False,
     prior_gifts_10y: int = 0,
+    as_of: date | None = None,
 ) -> CalculationResult:
     if relation not in {*_DEDUCTION_NAME_MAP, '기타'}:
         raise CalculationError('unsupported_condition')
@@ -25,6 +27,7 @@ async def calculate(
     steps.append(TaxStep(label="과세가액(증여액+10년내기증여)", amount=taxable_base))
 
     deduction = 0
+    used_rows = []
     deduction_name = None
     if relation == '직계존비속' and is_minor:
         deduction_name = _MINOR_DEDUCTION_NAME
@@ -32,7 +35,8 @@ async def calculate(
         deduction_name = _DEDUCTION_NAME_MAP[relation]
 
     if deduction_name:
-        row = await get_deduction('증여세', deduction_name)
+        row = await get_deduction('증여세', deduction_name, as_of=as_of)
+        used_rows.append(row)
         deduction = require_value(row, 'amount')
 
     steps.append(TaxStep(label=f"증여재산공제({relation})", amount=deduction))
@@ -40,7 +44,8 @@ async def calculate(
     taxable = max(0, taxable_base - deduction)
     steps.append(TaxStep(label="과세표준", amount=taxable))
 
-    brackets = await get_brackets('증여세', 'default')
+    brackets = await get_brackets('증여세', 'default', as_of=as_of)
+    used_rows.extend(brackets)
     calculated_tax, rate_desc = apply_progressive_tax(taxable, brackets)
 
     steps.append(TaxStep(label=f"산출세액({rate_desc})", amount=calculated_tax))
@@ -52,7 +57,7 @@ async def calculate(
     steps.append(TaxStep(label="결정세액", amount=final_tax))
 
     effective_rate = round(final_tax / gift_amount, 6) if gift_amount > 0 else 0.0
-    source_articles = await get_source_articles('증여세')
+    source_articles = await get_source_articles('증여세', as_of=as_of)
 
     return CalculationResult(
         tax_type="증여세",
@@ -62,4 +67,6 @@ async def calculate(
         final_tax=final_tax,
         effective_rate=effective_rate,
         source_articles=source_articles,
+        basis=TaxBasis(queried_on=(as_of or date.today()).isoformat(),
+                       effective_dates=sorted({str(r['effective_date']) for r in used_rows if r and r.get('effective_date')})),
     )

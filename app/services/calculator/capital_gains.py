@@ -1,5 +1,6 @@
+from datetime import date
 from app.services.calculator.errors import CalculationError, require_value
-from app.schemas.calculator import CalculationResult, TaxStep
+from app.schemas.calculator import CalculationResult, TaxBasis, TaxStep
 from app.services.calculator.brackets import apply_progressive_tax
 from app.services.calculator.repository import get_brackets, get_deduction, get_source_articles
 
@@ -19,6 +20,7 @@ async def calculate(
     holding_years: int = 0,
     asset_type: str = '부동산',
     is_one_home: bool = False,
+    as_of: date | None = None,
 ) -> CalculationResult:
     if asset_type != '부동산':
         raise CalculationError('unsupported_condition')
@@ -29,10 +31,12 @@ async def calculate(
     steps.append(TaxStep(label="양도차익(양도가액-취득가액-경비)", amount=gain))
 
     long_term_deduction = 0
+    used_rows = []
     if asset_type == '부동산' and holding_years >= 3:
         for min_years, need_one_home, deduction_name in _LONG_TERM_DEDUCTION_MAP:
             if holding_years >= min_years and (not need_one_home or is_one_home):
-                row = await get_deduction('양도소득세', deduction_name)
+                row = await get_deduction('양도소득세', deduction_name, as_of=as_of)
+                used_rows.append(row)
                 long_term_deduction = int(gain * float(require_value(row, 'rate')))
                 steps.append(TaxStep(label=f"장기보유특별공제({deduction_name})", amount=long_term_deduction))
                 break
@@ -40,7 +44,8 @@ async def calculate(
     income_after_ltdc = gain - long_term_deduction
     steps.append(TaxStep(label="양도소득금액", amount=income_after_ltdc))
 
-    basic_deduction_row = await get_deduction('소득세', '양도소득기본공제')
+    basic_deduction_row = await get_deduction('소득세', '양도소득기본공제', as_of=as_of)
+    used_rows.append(basic_deduction_row)
     basic_deduction = require_value(basic_deduction_row, 'amount')
     taxable = max(0, income_after_ltdc - basic_deduction)
     steps.append(TaxStep(label="과세표준(기본공제 250만 차감)", amount=taxable))
@@ -52,7 +57,8 @@ async def calculate(
     else:
         category = '기본'
 
-    brackets = await get_brackets('양도소득세', category)
+    brackets = await get_brackets('양도소득세', category, as_of=as_of)
+    used_rows.extend(brackets)
     calculated_tax, rate_desc = apply_progressive_tax(taxable, brackets)
 
     steps.append(TaxStep(label=f"산출세액({rate_desc})", amount=calculated_tax))
@@ -64,7 +70,7 @@ async def calculate(
     steps.append(TaxStep(label="합계(산출세액+지방소득세)", amount=final_tax))
 
     effective_rate = round(final_tax / transfer_price, 6) if transfer_price > 0 else 0.0
-    source_articles = await get_source_articles('양도소득세')
+    source_articles = await get_source_articles('양도소득세', as_of=as_of)
 
     return CalculationResult(
         tax_type="양도소득세",
@@ -74,4 +80,6 @@ async def calculate(
         final_tax=final_tax,
         effective_rate=effective_rate,
         source_articles=source_articles,
+        basis=TaxBasis(queried_on=(as_of or date.today()).isoformat(),
+                       effective_dates=sorted({str(r['effective_date']) for r in used_rows if r and r.get('effective_date')})),
     )

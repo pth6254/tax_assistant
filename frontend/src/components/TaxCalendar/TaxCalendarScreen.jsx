@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { getOfficialTaxCalendar } from '../../api/taxScheduleApi'
+import { getOfficialTaxCalendar, getPersonalEvents, getUpcomingPersonalEvents,
+  watchOfficialEvent, updatePersonalEvent, removePersonalEvent } from '../../api/taxScheduleApi'
 import Icon from '../ui/Icon'
 import { eventsOnDay, monthCells, parseMonthSelection, shiftMonth } from './calendarUtils'
 import './taxCalendar.css'
@@ -15,6 +16,8 @@ export default function TaxCalendarScreen() {
   const [error, setError] = useState('')
   const [reload, setReload] = useState(0)
   const [forceRefresh, setForceRefresh] = useState(false)
+  const [personal, setPersonal] = useState([]), [upcoming, setUpcoming] = useState([])
+  const [personalBusy, setPersonalBusy] = useState(false), [personalError, setPersonalError] = useState('')
   const monthPicker = useRef(null)
 
   useEffect(() => {
@@ -28,6 +31,23 @@ export default function TaxCalendarScreen() {
       .finally(() => { if (active) { setLoading(false); setForceRefresh(false) } })
     return () => { active = false }
   }, [period.year, period.month, reload])
+  useEffect(() => {
+    let active = true
+    getPersonalEvents(period.year, period.month).then(rows => { if (active) setPersonal(rows) })
+      .catch(err => { if (active) setPersonalError(err.message) })
+    getUpcomingPersonalEvents().then(rows => { if (active) setUpcoming(rows) }).catch(() => {})
+    return () => { active = false }
+  }, [period.year, period.month])
+  const refreshPersonal = async () => {
+    const [rows, soon] = await Promise.all([getPersonalEvents(period.year, period.month), getUpcomingPersonalEvents()])
+    setPersonal(rows); setUpcoming(soon)
+  }
+  const changePersonal = async action => {
+    setPersonalBusy(true); setPersonalError('')
+    try { await action(); await refreshPersonal() }
+    catch (err) { setPersonalError(err.message) }
+    finally { setPersonalBusy(false) }
+  }
 
   const goToMonth = next => {
     if (!next || next.year < 2000 || next.year > today.getFullYear() + 1) return
@@ -52,6 +72,10 @@ export default function TaxCalendarScreen() {
       <a className="button secondary" href="https://www.nts.go.kr/nts/ad/taxSchdul/selectList.do?mi=135747" target="_blank" rel="noopener noreferrer">국세청 원문 ↗</a>
     </header>
     <div className="page-scroll tax-calendar-scroll">
+      <section className="personal-upcoming"><h2>다가오는 내 준비 일정</h2>
+        {upcoming.length ? <ul>{upcoming.map(item => <li key={item.id}>{item.due_date} · {item.title} · {item.status === 'preparing' ? '준비 중' : '확인 예정'}</li>)}</ul>
+          : <p className="small muted">선택한 공식 일정 중 앞으로 30일 안에 확인할 항목이 없습니다.</p>}</section>
+      {personalError && <div className="notice" role="alert">{personalError}</div>}
       <div className="calendar-intro">
         <div><span className="calendar-kicker">국세청 공식 게시 일정</span><h2>{period.year}년 {period.month}월</h2></div>
         <div className="calendar-controls">
@@ -91,10 +115,19 @@ export default function TaxCalendarScreen() {
           <aside className="calendar-agenda" aria-live="polite">
             <p className="calendar-agenda-eyebrow">선택한 날짜</p>
             <h3>{period.month}월 {day}일 <span>{selected.length}건</span></h3>
-            {selected.length ? <ul>{selected.map((event, index) => <li key={`${event.title}-${index}`}><strong>{event.title}</strong>{event.note && <p>{event.note}</p>}</li>)}</ul> : <p className="calendar-no-events">이 날짜에 게시된 일정이 없습니다.</p>}
+            {selected.length ? <ul>{selected.map((event, index) => {
+              const saved = personal.find(item => item.due_date === event.date && item.title === event.title)
+              return <li key={`${event.title}-${index}`}><strong>{event.title}</strong>{event.note && <p>{event.note}</p>}
+                {saved ? <div className="personal-event-controls"><label>내 준비 상태<select aria-label={`${event.title} 준비 상태`} value={saved.status} disabled={personalBusy}
+                  onChange={e => changePersonal(() => updatePersonalEvent(saved.id, e.target.value))}>
+                    <option value="watching">확인 예정</option><option value="preparing">준비 중</option><option value="done">신고·납부 완료로 기록</option>
+                    <option value="not_applicable">해당 없음</option></select></label>
+                    <button className="text-button" disabled={personalBusy} onClick={() => changePersonal(() => removePersonalEvent(saved.id))}>내 일정에서 제거</button></div>
+                  : <button className="button secondary" disabled={personalBusy} onClick={() => changePersonal(() => watchOfficialEvent(event))}>내 준비 일정에 추가</button>}
+              </li> })}</ul> : <p className="calendar-no-events">이 날짜에 게시된 일정이 없습니다.</p>}
           </aside>
         </div>
-        <p className="calendar-disclaimer">국세청 전체 게시 일정입니다. 사업자 유형·과세기간·예외 요건에 따라 실제 신고 의무는 달라질 수 있습니다. 이 화면은 개인별 의무 판정이나 신고 완료 확인을 제공하지 않습니다. 최신 기한은 원문을 다시 확인하세요.</p>
+        <p className="calendar-disclaimer">국세청 전체 게시 일정입니다. 내 준비 상태는 사용자가 기록한 값이며 신고 접수·납부 여부를 자동 확인하지 않습니다. 사업자 유형·과세기간·예외 요건에 따른 실제 의무와 최신 기한은 공식 원문에서 확인하세요.</p>
       </>}
     </div>
   </main>

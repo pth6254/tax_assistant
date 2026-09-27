@@ -1,0 +1,14 @@
+.document-upload.is-dragging { border-color: var(--accent); background: #eaf1ff; box-shadow: inset 0 0 0 2px #7fa2e0; }
+.document-upload-copy { min-width: 0; }
+.document-upload-copy p { line-height: 1.55; margin-top: 5px; }
+.document-upload-note { margin: -19px 0 26px; line-height: 1.5; }
+.document-upload .button { flex-shrink: 0; }
+.document-upload .spinner { width: 17px; height: 17px; }
+.document-chunking { display: inline-block; margin-top: 7px !important; padding: 4px 8px; border-radius: 6px; font-size: 12px !important; }
+.document-chunking.structured { background: #eaf7f1; color: #126443; }
+.document-chunking.legacy { background: #fff4e3; color: #815014; }
+@media (max-width: 760px) {
+  .document-upload .button { width: 100%; justify-content: center; }
+  .document-upload-note { margin-top: -17px; }
+  .document-actions { flex-wrap: wrap; }
+}

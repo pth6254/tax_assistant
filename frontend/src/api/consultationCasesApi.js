@@ -12,3 +12,8 @@ export const clearCaseDocument = (id, slot) => requestJson(`${BASE}/${encodeURIC
 export const calculateCase = id => requestJson(`${BASE}/${encodeURIComponent(id)}/calculate`, { method: 'POST' })
 export const ensureCaseConversation = id => requestJson(`${BASE}/${encodeURIComponent(id)}/conversation`, { method: 'POST' })
 export const deleteCase = id => requestJson(`${BASE}/${encodeURIComponent(id)}`, { method: 'DELETE' })
+export const reportUrl = id => `${BASE}/${encodeURIComponent(id)}/report.pdf`
+export const listScenarios = id => requestJson(`${BASE}/${encodeURIComponent(id)}/scenarios`)
+export const saveScenario = (id, name) => requestJson(`${BASE}/${encodeURIComponent(id)}/scenarios`, json('POST', { name }))
+export const deleteScenario = (id, scenarioId) => requestJson(`${BASE}/${encodeURIComponent(id)}/scenarios/${encodeURIComponent(scenarioId)}`, { method: 'DELETE' })
+export const applyReviewedField = (id, filename, field_key) => requestJson(`${BASE}/${encodeURIComponent(id)}/apply-reviewed-field`, json('POST', { filename, field_key }))

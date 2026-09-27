@@ -1,6 +1,7 @@
+from datetime import date
 from app.services.calculator.errors import CalculationError, require_value
 
-from app.schemas.calculator import CalculationResult, TaxStep
+from app.schemas.calculator import CalculationResult, TaxBasis, TaxStep
 from app.services.calculator.repository import get_brackets, get_source_articles
 
 
@@ -22,6 +23,7 @@ async def calculate(
     exempt_sales: int = 0,
     is_simplified: bool = False,
     business_type: str = "소매업",
+    as_of: date | None = None,
 ) -> CalculationResult:
     if is_simplified and business_type not in _SIMPLIFIED_VALUE_ADDED_RATE:
         raise CalculationError('unsupported_condition')
@@ -30,7 +32,7 @@ async def calculate(
     taxable_sales = max(0, sales - exempt_sales)
     steps.append(TaxStep(label="과세매출(영세율·면세 제외)", amount=taxable_sales))
 
-    brackets = await get_brackets("부가가치세", "default")
+    brackets = await get_brackets("부가가치세", "default", as_of=as_of)
     if not brackets:
         raise CalculationError("missing_tax_data")
     vat_rate = float(require_value(brackets[0], "rate"))
@@ -55,7 +57,7 @@ async def calculate(
     steps.append(TaxStep(label="차가감 납부(환급)세액", amount=final_tax))
 
     effective_rate = round(final_tax / sales, 6) if sales > 0 else 0.0
-    source_articles = await get_source_articles("부가가치세") or ["부가가치세법 제37조"]
+    source_articles = await get_source_articles("부가가치세", as_of=as_of) or ["부가가치세법 제37조"]
 
     return CalculationResult(
         tax_type="부가가치세",
@@ -65,4 +67,6 @@ async def calculate(
         final_tax=final_tax,
         effective_rate=effective_rate,
         source_articles=source_articles,
+        basis=TaxBasis(queried_on=(as_of or date.today()).isoformat(),
+                       effective_dates=sorted({str(r['effective_date']) for r in brackets if r.get('effective_date')})),
     )

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { listDocuments, deleteDocument } from '../api/documentsApi'
 import { uploadFile } from '../api/uploadApi'
 import { errorMessage } from '../api/http'
+import { validateDocumentFile } from '../components/Documents/uploadValidation'
 
 export function useDocumentLibrary() {
   const [documents, setDocuments] = useState([])
@@ -23,14 +24,20 @@ export function useDocumentLibrary() {
   const add = async file => {
     if (!file || uploading.current) return
     if (loading || error) { setUpload({ status: 'error', message: '기존 파일의 교체 여부를 확인하려면 문서 목록을 먼저 새로고침해 주세요.' }); return }
-    if (!file.name.toLowerCase().endsWith('.pdf')) { setUpload({ status: 'error', message: '텍스트가 포함된 PDF 파일을 선택해 주세요.' }); return }
+    const validationError = validateDocumentFile(file)
+    if (validationError) { setUpload({ status: 'error', message: validationError }); return }
     // Same-name uploads replace existing chunks on the server. Make that consequence explicit.
-    if (documents.some(d => d.filename === file.name) && !window.confirm(`“${file.name}”의 기존 내용을 새 파일로 교체할까요?`)) return
+    if (documents.some(d => d.filename === file.name) && !window.confirm(`“${file.name}”의 기존 원본·검색 데이터를 교체할까요? 저장된 문서 검토값도 초기화됩니다.`)) return
     uploading.current = true
     setUpload({ status: 'loading', message: `${file.name} · 문서를 처리하고 있습니다. 완료 전에는 새 내용을 검색할 수 없습니다.` })
     try {
-      await uploadFile(file)
-      if (alive.current) { setUpload({ status: 'ok', message: `${file.name} · 저장 완료. 문서 목록에서 검색 준비 상태를 확인하세요.` }); await refresh() }
+      const result = await uploadFile(file)
+      if (alive.current) {
+        const detail = [`${result.chunks_stored}개 구조화 청크`]
+        if (result.ocr_pages) detail.push(`OCR ${result.ocr_pages}쪽`)
+        setUpload({ status: 'ok', message: `${file.name} · 저장 완료 (${detail.join(' · ')}). 문서 목록에서 검색 준비 상태를 확인하세요.` })
+        await refresh()
+      }
     } catch (e) { if (alive.current) setUpload({ status: 'error', message: errorMessage(e, '문서 처리에 실패했습니다.') }) }
     finally { uploading.current = false }
   }

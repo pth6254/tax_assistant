@@ -1,0 +1,98 @@
+"""Supported consultation flows; questions and document prompts are not legal eligibility rules."""
+
+CASE_KINDS = {
+    'income_tax': {
+        'label': '종합소득세', 'date_label': '귀속연도',
+        'questions': (
+            ('income', '해당 귀속연도의 총수입금액은 얼마인가요?', 'amount', None),
+            ('expense', '필요경비는 얼마인가요? 없다면 0원을 입력해 주세요.', 'amount', None),
+            ('personal_deduction_count', '기본공제 대상 인원은 본인을 포함해 몇 명인가요?', 'count', None),
+            ('other_deductions', '기타 소득공제 합계는 얼마인가요? 없다면 0원을 입력해 주세요.', 'amount', None),
+        ),
+        'documents': (
+            ('income_proof', '수입금액 확인 자료', '수입금액을 확인할 수 있는 자료', None),
+            ('expense_proof', '필요경비 확인 자료', '필요경비를 확인할 자료', 'expense'),
+            ('deduction_proof', '공제 확인 자료', '공제 항목을 확인할 자료', 'other_deductions'),
+        ),
+    },
+    'capital_gains': {
+        'label': '양도소득세', 'date_label': '양도일·자료 조회 기준일',
+        'questions': (
+            ('transfer_price', '양도가액은 얼마인가요?', 'amount', None),
+            ('acquisition_price', '취득가액은 얼마인가요?', 'amount', None),
+            ('expenses', '취득·양도 관련 필요경비는 얼마인가요?', 'amount', None),
+            ('holding_years', '보유기간은 몇 년인가요? (완료된 연수)', 'count', None),
+            ('asset_type', '양도 자산은 무엇인가요? 현재 부동산만 계산합니다.', 'choice', ('부동산',)),
+            ('is_one_home', '1세대 1주택에 해당한다고 보시나요? (비과세 판정은 아님)', 'boolean', None),
+        ),
+        'documents': (
+            ('transfer_contract', '양도 계약 자료', '양도가액·양도일 확인 자료', None),
+            ('acquisition_contract', '취득 계약 자료', '취득가액·취득일 확인 자료', None),
+            ('expense_proof', '필요경비 증빙', '경비 확인 자료', 'expenses'),
+            ('residence_proof', '주택 관련 자료', '보유·거주·주택 수 확인 자료', 'is_one_home'),
+        ),
+    },
+    'inheritance': {
+        'label': '상속세', 'date_label': '상속개시일·자료 조회 기준일',
+        'questions': (
+            ('estate_value', '상속재산가액은 얼마인가요?', 'amount', None),
+            ('debts', '채무·공과금 합계는 얼마인가요?', 'amount', None),
+            ('spouse_inheritance', '배우자가 상속받는 금액은 얼마인가요?', 'amount', None),
+            ('children_count', '자녀는 몇 명인가요?', 'count', None),
+        ),
+        'documents': (
+            ('estate_proof', '상속재산 자료', '재산목록·평가 자료', None),
+            ('debt_proof', '채무·공과금 자료', '채무 증빙', 'debts'),
+            ('family_proof', '가족관계 자료', '상속인 관계 확인 자료', None),
+            ('spouse_proof', '배우자 상속 자료', '배우자 상속분 확인 자료', 'spouse_inheritance'),
+        ),
+    },
+    'gift': {
+        'label': '증여세', 'date_label': '증여일·자료 조회 기준일',
+        'questions': (
+            ('gift_amount', '증여재산가액은 얼마인가요?', 'amount', None),
+            ('relation', '증여자와의 관계는 무엇인가요?', 'choice', ('배우자', '직계존비속', '기타친족', '기타')),
+            ('is_minor', '수증자가 미성년자인가요?', 'boolean', None),
+            ('prior_gifts_10y', '같은 증여자에게서 10년 내 받은 증여액은 얼마인가요?', 'amount', None),
+        ),
+        'documents': (
+            ('gift_proof', '증여재산 자료', '증여 계약·재산 평가 자료', None),
+            ('family_proof', '관계 확인 자료', '증여자와 수증자의 관계 자료', None),
+            ('prior_gift_proof', '과거 증여 자료', '10년 내 증여 내역', 'prior_gifts_10y'),
+        ),
+    },
+    'vat': {
+        'label': '부가가치세', 'date_label': '과세기간 종료일·자료 조회 기준일',
+        'questions': (
+            ('sales', '과세기간의 총매출액은 얼마인가요?', 'amount', None),
+            ('purchases', '매입액은 얼마인가요?', 'amount', None),
+            ('exempt_sales', '면세·영세율 매출로 분리할 금액은 얼마인가요?', 'amount', None),
+            ('is_simplified', '간이과세자에 해당하나요?', 'boolean', None),
+            ('business_type', '업종은 무엇인가요?', 'choice', ('소매업', '음식점업', '제조업', '숙박업', '건설업', '서비스업', '부동산임대업')),
+        ),
+        'documents': (
+            ('sales_proof', '매출 자료', '매출 세금계산서·장부', None),
+            ('purchase_proof', '매입 자료', '매입 세금계산서·장부', 'purchases'),
+            ('exempt_proof', '면세·영세율 자료', '구분 매출 증빙', 'exempt_sales'),
+            ('business_proof', '사업자 유형 자료', '과세유형·업종 확인 자료', None),
+        ),
+    },
+    'penalty_tax': {
+        'label': '가산세', 'date_label': '위반·납부 기준일·자료 조회 기준일',
+        'questions': (
+            ('unpaid_tax', '무신고·과소신고 또는 미납 본세는 얼마인가요?', 'amount', None),
+            ('penalty_type', '어떤 가산세를 검토하나요?', 'choice', ('무신고', '과소신고', '납부지연')),
+            ('is_negligent', '부정행위가 있는 경우인가요? (무신고·과소신고에만 적용)', 'boolean', None),
+            ('days_late', '납부지연 일수는 며칠인가요?', 'count', None),
+        ),
+        'documents': (
+            ('tax_notice', '본세·신고 자료', '신고서·고지서', None),
+            ('due_date_proof', '기한·납부 자료', '기한과 실제 납부일 확인 자료', None),
+            ('penalty_basis', '부정행위 판단 자료', '부정행위 관련 자료', 'is_negligent'),
+        ),
+    },
+}
+
+
+def case_kind(kind):
+    return CASE_KINDS[kind]

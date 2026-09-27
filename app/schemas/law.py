@@ -37,6 +37,7 @@ class HybridSearchResult:
     priority: int
     article_no: str = ""
     graph_evidence: str = ""
+    document_location: str = ""
 
 
 class ParsedLawReference(BaseModel):

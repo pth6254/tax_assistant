@@ -202,6 +202,14 @@ async def _search_documents(
         category = meta.get("category", "기타")
         law_name = meta.get("law_name", "")
         source   = meta.get("source", "")
+        location = ", ".join(
+            f"{label} {meta[key]}" for key, label in
+            (("page", "페이지"), ("slide", "슬라이드"),
+             ("section", "구역"), ("table", "표"), ("row", "행"))
+            if meta.get(key) is not None
+        )
+        if meta.get("ocr"):
+            location = f"{location}, OCR 추출" if location else "OCR 추출"
 
         priority    = _DOC_CATEGORY_PRIORITY.get(category, _DOC_CATEGORY_DEFAULT_PRIORITY)
         source_type = _DOC_CATEGORY_SOURCE_TYPE.get(category, _DOC_CATEGORY_DEFAULT_SOURCE_TYPE)
@@ -214,6 +222,7 @@ async def _search_documents(
             source_type=source_type,
             similarity_score=round(float(r["similarity_score"]), 4),
             priority=priority,
+            document_location=location,
         ))
 
     return results
@@ -266,7 +275,7 @@ def format_hybrid_context(results: list[HybridSearchResult]) -> str:
         return "관련 문서를 찾지 못했습니다."
 
     return "\n\n---\n\n".join(
-        f"[출처: {r.source} | {r.law_name} | 📌 {r.category} ({r.source_type})]\n"
+        f"[출처: {r.source}{' | ' + r.document_location if r.document_location else ''} | {r.law_name} | 📌 {r.category} ({r.source_type})]\n"
         + (f"[관계 검색 보조 근거: {r.graph_evidence}; 질문의 법적 적용 여부는 별도 판단]\n" if r.graph_evidence else "")
         + f"{r.content}"
         for r in results

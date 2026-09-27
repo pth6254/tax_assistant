@@ -1,6 +1,7 @@
+from datetime import date
 from app.services.calculator.errors import CalculationError, require_value
 
-from app.schemas.calculator import CalculationResult, TaxStep
+from app.schemas.calculator import CalculationResult, TaxBasis, TaxStep
 from app.services.calculator.repository import get_deduction, get_source_articles
 
 
@@ -23,10 +24,12 @@ async def calculate(
     penalty_type: str = "무신고",
     is_negligent: bool = False,
     days_late: int = 0,
+    as_of: date | None = None,
 ) -> CalculationResult:
     if penalty_type not in {'무신고', '과소신고', '납부지연'}:
         raise CalculationError('unsupported_condition')
     steps: list[TaxStep] = []
+    used_rows = []
     steps.append(TaxStep(label="본세(무신고·과소신고·미납 세액)", amount=unpaid_tax))
 
     if penalty_type == "납부지연":
@@ -37,7 +40,8 @@ async def calculate(
         ))
     else:
         deduction_name = _RATE_DEDUCTION_NAME.get((penalty_type, is_negligent))
-        row = await get_deduction("가산세", deduction_name) if deduction_name else None
+        row = await get_deduction("가산세", deduction_name, as_of=as_of) if deduction_name else None
+        used_rows.append(row)
         rate = float(require_value(row, "rate"))
         penalty = int(unpaid_tax * rate)
         label = f"{penalty_type}가산세({int(rate * 100)}%{' · 부정행위' if is_negligent else ''})"
@@ -47,7 +51,7 @@ async def calculate(
     steps.append(TaxStep(label="납부할 총액(본세+가산세)", amount=final_tax))
 
     effective_rate = round(penalty / unpaid_tax, 6) if unpaid_tax > 0 else 0.0
-    source_articles = await get_source_articles("가산세") or [
+    source_articles = await get_source_articles("가산세", as_of=as_of) or [
         "국세기본법 제47조의2", "국세기본법 제47조의3", "국세기본법 제47조의4",
     ]
 
@@ -59,4 +63,6 @@ async def calculate(
         final_tax=final_tax,
         effective_rate=effective_rate,
         source_articles=source_articles,
+        basis=TaxBasis(queried_on=(as_of or date.today()).isoformat(),
+                       effective_dates=sorted({str(r['effective_date']) for r in used_rows if r and r.get('effective_date')})),
     )

@@ -76,6 +76,22 @@ def test_upload_pdf_success_returns_200(client, auth_cookie):
     assert resp.json()["chunks_stored"] == 42
 
 
+@pytest.mark.parametrize('suffix,mime', [
+    ('docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+    ('hwpx', 'application/zip'),
+    ('pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'),
+    ('html', 'text/html'),
+])
+def test_upload_other_supported_formats_reach_shared_pipeline(client, auth_cookie, suffix, mime):
+    with patch('app.services.upload_service.process_upload', AsyncMock(return_value={
+        'status': 'ok', 'filename': f'document.{suffix}', 'chunks_stored': 1,
+    })) as process:
+        response = client.post('/api/upload', files={'file': (f'document.{suffix}', b'fixture', mime)},
+                               cookies=auth_cookie)
+    assert response.status_code == 200
+    assert process.await_args.kwargs['filename'] == f'document.{suffix}'
+
+
 # ── 문서 목록 ────────────────────────────────────────────────────
 
 def test_list_documents_without_auth_returns_401(client):

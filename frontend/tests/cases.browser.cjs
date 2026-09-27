@@ -3,10 +3,10 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const assert = require('node:assert/strict')
 
 const fields = [
-  ['income', '해당 귀속연도의 총수입금액은 얼마인가요?', '원'],
-  ['expense', '필요경비는 얼마인가요? 없다면 0원을 입력해 주세요.', '원'],
-  ['personal_deduction_count', '기본공제 대상 인원은 본인을 포함해 몇 명인가요?', '명'],
-  ['other_deductions', '기타 소득공제 합계는 얼마인가요? 없다면 0원을 입력해 주세요.', '원'],
+  ['income', '해당 귀속연도의 총수입금액은 얼마인가요?', 'amount', '원'],
+  ['expense', '필요경비는 얼마인가요? 없다면 0원을 입력해 주세요.', 'amount', '원'],
+  ['personal_deduction_count', '기본공제 대상 인원은 본인을 포함해 몇 명인가요?', 'count', '명'],
+  ['other_deductions', '기타 소득공제 합계는 얼마인가요? 없다면 0원을 입력해 주세요.', 'amount', '원'],
 ]
 
 ;(async () => {
@@ -18,7 +18,7 @@ const fields = [
     const detail = () => ({ ...current, facts: { ...facts }, calculation, checklist: [
       ['income_proof', '수입금액 확인 자료'], ['expense_proof', '필요경비 확인 자료'], ['deduction_proof', '공제 확인 자료'],
     ].map(([key, title]) => ({ key, title, prompt: '자료 확인', needed: true, status: docs[key]?.status || 'pending', filename: docs[key]?.filename, note: docs[key]?.note })),
-      questions: fields.map(([key, question, unit]) => ({ key, question, unit, answered: facts[key] != null, value: facts[key] ?? null })),
+      questions: fields.map(([key, question, type, unit]) => ({ key, question, type, unit, answered: facts[key] != null, value: facts[key] ?? null })),
       next_question: fields.find(([key]) => facts[key] == null)?.[1] || null })
     page.on('pageerror', e => errors.push(e.message))
     await page.route('**/api/**', async route => {
@@ -30,11 +30,12 @@ const fields = [
       else if (path === '/api/consultation-cases' && req.method() === 'GET') body = list
       else if (path === '/api/consultation-cases' && req.method() === 'POST') {
         const input = JSON.parse(req.postData())
-        current = { ...input, id: 'case-1', kind: 'income_tax', conversation_id: 'conversation-1', has_chat: false,
+        current = { ...input, id: 'case-1', kind_label: '종합소득세', conversation_id: 'conversation-1', has_chat: false,
           created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
         list.push({ id: current.id, title: current.title, tax_year: current.tax_year, answered: 0, has_calculation: false })
         body = detail()
       } else if (path === '/api/consultation-cases/case-1' && req.method() === 'GET') body = detail()
+      else if (path === '/api/consultation-cases/case-1/scenarios' && req.method() === 'GET') body = []
       else if (path.endsWith('/facts')) { Object.assign(facts, JSON.parse(req.postData())); calculation = null; list[0].answered = Object.keys(facts).length; body = detail() }
       else if (path.includes('/documents/')) { const key = path.split('/').at(-1); docs[key] = JSON.parse(req.postData()); body = detail() }
       else if (path.endsWith('/calculate')) {

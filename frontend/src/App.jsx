@@ -10,6 +10,7 @@ import DocumentsScreen from './components/Documents/DocumentsScreen'
 import ProfileScreen from './components/Profile/ProfileScreen'
 import TaxCalendarScreen from './components/TaxCalendar/TaxCalendarScreen'
 import CasesScreen from './components/Cases/CasesScreen'
+import LawExplorerScreen from './components/LawExplorer/LawExplorerScreen'
 import Icon from './components/ui/Icon'
 import Notice from './components/ui/Notice'
 export default function App() {
@@ -53,6 +54,7 @@ function Workspace({ user, onLogout }) {
         {view === 'documents' ? <DocumentsScreen library={library} onAsk={ask} />
           : view === 'cases' ? <CasesScreen library={library} onOpenDocuments={() => changeView('documents')} onOpenChat={openCaseChat} />
           : view === 'calculator' ? <CalculatorScreen initial={prefill} onInitialConsumed={() => setPrefill(null)} onAskAboutResult={ask} />
+          : view === 'law-explorer' ? <LawExplorerScreen />
           : view === 'calendar' ? <TaxCalendarScreen />
           : view === 'profile' ? <ProfileScreen onLogout={onLogout} onOpenCalendar={() => changeView('calendar')} />
           : <ChatArea user={user} conversationId={currentId} conversationTitle={current?.title} onMessageSent={refresh}
