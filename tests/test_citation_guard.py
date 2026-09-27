@@ -161,6 +161,10 @@ def test_verify_calc_amount_no_calc_context_passes():
     assert verify_calc_final_amount("아무 답변", None) is True
 
 
+def test_verify_calc_amount_rejects_malformed_tool_context():
+    assert verify_calc_final_amount("결정세액은 5,895,000원입니다.", "계산 결과를 확인할 수 없습니다.") is False
+
+
 # ── build_citation_footer / apply_citation_guard ──────────────────
 
 def test_footer_empty_when_all_verified():

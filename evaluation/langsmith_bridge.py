@@ -20,7 +20,8 @@ def write_new(path, value):
         stream.write('\n')
 
 
-def prepare(run_dir, *, include_content=False, region='us', annotation_queue=False):
+def prepare(run_dir, *, include_content=False, region='us', annotation_queue=False,
+            judge_report=None):
     """Construct exactly the application data to upload, without a Client/network."""
     directory = Path(run_dir)
     read = lambda name: json.loads((directory/name).read_text(encoding='utf-8'))
@@ -31,6 +32,33 @@ def prepare(run_dir, *, include_content=False, region='us', annotation_queue=Fal
     report = score_run(dataset, run, adjudications)
     if digest(saved) != digest(report):
         raise ValueError('Report differs from current scorer; rescore to a new directory first')
+    judge_records = {}
+    judge_file = Path(judge_report) if judge_report else directory/'judge.json'
+    judge_metadata = None
+    if judge_report and not judge_file.is_file():
+        raise FileNotFoundError('Judge report not found')
+    if judge_file.is_file():
+        judge = json.loads(judge_file.read_text(encoding='utf-8'))
+        if (judge.get('schema_version') != '1.1' or judge.get('advisory_only') is not True
+                or judge.get('dataset_hash') != dataset.fingerprint()
+                or judge.get('observations_hash') != digest(run.model_dump(mode='json'))):
+            raise ValueError('Judge report is not bound to this dataset and observations')
+        judge_metadata = {key: judge.get(key) for key in ('model', 'provider', 'prompt_hash')}
+        cases_by_id = {case.id: case for case in dataset.cases}
+        observations_by_key = {(o.case_id, o.variant, o.repeat): o for o in run.observations}
+        for record in judge.get('records', []):
+            key = (record['case_id'], record['variant'], record['repeat'])
+            case = cases_by_id.get(key[0])
+            observation = observations_by_key.get(key)
+            expected = {criterion.id for criterion in case.rubric} if case else set()
+            criteria = record.get('criteria', [])
+            if (key in judge_records or case is None or observation is None
+                    or case.stage != 'answer' or record.get('payload_hash') != digest(observation.payload)
+                    or {item['criterion_id'] for item in criteria} != expected
+                    or len(criteria) != len(expected)
+                    or any(item.get('verdict') not in {'pass', 'fail', 'unknown', 'error'} for item in criteria)):
+                raise ValueError('Judge record does not match an answer observation and rubric')
+            judge_records[key] = record
     if annotation_queue and not include_content:
         raise ValueError('Human review requires explicitly approved content')
     examples = []
@@ -57,11 +85,33 @@ def prepare(run_dir, *, include_content=False, region='us', annotation_queue=Fal
                 feedback.append({'key': f'{namespace}.{row["basis"]}.{key}', 'score': value})
         if observation:
             feedback.append({'key': 'observed_elapsed_seconds', 'score': observation.elapsed_seconds})
+            verification = observation.payload.get('verification', {})
+            if verification.get('schema_version') == '2.0':
+                # Runtime checks remain diagnostics even for a human-approved case.
+                # Only the independent rubric can score legal accuracy.
+                for name in ('claims_total', 'claims_released', 'claims_withheld', 'issues_total', 'issues_answered', 'judge_error'):
+                    value = verification.get('metrics', {}).get(name)
+                    if isinstance(value, (int, float)) and math.isfinite(value):
+                        feedback.append({'key': f'diagnostic.runtime.{name}', 'score': value})
+                for name in ('citation', 'calculation', 'legal_application'):
+                    value = verification.get('checks', {}).get(name)
+                    if value in {'checked', 'failed', 'not_assessed', 'not_applicable'}:
+                        feedback.append({'key': f'diagnostic.runtime.{name}', 'value': value})
+        judge_record = judge_records.get((row['case_id'], row['variant'], row['repeat']))
+        if judge_record:
+            for criterion in judge_record['criteria']:
+                key = f'{namespace}.judge.{criterion["criterion_id"]}'
+                verdict = criterion['verdict']
+                feedback.append({'key': key, **({'score': int(verdict == 'pass')}
+                                                  if verdict in {'pass', 'fail'} else {'value': verdict})})
+            if include_content:
+                output['judge'] = judge_record['criteria']
         records.append(dict(case_id=row['case_id'], variant=row['variant'], repeat=row['repeat'],
                             outputs=output, feedback=feedback, review_status=row['review_status'],
                             stage=row['stage'], basis=row['basis']))
     return dict(schema_version='1.0', endpoint=ENDPOINTS[region], include_content=include_content,
                 annotation_queue=annotation_queue, examples=examples, records=records,
+                judge=judge_metadata,
                 dataset_key=digest(examples), dataset_hash=dataset.fingerprint(),
                 observations_hash=report['observations_hash'], scorer_version=SCORER_VERSION,
                 gate=report['gate'], split=run.split, mode=run.mode, repeats=run.repeats,
@@ -130,6 +180,8 @@ def publish(plan, *, approved_sha256, receipt_path, client_factory=None, env_fil
         receipt['dataset'] = str(dataset.id)
         inputs = {e['case_id']: e['inputs'] for e in plan['examples']}
         metadata = {key: plan[key] for key in ('dataset_hash', 'observations_hash', 'scorer_version', 'gate', 'split', 'mode')}
+        if plan.get('judge'):
+            metadata['judge'] = plan['judge']
         metadata.update(artifact_import=True, plan_hash=fingerprint, timing='Use observed_elapsed_seconds; native timing is import time')
         for variant, name in project_names.items():
             project = client.create_project(name, reference_dataset_id=dataset.id,

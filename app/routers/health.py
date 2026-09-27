@@ -2,6 +2,7 @@
 import logging
 
 import httpx
+from urllib.parse import quote
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
@@ -88,13 +89,21 @@ async def _llm_status(provider: str | None = None, model: str | None = None,
             "missing_models": [],
         }
     try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            endpoint = (f"{base_url.rstrip('/')}/model/{quote(model, safe='/')}"
+                        if provider == "openrouter" else f"{base_url.rstrip('/')}/models")
             response = await client.get(
-                f"{base_url.rstrip('/')}/models",
+                endpoint,
                 headers={"Authorization": f"Bearer {api_key}"},
             )
+        if provider == "openrouter" and response.status_code == 404:
+            return {"status": "model_missing", "provider": provider, "device": "remote",
+                    "model": model, "connected": True,
+                    "required_models": [model], "missing_models": [model]}
         response.raise_for_status()
-        models = {item.get("id") for item in response.json().get("data", [])}
+        data = response.json().get("data", [])
+        models = ({data.get("id")} if provider == "openrouter" and isinstance(data, dict)
+                  else {item.get("id") for item in data})
         missing = [] if model in models else [model]
         return {
             "status": "ok" if not missing else "model_missing",
@@ -106,7 +115,7 @@ async def _llm_status(provider: str | None = None, model: str | None = None,
             "missing_models": missing,
         }
     except (httpx.HTTPError, ValueError, KeyError) as exc:
-        logger.warning("LLM health check failed: %s", exc)
+        logger.warning("LLM health check failed (%s): %s", type(exc).__name__, exc)
         return {
             "status": "unreachable",
             "provider": provider,

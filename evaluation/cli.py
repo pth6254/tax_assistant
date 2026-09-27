@@ -51,6 +51,7 @@ def main(argv=None):
     prepare.add_argument('--output', required=True)
     prepare.add_argument('--include-content', action='store_true')
     prepare.add_argument('--annotation-queue', action='store_true')
+    prepare.add_argument('--judge-report', help='Path to a hash-bound advisory judge.json report')
     prepare.add_argument('--region', choices=['us', 'eu'], default='us')
     publish = smith_sub.add_parser('publish')
     publish.add_argument('--plan', required=True)
@@ -70,7 +71,8 @@ def main(argv=None):
         from evaluation.schema import digest
         if args.smith_command == 'prepare':
             plan = bridge.prepare(args.run_dir, include_content=args.include_content,
-                                  region=args.region, annotation_queue=args.annotation_queue)
+                                  region=args.region, annotation_queue=args.annotation_queue,
+                                  judge_report=args.judge_report)
             bridge.write_new(args.output, plan)
             print(json.dumps({'plan': args.output, 'sha256': digest(plan), 'content_included': plan['include_content'],
                               'records': len(plan['records']), 'uploaded': False}))

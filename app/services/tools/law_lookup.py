@@ -1,5 +1,7 @@
 from app.schemas.tool_call import LawLookupRequest
 from app.services.law.lookup_service import get_law_article
+from app.schemas.law import HybridSearchResult
+from app.services.evidence import context_from_records, record_from_result
 
 
 async def lookup(request: LawLookupRequest) -> tuple[str, str]:
@@ -10,7 +12,12 @@ async def lookup(request: LawLookupRequest) -> tuple[str, str]:
         return "not_found", "조문은 있으나 요청한 항·호·목을 본문에서 확인하지 못했습니다. 존재한다고 단정하지 마세요."
     text = article.target.text if article.target and article.target.text else article.article_text
     reference = article.reference.canonical if article.reference else article.article_no
-    return "ok", (
-        f"[출처: {article.source_url} | {article.law_name} | {article.law_type}]\n"
-        f"{reference}\n{text}\n시행일: {article.effective_date}"
+    result = HybridSearchResult(
+        content=f"{reference}\n{text}", source=article.source_url,
+        law_name=article.law_name, category=article.law_type, source_type="law",
+        similarity_score=1, priority=0, article_no=getattr(article, "article_no", request.article_no),
+        origin_kind="official_law", source_id=getattr(article, "source_id", ""),
+        effective_date=article.effective_date, content_hash=getattr(article, "content_hash", ""),
+        original_text=article.article_text,
     )
+    return "ok", context_from_records([record_from_result(result)])

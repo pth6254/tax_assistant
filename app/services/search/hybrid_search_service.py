@@ -24,6 +24,7 @@ import uuid as _uuid
 
 from app.database import get_pool
 from app.schemas.law import HybridSearchResult
+from app.services.evidence import context_from_records, record_from_result, digest
 from app.services.embedding_service import embed_texts
 from app.services.law.reference_parser import extract_law_reference
 from app.services.law.lookup_service import get_law_article
@@ -89,7 +90,7 @@ _EMBEDDING_COLUMN = "embedding_v2" if EMBEDDING_VERSION == "v2" else "embedding"
 
 _LAW_ARTICLES_SQL = f"""
 SELECT
-    law_name, law_type, tax_type,
+    id, content_hash, effective_date, law_name, law_type, tax_type,
     article_no, article_title, article_text,
     source_url,
     1 - ({_EMBEDDING_COLUMN}::halfvec(2560) <=> $1::vector::halfvec(2560)) AS similarity_score
@@ -105,7 +106,7 @@ LIMIT $3
 # 조문 벡터에서 희석되는 특정 항의 내용(예: 제59조의4 ⑨항)도 검색에 걸리게 함.
 _LAW_CLAUSES_SQL = f"""
 SELECT
-    la.law_name, la.law_type, la.tax_type,
+    la.id, la.content_hash, la.effective_date, la.law_name, la.law_type, la.tax_type,
     la.article_no, la.article_title, la.article_text,
     la.source_url,
     1 - (c.{_EMBEDDING_COLUMN}::halfvec(2560) <=> $1::vector::halfvec(2560)) AS similarity_score
@@ -120,7 +121,7 @@ LIMIT $3
 
 _DOCUMENTS_SQL = f"""
 SELECT
-    content,
+    id, content,
     metadata,
     1 - ({_EMBEDDING_COLUMN}::halfvec(2560) <=> $1::vector::halfvec(2560)) AS similarity_score
 FROM documents
@@ -151,6 +152,11 @@ def _row_to_article_result(r) -> HybridSearchResult:
         similarity_score=round(float(r["similarity_score"]), 4),
         priority=priority,
         article_no=r["article_no"],
+        origin_kind="official_law",
+        source_id=str(r.get("id", r.get("source_id", ""))),
+        effective_date=str(r.get("effective_date", "") or ""),
+        content_hash=r.get("content_hash", ""),
+        original_text=r["article_text"],
     )
 
 
@@ -212,7 +218,7 @@ async def _search_documents(
             location = f"{location}, OCR 추출" if location else "OCR 추출"
 
         priority    = _DOC_CATEGORY_PRIORITY.get(category, _DOC_CATEGORY_DEFAULT_PRIORITY)
-        source_type = _DOC_CATEGORY_SOURCE_TYPE.get(category, _DOC_CATEGORY_DEFAULT_SOURCE_TYPE)
+        source_type = "user_pdf"
 
         results.append(HybridSearchResult(
             content=r["content"],
@@ -223,6 +229,10 @@ async def _search_documents(
             similarity_score=round(float(r["similarity_score"]), 4),
             priority=priority,
             document_location=location,
+            origin_kind="user_document",
+            source_id=str(r.get("id", "")),
+            content_hash=digest(r["content"]),
+            original_text=r["content"],
         ))
 
     return results
@@ -271,15 +281,7 @@ async def _search_all(
 
 def format_hybrid_context(results: list[HybridSearchResult]) -> str:
     """하이브리드 검색 결과를 LLM 컨텍스트 문자열로 포맷한다."""
-    if not results:
-        return "관련 문서를 찾지 못했습니다."
-
-    return "\n\n---\n\n".join(
-        f"[출처: {r.source}{' | ' + r.document_location if r.document_location else ''} | {r.law_name} | 📌 {r.category} ({r.source_type})]\n"
-        + (f"[관계 검색 보조 근거: {r.graph_evidence}; 질문의 법적 적용 여부는 별도 판단]\n" if r.graph_evidence else "")
-        + f"{r.content}"
-        for r in results
-    )
+    return context_from_records(record_from_result(r) for r in results)
 
 
 async def _lookup_referenced_article(
@@ -314,6 +316,11 @@ async def _lookup_referenced_article(
         similarity_score=1.0,   # 직접 조회 — 항상 최상위
         priority=priority,
         article_no=article.article_no,
+        origin_kind="official_law",
+        source_id=getattr(article, "source_id", ""),
+        effective_date=article.effective_date,
+        content_hash=getattr(article, "content_hash", ""),
+        original_text=article.article_text,
     )
 
 
@@ -336,6 +343,7 @@ async def hybrid_search(
     law_filter: str = "ALL",
     user_id: str = "",
     original_query: str = "",
+    official_only: bool = False,
 ) -> list[HybridSearchResult]:
     """law_articles + documents를 동시에 검색하고 우선순위 순으로 병합한다.
 
@@ -347,6 +355,13 @@ async def hybrid_search(
 
     t0 = time.perf_counter()
 
+    async def candidates(vector, count):
+        if not official_only:
+            return await _search_all(vector, law_filter, count, user_id)
+        rows = await _search_law_articles(vector, law_filter, count)
+        return sorted([r for r in rows if r.similarity_score >= SIMILARITY_THRESHOLD],
+                      key=lambda r: (r.priority, -r.similarity_score))
+
     direct = await _lookup_referenced_article(original_query or queries[0], law_filter)
     if direct:
         logger.info("[SEARCH] 조문번호 직접 질의 감지 — %s %s 최상위 배치",
@@ -354,7 +369,7 @@ async def hybrid_search(
 
     if len(queries) == 1:
         q_emb = (await embed_texts(queries))[0]
-        merged = await _search_all(q_emb, law_filter, TOP_K, user_id)
+        merged = await candidates(q_emb, TOP_K)
         candidates = merged[:TOP_K]
         final = candidates
         final  = _prepend_direct_hit(direct, final)
@@ -373,7 +388,7 @@ async def hybrid_search(
     fetch_k = TOP_K * 2
     q_embs = await embed_texts(queries)
     results_per_query = await asyncio.gather(*[
-        _search_all(q_emb, law_filter, fetch_k, user_id)
+        candidates(q_emb, fetch_k)
         for q_emb in q_embs
     ])
 

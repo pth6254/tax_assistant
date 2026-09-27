@@ -112,7 +112,7 @@ async def test_run_calculation_full_flow():
             AsyncMock(return_value=_dummy_result()),
         ) as mock_calc,
     ):
-        run = await run_calculation_for_query("연소득 5천만원 세금 얼마야?")
+        run = await run_calculation_for_query("연소득 5천만원, 경비 0원, 공제 인원 1명, 기타 공제 0원 세금 얼마야?")
     assert run is not None
     assert "소득세법 제55조" in run.context
     assert run.tool == "income_tax"
@@ -179,7 +179,7 @@ async def test_run_calculation_routes_to_vat():
             AsyncMock(return_value=_dummy_vat_result()),
         ) as mock_calc,
     ):
-        run = await run_calculation_for_query("매출 1억 매입 6천만원인데 부가세 얼마 내야해?")
+        run = await run_calculation_for_query("매출 1억 매입 6천만원, 면세 매출 0원, 일반과세 소매업 부가세 얼마 내야해?")
     assert run is not None
     assert run.tool == "vat"
     mock_calc.assert_awaited_once_with(
@@ -208,7 +208,7 @@ async def test_run_calculation_routes_to_penalty_tax():
             AsyncMock(return_value=_dummy_penalty_result()),
         ) as mock_calc,
     ):
-        run = await run_calculation_for_query("종합소득세 1,000만원 무신고했는데 가산세 얼마나 나와?")
+        run = await run_calculation_for_query("미납 세액 1,000만원 무신고, 부정행위 없음, 지연 일수 0일 가산세 얼마나 나와?")
     assert run is not None
     assert run.tool == "penalty_tax"
     mock_calc.assert_awaited_once_with(

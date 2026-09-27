@@ -2,6 +2,7 @@
 from dataclasses import replace
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
 
 
@@ -89,3 +90,18 @@ async def test_openrouter_without_key_reports_configuration_missing(monkeypatch)
     assert result["status"] == "configuration_missing"
     assert result["connected"] is False
     assert result["device"] == "remote"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('status,expected', [(200, 'ok'), (404, 'model_missing')])
+async def test_openrouter_health_checks_one_model_without_downloading_catalog(monkeypatch, status, expected):
+    from app.routers import health
+    actual_client = httpx.AsyncClient
+    def respond(request):
+        assert request.url.path == '/api/v1/model/openai/gpt-6-luna'
+        return httpx.Response(status, json={'data': {'id': 'openai/gpt-6-luna'}})
+    monkeypatch.setattr(health.httpx, 'AsyncClient',
+                        lambda **options: actual_client(transport=httpx.MockTransport(respond), **options))
+    result = await health._llm_status('openrouter', 'openai/gpt-6-luna',
+                                      'https://openrouter.ai/api/v1', 'test-key')
+    assert result['status'] == expected

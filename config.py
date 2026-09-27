@@ -39,11 +39,12 @@ OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 CHAT_MODEL: str      = os.getenv("CHAT_MODEL",  "qwen3.5:9b")          # LLM
 LLM_TASK_NAMES = (
     "answer", "history_answer", "citation_extraction", "query_classification",
-    "tool_selection", "document_classification",
+    "tool_selection", "document_classification", "question_planning", "answer_judge",
 )
 _DEFAULT_EFFORT = {
     "answer": "low", "history_answer": "low", "citation_extraction": "low",
     "query_classification": "low", "tool_selection": "low", "document_classification": "none",
+    "question_planning": "low", "answer_judge": "low",
 }
 _VALID_EFFORT = {"none", "minimal", "low", "medium", "high", "xhigh", "max"}
 
@@ -116,6 +117,11 @@ THINK_ENABLED: bool  = os.getenv("THINK_ENABLED", "false").lower() == "true"  # 
 
 # Call sites select a fixed task name; arbitrary request input cannot choose a provider.
 LLM_TASK_SETTINGS: dict[str, LLMTaskSettings] = {name: _task_settings(name) for name in LLM_TASK_NAMES}
+
+# Independent gold calibration is required before enabling semantic release gates.
+ANSWER_JUDGE_MODE = os.getenv("ANSWER_JUDGE_MODE", "shadow").lower()
+if ANSWER_JUDGE_MODE not in {"shadow", "enforce"}:
+    raise ValueError("ANSWER_JUDGE_MODE must be shadow or enforce")
 
 
 @dataclass(frozen=True)

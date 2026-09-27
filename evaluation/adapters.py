@@ -6,7 +6,7 @@ import time
 from evaluation.schema import Observation
 
 OFFLINE = {'reference', 'relation', 'graph_index', 'progressive_tax'}
-MODEL_GENERATION = {'tool_selection', 'answer_fixed_context'}
+MODEL_GENERATION = {'tool_selection', 'answer_fixed_context', 'answer_reliable_context'}
 
 
 def offline(case):
@@ -117,18 +117,30 @@ async def live(case, user_id):
         from app.services.tools.planner import select_tool
         selection = await select_tool(case.input['query'], case.input.get('history'))
         return {'tool': selection[0] if selection else 'none', 'params': selection[1] if selection else {}}
+    if case.adapter == 'answer_reliable_context':
+        from app.schemas.reliability import EvidenceRecord, QuestionPlan
+        from app.services.evidence import context_from_records
+        from app.services.claim_verification import generate_verified_answer
+        # Explicit trusted fixture records; never reconstruct identity from text.
+        context = context_from_records([EvidenceRecord.model_validate(r) for r in case.input['evidence']],
+                                       plan=QuestionPlan.model_validate(case.input['plan']))
+        answer, verification = await generate_verified_answer(case.input['query'], context)
+        return {'answer': answer, 'context': str(context), 'verification': verification}
     if case.adapter == 'answer_fixed_context':
         from app.services.chat_service import (_FINAL_PROMPT_TEMPLATE, _generate_answer,
-                                               _final_prompt_values, _append_source_list_if_missing)
+                                               _final_prompt_values)
         from app.services.ai_pipeline import text_chain
-        from app.services.citation_guard import apply_citation_guard, extract_citations
+        from app.services.answer_verification import verify_answer
+        from app.services.citation_guard import extract_citations
         # Isolate generation from retrieval, history persistence, web search and tool execution.
         context = case.input['context']
-        answer = await text_chain(_FINAL_PROMPT_TEMPLATE, _generate_answer, name='evaluation_fixed_context').ainvoke(
+        raw_answer = await text_chain(_FINAL_PROMPT_TEMPLATE, _generate_answer, name='evaluation_fixed_context').ainvoke(
             _final_prompt_values(case.input['query'], context, '', []))
-        answer = await _append_source_list_if_missing(answer, context)
-        answer = apply_citation_guard(answer, context)
-        return {'answer': answer, 'citations': [dict(law=l, reference=r) for _, l, r in extract_citations(answer)]}
+        answer, verification = verify_answer(raw_answer, context,
+                                             require_law=bool(case.input.get('require_law', False)))
+        return {'answer': answer, 'raw_answer': raw_answer, 'verification': verification,
+                'context': context,
+                'citations': [dict(law=l, reference=r) for _, l, r in extract_citations(answer)]}
     raise ValueError('Recorded observations must be supplied through the score command')
 
 

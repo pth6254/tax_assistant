@@ -33,6 +33,21 @@ test('SSE handles split UTF-8, tool, calc and chunk events in order', async t =>
   assert.deepEqual(events, ['running', 'ok', '답변', 'vat', 'done'])
 })
 
+test('SSE delivers verification progress and final result before completion', async t => {
+  const summary = { schema_version: '1.0', status: 'checked', citations: [] }
+  const body = [
+    { type: 'verification', status: 'checking' },
+    { type: 'chunk', text: 'answer' },
+    { type: 'verification', data: summary },
+  ].map(event => 'data: ' + JSON.stringify(event) + '\n\n').join('') + 'data: [DONE]\n\n'
+  t.mock.method(globalThis, 'fetch', async () => new Response(body))
+  const events = []
+  await streamChat('question', 'id', value => events.push(value), () => events.push('done'),
+    null, null, null, null, null, value => events.push(value))
+  assert.deepEqual(events, [{ type: 'verification', status: 'checking' }, 'answer',
+    { type: 'verification', data: summary }, 'done'])
+})
+
 test('SSE replacement swaps the generated answer with corrected citations', async t => {
   const body = [
     { type: 'chunk', text: '[법률] 소득세법 제101조 - 부당 Lerer계산' },
@@ -133,5 +148,29 @@ test('chat message actions render as labelled icon-only buttons', async () => {
     assert.match(answer, /aria-label="다시 답변"/)
     assert.match(answer, /aria-label="답변 공유"/)
     assert.doesNotMatch(answer, />↻ 다시 답변</)
+  } finally { await server.close() }
+})
+
+test('verification panel displays the used snapshot and escapes uploaded markup', async () => {
+  const { createServer } = await import('vite')
+  const { createElement } = await import('react')
+  const { renderToStaticMarkup } = await import('react-dom/server')
+  const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom' })
+  try {
+    const { default: Panel } = await server.ssrLoadModule('/src/components/Chat/VerificationPanel.jsx')
+    const html = renderToStaticMarkup(createElement(Panel, { verification: {
+      status: 'limited', checks: {}, note: '확인 사항',
+      plan: { issues: [{ id: 'I1', subject: 'H', law: '법인세법' }], missing_inputs: ['거래 시점'] },
+      citations: [{ evidence_id: 'E1', origin: 'user_document', source: '계약서', text: '<img src=x onerror=alert(1)>', effective_from: '2025-01-01' }],
+    } }))
+    assert.match(html, /사용한 원문/)
+    assert.match(html, /2025-01-01/)
+    assert.match(html, /사용자 문서/)
+    assert.match(html, /추가 확인 필요/)
+    assert.match(html, /&lt;img/)
+    assert.doesNotMatch(html, /<img/)
+    assert.doesNotMatch(html, /<button/)
+    const progress = renderToStaticMarkup(createElement(Panel, { loading: true, progress: 'retrieving' }))
+    assert.match(progress, /쟁점별 근거/)
   } finally { await server.close() }
 })

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import ToolCallCard from './ToolCallCard'
+import VerificationPanel from './VerificationPanel'
 import Notice from '../ui/Notice'
 import Icon from '../ui/Icon'
 const CITATION_RE = /\[(법률|시행령|시행규칙)\]\s*([^\n\[]+?)\s*(제\s*\d+\s*조(?:\s*의\s*\d+)?(?:\s*제\s*\d+\s*항)?(?:\s*제\s*\d+\s*호(?:\s*의\s*\d+)?)?(?:\s*[가-힣]\s*목)?)/g
@@ -61,6 +62,7 @@ export default function MessageBubble({ message, onCitationClick, onOpenCalculat
       <div className="answer-label"><Icon name="book" size={18} /><span>세무 AI</span><span className="muted small">근거와 적용 조건을 함께 확인하세요</span></div>
       {message.tools?.map(t => <ToolCallCard key={t.id} tool={t} onCitationClick={onCitationClick} onOpenCalculator={onOpenCalculator} onRetry={onRetry} />)}
       <div ref={body} className="markdown-bubble" onClick={e => { const target = e.target.closest('button.citation-link'); if (target && body.current.contains(target)) onCitationClick?.(target.dataset.law, target.dataset.article) }} />
+      <VerificationPanel verification={message.verification} loading={message.verificationLoading} progress={message.verificationProgress} onCitationClick={onCitationClick} />
       {message.status === 'stopped' && <Notice tone="info">생성을 중지했습니다. 표시된 내용은 미완성이고 저장되지 않았을 수 있습니다.</Notice>}
       {message.status === 'error' && <Notice onRetry={onRetry}>{message.error}</Notice>}
       {message.status === 'stopped' && onRetry && <button className="button secondary" onClick={onRetry}>같은 질문 다시 보내기</button>}

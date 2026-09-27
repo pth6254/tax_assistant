@@ -147,7 +147,8 @@ async def test_chat_pipeline_keeps_guard_and_history_storage(monkeypatch):
     conv_id = uuid4()
     assert await chat_service.process_chat("질문", str(conv_id), "test-user") == ("original guarded", None)
     append.assert_not_awaited()
-    save.assert_awaited_once_with(conv_id, "질문", "original guarded", is_first=True)
+    assert save.await_args.args == (conv_id, "질문", "original guarded")
+    assert save.await_args.kwargs['verification']['status'] == 'withheld'
 
 
 @pytest.mark.asyncio
@@ -183,8 +184,10 @@ async def test_streaming_chat_keeps_footer_events_and_saved_answer(monkeypatch):
     monkeypatch.setattr(chat_service, "_save_history", save)
     conv_id = uuid4()
     events = [e async for e in chat_service.stream_chat_response("질문", str(conv_id), "test-user")]
-    assert events == [{"type": "chunk", "text": "hello world footer"}]
-    save.assert_awaited_once_with(conv_id, "질문", "hello world footer", is_first=True)
+    assert [event['type'] for event in events] == ['verification', 'chunk', 'verification']
+    assert events[1]['text'] == 'hello world footer'
+    assert save.await_args.args == (conv_id, "질문", "hello world footer")
+    assert save.await_args.kwargs['verification'] == events[2]['data']
 
 
 @pytest.mark.asyncio
@@ -204,8 +207,9 @@ async def test_streaming_chat_replaces_generated_source_title_before_save(monkey
     monkeypatch.setattr(chat_service, "_save_history", save)
     conv_id = uuid4()
     events = [event async for event in chat_service.stream_chat_response("질문", str(conv_id), "test-user")]
-    assert events == [{"type": "chunk", "text": corrected}]
-    save.assert_awaited_once_with(conv_id, "질문", corrected, is_first=True)
+    assert [event['type'] for event in events] == ['verification', 'chunk', 'verification']
+    assert events[1]['text'] == corrected
+    assert save.await_args.args == (conv_id, "질문", corrected)
 
 
 @pytest.mark.asyncio
@@ -225,7 +229,9 @@ async def test_invalid_law_citation_is_never_streamed_or_saved(monkeypatch):
     monkeypatch.setattr(chat_service, '_save_history', save)
 
     events = [event async for event in chat_service.stream_chat_response('소득세 질문', str(uuid4()), 'test-user')]
-    assert len(events) == 1 and events[0]['type'] == 'chunk'
-    assert wrong_answer not in events[0]['text']
-    assert '검증하지 못했습니다' in events[0]['text']
-    assert save.call_args.args[2] == events[0]['text']
+    chunks = [event['text'] for event in events if event['type'] == 'chunk']
+    assert len(chunks) == 1
+    assert wrong_answer not in chunks[0]
+    assert '검증하지 못했습니다' in chunks[0]
+    assert save.call_args.args[2] == chunks[0]
+    assert save.call_args.kwargs['verification']['status'] == 'withheld'

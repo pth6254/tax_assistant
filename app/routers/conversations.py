@@ -162,6 +162,7 @@ async def get_messages(conv_id: str, user: dict = Depends(verify_token)):
             msg = json.loads(msg)
         result.append({"message_id": r.get('id'), "role": msg["role"], "content": msg["content"],
                        "tools": msg.get("tools", []),
+                       "verification": msg.get("verification") if msg["role"] == "assistant" else None,
                        "answer_version": r.get('answer_version', 1) if msg['role'] == 'assistant' else None,
                        "answer_version_count": max(1, r.get('version_count', 0)) if msg['role'] == 'assistant' else None})
     return result

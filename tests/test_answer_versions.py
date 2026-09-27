@@ -130,5 +130,7 @@ async def test_regeneration_stream_commits_after_final_chunk(monkeypatch):
     with patch('app.services.answer_version_service.commit_regeneration', commit):
         events = [event async for event in chat_service.stream_chat_response(
             'question', str(uuid.uuid4()), str(uuid.uuid4()), regeneration=regen)]
-    assert events == [{'type': 'chunk', 'text': 'fresh answer'}]
+    assert [event['type'] for event in events] == ['verification', 'chunk', 'verification']
+    assert events[1]['text'] == 'fresh answer'
     assert commit.await_args.args[2:] == (regen, 'fresh answer', [])
+    assert commit.await_args.kwargs['verification'] == events[2]['data']

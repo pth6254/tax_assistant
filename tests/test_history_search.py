@@ -61,7 +61,8 @@ async def test_chat_history_never_calls_current_rag(monkeypatch,stream):
     monkeypatch.setattr(chat,'history_answer',answer)
     if stream:
         events=[e async for e in chat.stream_chat_response('2010년 소득세법',str(uuid4()),str(uuid4()))]
-        assert events[-1]['text']=='시점 확인 필요'
+        assert [e['text'] for e in events if e['type']=='chunk']==['시점 확인 필요']
+        assert [e['data']['status'] for e in events if e['type']=='verification']==['limited']
     else:
         result,_=await chat.process_chat('2010년 소득세법',str(uuid4()),str(uuid4()))
         assert result=='시점 확인 필요'

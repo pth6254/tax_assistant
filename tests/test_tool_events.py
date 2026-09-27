@@ -42,7 +42,7 @@ async def test_stream_emits_progress_before_preparation_finishes_and_saves_termi
     release.set()
     remaining = [e async for e in stream]
     assert remaining[0]["status"] == "ok"
-    assert remaining[1]["type"] == "chunk"
+    assert [event['type'] for event in remaining[1:]] == ['verification', 'chunk', 'verification']
     assert [e["status"] for e in save.call_args.kwargs["tools"]] == ["ok"]
 
 

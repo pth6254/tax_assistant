@@ -13,12 +13,13 @@ from app.services.law.reference_parser import extract_law_reference, parse_law_r
 from app.services.law.coverage_service import NATIONAL_TAX_LAWS
 from app.services.tools.registry import TOOL_SCHEMAS
 from app.services.tools.executor import ToolRun, execute_tool
+from app.services.tools.policy import DOCUMENT_INTENT, check_proposal
 
 logger = logging.getLogger(__name__)
 # 금액 표현: 숫자 또는 한글 단위(억/천만/백만/만원)
 _AMOUNT_RE = re.compile(r"\d|[일이삼사오육칠팔구십백천]+\s*(?:억|천만|백만|만\s*원)")
-# 계산 의도 키워드
-_INTENT_RE = re.compile(r"얼마|계산|세액|세금.{0,6}(?:나오|내야|납부|부과)|내야\s*(?:하|할|되)")
+# 세금계산서의 '계산'은 세액 산출 요청이 아니다.
+_INTENT_RE = re.compile(r"얼마|계산(?!서)|세액|세금.{0,6}(?:나오|내야|납부|부과)|내야\s*(?:하|할|되)")
 
 def has_calculation_intent(query: str) -> bool:
     """Explicit calculation requests may lack inputs; a year alone is not money."""
@@ -33,7 +34,7 @@ def has_tool_intent(query: str) -> bool:
     return (
         has_calculation_intent(query)
         or bool(reference and reference.article is not None)
-        or bool(re.search(r"원문|조문|문서|서류|계약서|업로드|첨부|PDF|pdf", query))
+        or bool(re.search(r"원문|조문", query)) or bool(DOCUMENT_INTENT.search(query))
     )
 
 
@@ -94,13 +95,37 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
         _emit_result(result, {}, on_event)
         return result
     if selection is None:
+        if not (has_calculation_intent(query) or calculation_followup or DOCUMENT_INTENT.search(query)
+                or re.search(r"원문.*(?:보여|조회)|조문.*조회", query)):
+            if on_event:
+                on_event({"type": "tool", "id": "primary", "tool": "none", "status": "no_tool_needed"})
+            return None
         result = ToolRun("none", "needs_input", "실행할 도구나 필수 입력을 확정하지 못했습니다. 필요한 조건을 확인하고 세액·문서 내용을 추측하지 마세요.")
+        _emit_result(result, {}, on_event)
+        return result
+    allowed, reason, proofs = check_proposal(*selection, query, history,
+        calculation_intent=has_calculation_intent(query) or calculation_followup)
+    if not allowed:
+        # An irrelevant proposal for an analysis question must not suppress RAG.
+        if reason in {"explicit_reference_required", "explicit_lookup_request_required", "document_request_required", "calculation_request_mismatch"} and not (
+            has_calculation_intent(query) or calculation_followup or DOCUMENT_INTENT.search(query)
+        ):
+            if on_event:
+                on_event({"type": "tool", "id": "primary", "tool": selection[0],
+                          "status": "no_tool_needed", "error_code": reason})
+            return None
+        from app.services.tools.policy import ALIASES
+        missing = reason.split(":", 1)[1].split(",") if reason.startswith("unconfirmed_inputs:") else []
+        labels = [ALIASES.get(key, key).split("|")[0] for key in missing]
+        result = ToolRun(selection[0], "invalid_arguments" if reason == "invalid_input" else "needs_input", "입력값 또는 조회 대상을 사용자 발언에서 확인하지 못했습니다."
+                         + (" 확인할 입력: " + ", ".join(labels) if labels else " 조회 대상과 계산 조건을 구체적으로 알려주세요."),
+                         error_code=reason)
         _emit_result(result, {}, on_event)
         return result
     if on_event:
         on_event({"type": "tool", "id": "primary", "tool": selection[0], "status": "running"})
     result = await execute_tool(*selection, user_id=user_id)
-    _emit_result(result, selection[1] if result.status == "ok" else {}, on_event)
+    _emit_result(result, selection[1], on_event)
     return result
 
 

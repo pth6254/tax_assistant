@@ -114,6 +114,10 @@ async def collect(dataset, *, mode='offline', split='dev', include_draft=False, 
 
 
 def write_artifacts(directory, dataset, run, adjudications=()):
+    # Score the same JSON-normalized values that a later import will reload.
+    # Pydantic may retain an integer default for a float field in memory.
+    dataset = Dataset.model_validate(dataset.model_dump(mode='json'))
+    run = Run.model_validate(run.model_dump(mode='json'))
     report = score_run(dataset, run, adjudications)
     path = Path(directory)
     path.mkdir(parents=True, exist_ok=False)  # Never overwrite a prior run.

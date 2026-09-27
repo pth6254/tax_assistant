@@ -11,7 +11,7 @@ from app.services import llm_client
 def test_task_names_cover_all_application_llm_calls():
     assert set(config.LLM_TASK_SETTINGS) == {
         "answer", "history_answer", "citation_extraction", "query_classification",
-        "tool_selection", "document_classification",
+        "tool_selection", "document_classification", "question_planning", "answer_judge",
     }
 
 

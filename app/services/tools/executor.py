@@ -1,4 +1,4 @@
-"""한 질문당 도구 하나, 시간 제한, 인증 컨텍스트 주입."""
+"""검사된 도구 호출 하나를 실행: 시간 제한과 서버 인증 컨텍스트 주입."""
 import asyncio
 import logging
 from dataclasses import dataclass
@@ -9,6 +9,7 @@ from app.services.calculator.errors import classify_error
 from app.services.calculator.engine import CALCULATORS, CalcRun, run_calculation
 from app.services.tools import document_search, law_lookup
 from app.services.tools.registry import validate_arguments
+from app.services.evidence import EvidenceContext
 
 logger = logging.getLogger(__name__)
 TOOL_TIMEOUT_SEC = 30
@@ -39,7 +40,7 @@ async def execute_tool(tool: str, params: dict, *, user_id: str) -> ToolRun:
                 status, context = await law_lookup.lookup(request)
             else:
                 status, context = await document_search.search(request, user_id)
-        if len(context) > 12000:
+        if len(context) > 12000 and not isinstance(context, EvidenceContext):
             context = context[:12000] + "\n[길이 제한으로 일부 생략됨. 전체 원문이라고 표현하지 마세요.]"
         return ToolRun(tool, status, context)
     except ValidationError as exc:

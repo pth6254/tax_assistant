@@ -177,7 +177,8 @@ async def test_followup_in_both_chat_entrypoints_persists_scope(monkeypatch, str
     monkeypatch.setattr(chat, 'history_answer', historical)
     if stream:
         events = [e async for e in chat.stream_chat_response('그럼 제2조는?', str(uuid4()), str(uuid4()))]
-        assert events[-1]['text'] == '구법 원문'
+        assert [e['text'] for e in events if e['type'] == 'chunk'] == ['구법 원문']
+        assert [e['data']['status'] for e in events if e['type'] == 'verification'] == ['limited']
     else:
         assert (await chat.process_chat('그럼 제2조는?', str(uuid4()), str(uuid4())))[0] == '구법 원문'
     assert save.call_args.args[1] == '그럼 제2조는?'
@@ -200,7 +201,7 @@ async def test_year_tasks_reach_normal_tool_path(monkeypatch, stream, query):
     monkeypatch.setattr(chat, '_fetch_rag_and_web_context', normal)
     if stream:
         events = [e async for e in chat.stream_chat_response(query, str(uuid4()), str(uuid4()))]
-        assert events[-1]['type'] == 'chunk'
+        assert [e['type'] for e in events[-2:]] == ['chunk', 'verification']
     else:
         await chat.process_chat(query, str(uuid4()), str(uuid4()))
     archive.assert_not_called()

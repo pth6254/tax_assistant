@@ -32,8 +32,10 @@ export const useChat = (conversationId) => {
     request.current.abort(); request.current = null
     setLoading(false)
     setMessages(prev => prev.map(m => m.status === 'streaming' ? (m.originalContent !== undefined
-      ? { ...m, content: m.originalContent, tools: m.originalTools, status: 'complete', originalContent: undefined, originalTools: undefined }
-      : { ...m, status: 'stopped', tools: interruptTools(m.tools) }) : m))
+      ? { ...m, content: m.originalContent, tools: m.originalTools, verification: m.originalVerification,
+          verificationLoading: false, status: 'complete', originalContent: undefined, originalTools: undefined,
+          originalVerification: undefined }
+      : { ...m, status: 'stopped', verificationLoading: false, tools: interruptTools(m.tools) }) : m))
   }, [])
 
   const sendMessage = async (query, onDone) => {
@@ -56,7 +58,10 @@ export const useChat = (conversationId) => {
         calc => update(m => ({ ...m, calc })),
         event => update(m => ({ ...m, tools: mergeTool(m.tools, event) })),
         controller.signal,
-        text => update(m => ({ ...m, content: text })))
+        text => update(m => ({ ...m, content: text })),
+        undefined,
+        event => update(m => ({ ...m, verificationLoading: Boolean(event.status), verificationProgress: event.status,
+          verification: event.data || m.verification })))
       update(m => ({ ...m, status: 'complete' }))
       // Refresh server IDs only after DONE (the server has committed the turn).
       try {
@@ -64,7 +69,8 @@ export const useChat = (conversationId) => {
         if (request.current === controller) setMessages(saved.map((m, i) => ({ ...m, id: 'saved-' + i, tools: m.tools || [] })))
       } catch { /* Generation succeeded; missing IDs can be recovered by reloading history. */ }
     } catch (e) {
-      if (e.name !== 'AbortError') update(m => ({ ...m, tools: interruptTools(m.tools), status: 'error', error: errorMessage(e) }))
+      if (e.name !== 'AbortError') update(m => ({ ...m, tools: interruptTools(m.tools), verificationLoading: false,
+        status: 'error', error: errorMessage(e) }))
     } finally {
       if (request.current === controller) { request.current = null; setLoading(false) }
     }
@@ -77,7 +83,8 @@ export const useChat = (conversationId) => {
       if (request.current !== controller) return
       setMessages(prev => prev.map(m => m.message_id === message.message_id ? change(m) : m))
     }
-    update(m => ({ ...m, originalContent: m.content, originalTools: m.tools, content: '', tools: [], status: 'streaming', error: undefined }))
+    update(m => ({ ...m, originalContent: m.content, originalTools: m.tools,
+      originalVerification: m.verification, verification: undefined, content: '', tools: [], status: 'streaming', error: undefined }))
     setLoading(true)
     try {
       await streamChat(null, conversationId,
@@ -87,17 +94,22 @@ export const useChat = (conversationId) => {
         event => update(m => ({ ...m, tools: mergeTool(m.tools, event) })),
         controller.signal,
         text => update(m => ({ ...m, content: text })),
-        { expected_message_id: message.message_id, expected_version: message.answer_version || 1 })
+        { expected_message_id: message.message_id, expected_version: message.answer_version || 1 },
+        event => update(m => ({ ...m, verificationLoading: Boolean(event.status), verificationProgress: event.status,
+          verification: event.data || m.verification })))
       try {
         const saved = await getMessages(conversationId)
         if (request.current === controller) setMessages(saved.map((m, i) => ({ ...m, id: 'saved-' + i, tools: m.tools || [] })))
       } catch {
         update(m => ({ ...m, status: 'complete', originalContent: undefined, originalTools: undefined,
+          originalVerification: undefined, verificationLoading: false,
           answer_version: (m.answer_version_count || 1) + 1, answer_version_count: (m.answer_version_count || 1) + 1 }))
       }
     } catch (e) {
-      if (e.name !== 'AbortError') update(m => ({ ...m, content: message.content, tools: message.tools, originalContent: undefined,
-        originalTools: undefined, status: 'error', error: errorMessage(e) }))
+      if (e.name !== 'AbortError') update(m => ({ ...m, content: message.content, tools: message.tools,
+        verification: m.originalVerification, verificationLoading: false,
+        originalContent: undefined, originalTools: undefined, originalVerification: undefined,
+        status: 'error', error: errorMessage(e) }))
     } finally {
       if (request.current === controller) { request.current = null; setLoading(false) }
     }

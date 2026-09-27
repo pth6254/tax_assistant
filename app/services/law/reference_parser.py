@@ -145,6 +145,16 @@ def extract_law_reference(value: str) -> LawReference | None:
     return _reference_from_groups(match.groupdict()) if match else None
 
 
+def extract_law_references(value: str) -> list[LawReference]:
+    """All references in prose, including citations without display brackets."""
+    return [_reference_from_groups(match.groupdict()) for match in _REFERENCE_SEARCH_PATTERN.finditer(value or "")]
+
+
+def reference_spans(value: str):
+    return [(match.group(), _reference_from_groups(match.groupdict()))
+            for match in _REFERENCE_SEARCH_PATTERN.finditer(value or "")]
+
+
 def normalize_article_no(value: str) -> str:
     """조문 입력을 DB 표준형으로 바꾸고 유권해석 안건번호는 보존한다."""
     compact = re.sub(r"\s+", "", value.strip())

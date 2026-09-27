@@ -9,6 +9,7 @@ export const STATUS_LABELS = {
   needs_input: '추가 정보 필요', selection_error: '선택 실패',
   invalid_arguments: '입력 확인 필요', timeout: '시간 초과', error: '실행 실패',
   interrupted: '연결 중단',
+  no_tool_needed: '분석으로 진행',
 }
 export const isPendingTool = tool => ['selecting', 'running'].includes(tool.status)
 export function mergeTool(tools = [], event) {

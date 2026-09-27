@@ -54,7 +54,7 @@ async def _locked_last_turn(conn, cid, message_id, expected_version):
     return _message(rows[0]['message'])
 
 
-async def commit_regeneration(conn, cid, regen, answer, tools):
+async def commit_regeneration(conn, cid, regen, answer, tools, *, verification=None):
     if not answer.strip():
         raise HTTPException(502, '빈 답변은 버전으로 저장할 수 없습니다.')
     async with conn.transaction():
@@ -69,6 +69,8 @@ async def commit_regeneration(conn, cid, regen, answer, tools):
         message = {'role': 'assistant', 'content': answer}
         if tools:
             message['tools'] = tools
+        if verification:
+            message['verification'] = verification
         await conn.execute(
             'INSERT INTO chat_answer_versions (assistant_message_id, version, message) VALUES ($1,$2,$3::jsonb)',
             regen.message_id, new_version, json.dumps(message, ensure_ascii=False))

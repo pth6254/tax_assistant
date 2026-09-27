@@ -7,7 +7,7 @@ from app.services.law.structure_parser import resolve_reference_target
 # ── 조문 원문 조회 ───────────────────────────────────────────────
 
 _ARTICLE_LOOKUP_SQL = """
-SELECT law_name, law_type, tax_type, article_no, article_title, article_text,
+SELECT id, content_hash, law_name, law_type, tax_type, article_no, article_title, article_text,
        effective_date, amendment_date, source_url
 FROM law_articles
 WHERE is_current = TRUE
@@ -88,4 +88,6 @@ async def get_law_article(law_name: str, article_no: str) -> LawArticleDetail | 
         source_url=row["source_url"] or "",
         reference=reference,
         target=target,
+        source_id=str(row.get("id", "")),
+        content_hash=row.get("content_hash", ""),
     )

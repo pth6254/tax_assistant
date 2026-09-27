@@ -93,7 +93,7 @@ class Case(StrictModel):
     split: Literal['dev', 'test']
     stage: Literal['source', 'reference', 'relation', 'retrieval', 'context', 'calculator',
                    'tools', 'answer', 'safety', 'performance']
-    adapter: Literal['reference', 'relation', 'graph_index', 'progressive_tax', 'calculator', 'retrieval', 'source', 'tool_selection', 'answer_fixed_context', 'recorded']
+    adapter: Literal['reference', 'relation', 'graph_index', 'progressive_tax', 'calculator', 'retrieval', 'source', 'tool_selection', 'answer_fixed_context', 'answer_reliable_context', 'recorded']
     review: Review
     input: dict
     checks: list[Check] = Field(default_factory=list)
@@ -115,7 +115,7 @@ class Case(StrictModel):
     def consistency(self):
         stages = {'reference': 'reference', 'relation': 'relation', 'graph_index': 'relation', 'progressive_tax': 'calculator',
                   'calculator': 'calculator', 'retrieval': 'retrieval', 'source': 'source',
-                  'tool_selection': 'tools', 'answer_fixed_context': 'answer'}
+                  'tool_selection': 'tools', 'answer_fixed_context': 'answer', 'answer_reliable_context': 'answer'}
         if self.adapter in stages and self.stage != stages[self.adapter]:
             raise ValueError('Adapter/stage mismatch')
         keys = [j.evidence.key() for j in self.judgments]

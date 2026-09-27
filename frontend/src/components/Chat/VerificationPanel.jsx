@@ -1,0 +1,47 @@
+const CHECKS = {
+  citation: { checked: '인용 내용과 확보한 원문을 대조했습니다.', failed: '인용 근거를 확인하지 못했습니다.',
+    not_assessed: '공식 법령 인용 검사를 수행하지 않았습니다.' },
+  calculation: { checked: '답변의 최종 금액이 계산기 결과와 일치합니다.', failed: '최종 금액이 계산기 결과와 다릅니다.',
+    not_applicable: '계산기를 사용하지 않았습니다.' },
+}
+
+const PROGRESS = { planning: '질문의 요청과 쟁점을 확인하고 있습니다…', retrieving: '쟁점별 근거를 찾고 있습니다…',
+  generating: '확보한 근거로 답변을 작성하고 있습니다…', checking: '답변의 근거와 조건을 대조하고 있습니다…' }
+
+export default function VerificationPanel({ verification, loading, progress, onCitationClick }) {
+  if (loading) return <p className="verification-progress" role="status">{PROGRESS[progress] || PROGRESS.checking}</p>
+  if (!verification) return null
+  const { status, checks = {}, citations = [], note } = verification
+  const title = status === 'withheld' ? '답변 보류 사유' : '근거 및 확인 사항'
+  return <details className={'verification-panel ' + (status === 'withheld' ? 'withheld' : '')}>
+    <summary>{title}</summary>
+    <div className="verification-content">
+      <p>{note}</p>
+      <ul>
+        <li>{CHECKS.citation[checks.citation] || '인용 검사 결과가 없습니다.'}</li>
+        <li>{CHECKS.calculation[checks.calculation] || '계산 검사 결과가 없습니다.'}</li>
+        <li>{checks.legal_application === 'checked' ? '모델이 근거와 적용 조건을 대조했습니다. 법적 정확성 보증은 아닙니다.' : '사건의 적용 시점과 법적 해석은 확정하지 않았습니다.'}</li>
+      </ul>
+      {verification.plan?.issues?.length > 0 && <ul aria-label="쟁점별 확인 상태">
+        {verification.plan.issues.map(issue => <li key={issue.id}>
+          {issue.subject} {issue.law === 'ALL' ? '확인 사항' : issue.law}: {' '}
+          {verification.judge?.missing_issue_ids?.includes(issue.id) ? '설명 보완 필요' :
+            verification.claims?.some(c => c.issue_id === issue.id && c.released) ? '근거가 연결된 설명 제공' :
+              verification.coverage?.[issue.id]?.calculation ? '계산 결과 제공' : '추가 확인 필요'}
+        </li>)}
+      </ul>}
+      {verification.plan?.missing_inputs?.length > 0 && <p>추가 확인: {verification.plan.missing_inputs.join(', ')}</p>}
+      {citations.length > 0 && <div className="verification-sources">
+        <strong>대조한 조문</strong>
+        {citations.map((source, index) => source.text ? <details key={source.evidence_id || index}>
+          <summary>{source.origin === 'user_document' ? '[사용자 문서]' : `[${source.label}]`} {source.law_name || source.source} {source.reference} — 사용한 원문</summary>
+          <p>{source.effective_from ? `자료 시행일: ${source.effective_from}` : '자료 시행일 미확인'} {source.location}</p>
+          <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{source.text}</pre>
+        </details> : <button key={`${source.law_name}-${source.reference}-${index}`}
+          type="button" onClick={() => onCitationClick?.(source.law_name, source.reference)}>
+          [{source.label}] {source.law_name} {source.reference} 원문 열기
+        </button>)}
+      </div>}
+    </div>
+  </details>
+}

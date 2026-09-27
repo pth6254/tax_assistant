@@ -1,5 +1,11 @@
 # LangSmith 평가 결과·검수
 
+## 2026-09-28 주장 단위 검증 연결
+
+- `answer_reliable_context` adapter는 `input.plan`과 명시적인 `input.evidence` 레코드로 실제 서비스의 주장 생성/검사 경로를 실행한다. 원문 출처를 문자열에서 다시 추론하지 않는다. `input.context`의 독립 정답과 서비스가 관측한 근거를 구분해 유지한다.
+- verification v2의 주장 수, 공개/보류 수, 쟁점 수, Judge 오류 및 검사 상태는 게시 준비에서 `diagnostic.runtime.*` feedback으로 변환한다. 인간 승인 데이터셋이어도 자동 진단을 승인된 법적 정확성 점수로 승격하지 않는다.
+- 서비스 `answer_release`/`claim_judge` trace와 답변 metadata의 run_id로 후보·근거·판정을 연결한다. 기본 `ANSWER_JUDGE_MODE=shadow`와 `enforce`의 차이 및 운영 승격 조건은 `docs/ai/RELIABILITY_WORKFLOW.md`를 따른다. 이번 구현에서 원격 평가 결과 게시를 실행하지 않았다.
+
 자체 evaluation_dashboard 대신 LangSmith를 사용합니다. 기존 평가셋·scoring·CLI·실행 결과는 유지합니다.
 이 문서의 평가 CLI는 **저장된 결과를 LangSmith 실험으로 가져오는 기능**입니다. 평가 CLI 자체는
 새로운 LLM 추론을 실행하지 않습니다. 실서비스 채팅 추적은 `CHAT_TRACING_ENABLED=true`로 별도 활성화합니다.
@@ -29,6 +35,13 @@ python scripts/evaluate.py langsmith prepare \
   --run-dir evaluation/runs/retrieval-rescored \
   --output evaluation/runs/langsmith-metrics-plan.json --region us
 
+# 답변 평가 run에 묶인 Judge 결과를 항목별 feedback으로 포함.
+# --judge-report를 생략하면 run 디렉터리의 judge.json을 자동 탐색.
+python scripts/evaluate.py langsmith prepare \
+  --run-dir evaluation/runs/answer-run \
+  --judge-report evaluation/runs/answer-judge/judge.json \
+  --output evaluation/runs/langsmith-answer-plan.json --region us
+
 # 질문·기대 근거·원문·답변을 보며 검수하려는 경우에만 본문 포함.
 python scripts/evaluate.py langsmith prepare \
   --run-dir evaluation/runs/retrieval-rescored \
@@ -45,6 +58,8 @@ python scripts/evaluate.py langsmith prepare \
 재채점한 후 준비하세요. `prepare`의 성공은 전송 성공이나 평가 통과를 의미하지 않습니다.
 
 ## 3. 확인한 계획만 명시적으로 전송
+
+Judge 결과는 데이터셋·관측 전체·각 답변 payload 해시와 rubric 항목이 일치해야 합니다. pass/fail은 항목별 1/0 feedback, unknown/error는 상태값으로 전달합니다. 초안 사례는 diagnostic.judge.*, 전문가 승인 사례만 approved.judge.*로 구분합니다. 기본 계획에는 답변과 Judge 이유를 싣지 않으며, --include-content를 명시하면 포함됩니다. Judge 평가는 서비스의 세무 정확성 인증이나 답변 통과 판정이 아닙니다.
 
 prepare 출력의 sha256을 사용합니다. 아래 HASH는 실제 확인한 값으로 바꿉니다.
 

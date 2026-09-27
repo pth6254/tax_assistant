@@ -5,12 +5,12 @@ LLM이 생성한 최종 답변에서 법령 인용([법률]/[시행령]/[시행�
 계산기 핵심 수치를 추출하여, 실제로 검색된 근거(RAG 컨텍스트 + 계산기 결과)에
 존재하는지 사후 검증한다.
 
-근거 없는 인용을 임의로 지우거나 답변을 재작성하지 않는다 — 사용자가 직접
-판단할 수 있도록 답변 하단에 경고 각주만 추가한다 (환각을 막는 최후 방어선이지,
-답변을 대신 고쳐주는 장치가 아님).
+실서비스의 근거는 EvidenceContext의 서버 레코드로 대조한다. 미검증 인용은
+공개 전에 차단한다. 문자열 출처 파싱은 검수된 과거 평가 fixture 호환용이다.
 """
 import re
 from dataclasses import dataclass
+from app.services.evidence import EvidenceContext, is_official
 
 from app.services.law.reference_parser import (
     InvalidLawReference, extract_law_reference, normalize_article_no, parse_law_reference,
@@ -41,6 +41,8 @@ def _source_label(category: str) -> str | None:
 
 
 def _official_source_markers(context: str) -> list[re.Match[str]]:
+    if isinstance(context, EvidenceContext):
+        return [r for r in context.records if is_official(r) and _source_label(r.category)]
     markers = []
     for marker in _SOURCE_RE.finditer(context):
         fields = [part.strip() for part in marker.group(1).split("|")]
@@ -84,7 +86,18 @@ def extract_citations(answer: str) -> list[tuple[str, str, str]]:
 def verify_citations(answer: str, trusted_text: str) -> list[CitationCheck]:
     """Match each citation to one official source article and its actual subunit."""
     sources = []
-    markers = list(_SOURCE_RE.finditer(trusted_text))
+    if isinstance(trusted_text, EvidenceContext):
+        for record in trusted_text.records:
+            if is_official(record) and _source_label(record.category):
+                reference = extract_law_reference(record.reference)
+                if reference and reference.article_no:
+                    sources.append((_source_label(record.category), _normalize(record.law_name),
+                                    reference.article_no, record.text))
+        markers = []
+    else:
+        # Compatibility for independently reviewed offline fixtures only. Live
+        # retrieval always supplies EvidenceContext, including an empty result.
+        markers = list(_SOURCE_RE.finditer(trusted_text))
     for index, marker in enumerate(markers):
         fields = [part.strip() for part in marker.group(1).split("|")]
         if len(fields) < 3:
@@ -159,7 +172,7 @@ def verify_calc_final_amount(answer: str, calc_context: str | None) -> bool:
         return True
     amounts = _MONEY_LINE_RE.findall(calc_context)
     if not amounts:
-        return True
+        return False
     final_amount = amounts[-1]  # format_calculation_context의 마지막 항목 = 결정세액/합계
     return final_amount in answer
 

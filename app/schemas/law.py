@@ -38,6 +38,11 @@ class HybridSearchResult:
     article_no: str = ""
     graph_evidence: str = ""
     document_location: str = ""
+    origin_kind: str = "unknown"
+    source_id: str = ""
+    effective_date: str = ""
+    content_hash: str = ""
+    original_text: str = ""
 
 
 class ParsedLawReference(BaseModel):
@@ -77,3 +82,5 @@ class LawArticleDetail(BaseModel):
     source_url: str
     reference: ParsedLawReference | None = None
     target: LawReferenceTarget | None = None
+    source_id: str = ""
+    content_hash: str = ""

@@ -10,7 +10,7 @@ export const sendChat = async (query, conversationId) => {
   return data
 }
 
-export const streamChat = async (query, conversationId, onChunk, onDone, onCalc, onTool, signal, onReplace, regeneration) => {
+export const streamChat = async (query, conversationId, onChunk, onDone, onCalc, onTool, signal, onReplace, regeneration, onVerification) => {
   const res = await fetch(regeneration ? `/api/conversations/${conversationId}/regenerate` : '/api/chat/stream', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     credentials: 'include', signal,
@@ -35,6 +35,7 @@ export const streamChat = async (query, conversationId, onChunk, onDone, onCalc,
         if (payload === '[DONE]') { onDone?.(); return }
         const event = JSON.parse(payload)
         if (event.type === 'tool') onTool?.(event)
+        else if (event.type === 'verification') onVerification?.(event)
         else if (event.type === 'calc') onCalc?.({ tool: event.tool, params: event.params })
         else if (event.type === 'chunk') onChunk(event.text)
         else if (event.type === 'replace') onReplace?.(event.text)

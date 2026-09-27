@@ -142,3 +142,39 @@ def test_default_key_file_is_env_example(artifacts,tmp_path,monkeypatch):
     assert receipt['status']=='complete'
     assert captured['api_key']=='synthetic-test-key'
     assert captured['auto_batch_tracing'] is False
+
+
+def test_prepare_imports_bound_judge_feedback_without_exposing_answer_by_default(tmp_path):
+    case = Case.model_validate(dict(
+        id='answer-one', group='one', split='dev', stage='answer', adapter='recorded',
+        review=dict(status='draft', basis='synthetic_contract'),
+        input={'query': 'PRIVATE QUESTION', 'context': 'PRIVATE REFERENCE'},
+        rubric=[{'id': 'core', 'dimension': 'factuality', 'instruction': 'Check conclusion', 'critical': True}],
+    ))
+    dataset = Dataset(name='judge-import', version='1', description='test', cases=[case])
+    observation = Observation(case_id=case.id, payload={'answer': 'PRIVATE ANSWER'},
+                              elapsed_seconds=2.5)
+    run = Run(dataset_hash=dataset.fingerprint(), split='dev', mode='recorded',
+              selected_ids=[case.id], observations=[observation])
+    directory = tmp_path/'run'
+    write_artifacts(directory, dataset, run)
+    judge = dict(schema_version='1.1', advisory_only=True, dataset_hash=dataset.fingerprint(),
+                 observations_hash=digest(run.model_dump(mode='json')), model='independent-reviewer',
+                 provider='local', prompt_hash='prompt-hash', records=[dict(
+                     case_id=case.id, variant=observation.variant, repeat=observation.repeat,
+                     payload_hash=digest(observation.payload),
+                     criteria=[{'criterion_id': 'core', 'verdict': 'fail', 'rationale': 'PRIVATE REASON'}])])
+    judge_path = tmp_path/'judge.json'
+    judge_path.write_text(json.dumps(judge), encoding='utf-8')
+
+    plan = prepare(directory, judge_report=judge_path)
+    assert plan['judge']['model'] == 'independent-reviewer'
+    assert {'key': 'diagnostic.judge.core', 'score': 0} in plan['records'][0]['feedback']
+    assert 'PRIVATE' not in json.dumps(plan)
+    reviewed = prepare(directory, judge_report=judge_path, include_content=True)
+    assert reviewed['records'][0]['outputs']['judge'][0]['rationale'] == 'PRIVATE REASON'
+
+    judge['records'][0]['payload_hash'] = 'wrong'
+    judge_path.write_text(json.dumps(judge), encoding='utf-8')
+    with pytest.raises(ValueError, match='Judge record'):
+        prepare(directory, judge_report=judge_path)

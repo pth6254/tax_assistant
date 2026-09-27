@@ -36,12 +36,14 @@ async def chat(
         )
 
     tool_events = []
+    verification = []
     try:
         answer, calculator = await chat_service.process_chat(
             query=body.query,
             conversation_id=str(conversation_id),
             user_id=user["id"],
             tool_events=tool_events,
+            verification_out=verification,
         )
     except LLMRequestError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.event()) from exc
@@ -52,7 +54,8 @@ async def chat(
             "reason": exc.reason,
         }) from exc
     return {"output": answer, "calculator": calculator,
-            "tools": [e for e in tool_events if e["status"] not in {"selecting", "running"}]}
+            "verification": verification[0] if verification else None,
+            "tools": chat_service._terminal_tools(tool_events)}
 
 
 @router.post("/chat/stream")
