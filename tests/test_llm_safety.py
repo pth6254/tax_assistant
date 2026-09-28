@@ -14,6 +14,9 @@ from app.services.inference.llm.policy import llm_purpose
 
 
 def provider_for(monkeypatch, handler, *, timeout=1):
+    # HTTP retry tests use a one-second fake network budget; pacing has its own
+    # virtual-clock and cancellation tests in test_llm_pacing.py.
+    monkeypatch.setattr(adapter, 'wait_for_slot', AsyncMock())
     client = httpx.AsyncClient(base_url="https://example.test/v1/", transport=httpx.MockTransport(handler))
     monkeypatch.setattr(adapter.httpx, "AsyncClient", lambda **kwargs: client)
     return adapter.OpenAICompatibleLLMProvider("https://example.test/v1", "secret", "openai/gpt-6-luna", timeout, False, "openrouter")
@@ -43,6 +46,7 @@ async def test_429_before_generation_retries_at_most_twice(monkeypatch, stream):
                 await provider.complete([], 0, -1)
         assert error.value.code == "llm_rate_limited"
         assert len(calls) == 3 and sleep.await_count == 2
+        assert adapter.wait_for_slot.await_count == 3
         assert "private" not in str(error.value)
     finally:
         await provider.close()

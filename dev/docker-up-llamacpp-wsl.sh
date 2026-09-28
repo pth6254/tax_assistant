@@ -26,6 +26,31 @@ if ! docker run --rm --gpus all --entrypoint nvidia-smi \
   exit 1
 fi
 
+STARTS_BACKEND=false
+if [[ $# -eq 0 ]]; then
+  STARTS_BACKEND=true
+else
+  for service in "$@"; do
+    if [[ "$service" == "backend" ]]; then
+      STARTS_BACKEND=true
+      break
+    fi
+  done
+fi
+if [[ "$STARTS_BACKEND" == true ]] && python - <<'PY'
+import os
+from dotenv import dotenv_values
+
+settings = dotenv_values('.env')
+current = str(os.getenv('GRAPH_RAG_ENABLED', settings.get('GRAPH_RAG_ENABLED') or 'false')).lower() == 'true'
+history = str(os.getenv('HISTORY_GRAPH_RAG_ENABLED', settings.get('HISTORY_GRAPH_RAG_ENABLED') or 'true')).lower() == 'true'
+raise SystemExit(0 if current or history else 1)
+PY
+then
+  echo "[INFO] GraphRAG enabled: waiting for Neo4j"
+  docker compose -f docker-compose.yml -f docker-compose.llamacpp.yml up -d --wait neo4j
+fi
+
 docker compose -f docker-compose.yml -f docker-compose.llamacpp.yml up -d --build "$@"
 
 echo

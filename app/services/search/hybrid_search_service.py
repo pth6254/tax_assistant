@@ -19,12 +19,14 @@ law_articles(공식 법령 조문)와 documents(PDF 업로드) 두 테이블을
 """
 import asyncio
 import logging
+import re
 import time
 import uuid as _uuid
 
 from app.database import get_pool
 from app.schemas.law import HybridSearchResult
 from app.services.evidence import context_from_records, record_from_result, digest
+from app.services.evidence import has_missing_items
 from app.services.embedding_service import embed_texts
 from app.services.law.reference_parser import extract_law_reference
 from app.services.law.lookup_service import get_law_article
@@ -131,6 +133,55 @@ WHERE {_EMBEDDING_COLUMN} IS NOT NULL
 ORDER BY {_EMBEDDING_COLUMN}::halfvec(2560) <=> $1::vector::halfvec(2560)
 LIMIT $4
 """
+
+# Legal terms are searched independently of embedding similarity. The patterns
+# are parameters, and results remain tied to current official source rows.
+_KEYWORD_ARTICLES_SQL = """
+SELECT id, content_hash, effective_date, law_name, law_type, tax_type,
+       article_no, article_title, article_text, source_url,
+       0.0 AS similarity_score,
+       (SELECT COALESCE(SUM(
+           CASE WHEN la.article_title ILIKE pattern THEN 3 ELSE 0 END +
+           CASE WHEN la.article_text ILIKE pattern THEN 1 ELSE 0 END
+       ), 0) FROM unnest($1::text[]) AS pattern) AS keyword_score
+FROM law_articles la
+WHERE is_current = TRUE
+  AND ($2::text IS NULL OR tax_type = $2)
+  AND (article_title ILIKE ANY($1::text[]) OR article_text ILIKE ANY($1::text[]))
+ORDER BY keyword_score DESC, article_no
+LIMIT $3
+"""
+
+_SEARCH_STOPWORDS = {
+    "무엇", "어떤", "어떻게", "있는지", "경우", "대해", "설명", "설명하시오", "문제",
+    "회사", "회사는", "회사의", "각각", "발생", "발생할", "확인", "판단", "자료",
+    "법인세법", "부가가치세법", "소득세법", "국세기본법", "시행령", "시행규칙",
+    "것은", "있다", "한다", "해당", "거래", "받았다", "제공", "관련",
+}
+
+
+def issue_keyword_terms(query: str, law_filter: str, limit: int = 6) -> list[str]:
+    """Choose bounded Korean legal terms; amounts and company labels are excluded."""
+    words = re.findall(r"[가-힣]{2,}|제\d+조(?:의\d+)?", query)
+    terms = []
+    for word in words:
+        term = re.sub(r"(?:에서는|에서|으로|에게|까지|부터|에는|이나|이라|라는|하고|하여|한다|하는|되는|되어|했다|였다|은|는|이|가|을|를|의|에|과|와|도)$", "", word)
+        if len(term) < 2 or term in _SEARCH_STOPWORDS or term in law_filter or term in terms:
+            continue
+        terms.append(term)
+    return terms[-limit:]
+
+
+async def _search_keyword_articles(query: str, law_filter: str, top_k: int) -> list[HybridSearchResult]:
+    terms = issue_keyword_terms(query, law_filter)
+    if not terms:
+        return []
+    patterns = [f"%{term}%" for term in terms]
+    tax_type_filter = None if law_filter == "ALL" else law_filter
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(_KEYWORD_ARTICLES_SQL, patterns, tax_type_filter, top_k)
+    return [_row_to_article_result(row) for row in rows]
 
 
 # ── 내부 검색 함수 ───────────────────────────────────────────────
@@ -260,6 +311,61 @@ def _rrf_merge(
     return [result_map[key] for key in sorted_keys[:top_k]]
 
 
+def _fuse_issue_rankings(rankings: list[list[HybridSearchResult]], top_k: int) -> list[HybridSearchResult]:
+    """Fuse vector and keyword lists by server-owned source identity."""
+    scores: dict[tuple[str, str], float] = {}
+    results: dict[tuple[str, str], HybridSearchResult] = {}
+    for ranking in rankings:
+        for rank, result in enumerate(ranking):
+            key = (result.law_name, result.article_no)
+            scores[key] = scores.get(key, 0.0) + 1.0 / (60 + rank + 1)
+            if key not in results or result.similarity_score > results[key].similarity_score:
+                results[key] = result
+    keys = sorted(scores, key=lambda key: (-scores[key], results[key].priority,
+                                            -results[key].similarity_score, key))
+    return [results[key] for key in keys[:top_k]]
+
+
+async def _search_issue_candidates(queries: list[str], law_filter: str,
+                                   original_query: str) -> list[HybridSearchResult]:
+    """Wider per-issue vector retrieval plus independent official keyword search."""
+    candidate_k, result_k = TOP_K * 3, TOP_K + 3
+    vectors = await embed_texts(queries)
+    vector_rankings = await asyncio.gather(*[
+        _search_law_articles(vector, law_filter, candidate_k) for vector in vectors
+    ])
+    rankings = [[row for row in ranking if row.similarity_score >= SIMILARITY_THRESHOLD]
+                for ranking in vector_rankings]
+    try:
+        keyword_hits = await _search_keyword_articles(queries[0], law_filter, candidate_k)
+    except Exception as error:
+        logger.warning('[SEARCH] keyword branch unavailable (%s)', type(error).__name__)
+        keyword_hits = []
+    rankings.append(keyword_hits)
+    results = _fuse_issue_rankings(rankings, result_k)
+    # Refined queries may identify missing articles even when the original
+    # question contained no reference. Resolve those against the official DB.
+    directs = await asyncio.gather(*[
+        _lookup_referenced_article(text, law_filter)
+        for text in dict.fromkeys([*queries, original_query]) if text
+    ])
+    direct_rows = [row for row in directs if row and (law_filter == "ALL" or
+                   row.law_name == law_filter or row.law_name.startswith(law_filter + " 시행"))]
+    if direct_rows:
+        results = list({(row.law_name, row.article_no): row for row in [*direct_rows, *results]}.values())[:result_k]
+    results = await expand_graph(results, original_query or queries[0])
+    async def recover(result):
+        if result.origin_kind != 'official_law' or not has_missing_items(result.content):
+            return result
+        replacement = await _lookup_referenced_article(f'{result.law_name} {result.article_no}', result.law_name)
+        if replacement and not has_missing_items(replacement.content):
+            replacement.similarity_score = result.similarity_score
+            replacement.graph_evidence = result.graph_evidence
+            return replacement
+        return result
+    return list(await asyncio.gather(*(recover(result) for result in results)))
+
+
 async def _search_all(
     q_emb: list[float],
     law_filter: str,
@@ -344,6 +450,7 @@ async def hybrid_search(
     user_id: str = "",
     original_query: str = "",
     official_only: bool = False,
+    issue_mode: bool = False,
 ) -> list[HybridSearchResult]:
     """law_articles + documents를 동시에 검색하고 우선순위 순으로 병합한다.
 
@@ -352,6 +459,9 @@ async def hybrid_search(
     """
     if not queries:
         return []
+
+    if official_only and issue_mode:
+        return await _search_issue_candidates(queries, law_filter, original_query)
 
     t0 = time.perf_counter()
 

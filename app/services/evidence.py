@@ -11,6 +11,12 @@ def digest(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def has_missing_items(text):
+    sections = re.split(r"[①-⑳㉑-㉟]", text)
+    return any(re.search(r"다음\s*각\s*호", part)
+               and not re.search(r"(?:^|\n)\s*\d+\s*\.", part) for part in sections)
+
+
 class EvidenceContext(str):
     """String adapter for existing prompts; checks use the records, never this text.
 
@@ -41,9 +47,7 @@ def record_from_result(result):
     identity = f"{origin}:{source_id}:{effective}:{digest(text)}"
     # A common legacy ingestion loss: a paragraph promises a numbered list,
     # but the child item texts were never stored. Hash equality cannot fix that.
-    sections = re.split(r"[①-⑳㉑-㉟]", text)
-    missing_items = any(re.search(r"다음\s*각\s*호", part)
-                        and not re.search(r"(?:^|\n)\s*\d+\s*\.", part) for part in sections)
+    missing_items = has_missing_items(text)
     return EvidenceRecord(
         id="E" + digest(identity)[:24], origin=origin,
         source_id=source_id, source=result.source,

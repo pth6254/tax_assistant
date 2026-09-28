@@ -96,6 +96,19 @@ def test_claim_cannot_move_corporate_tax_conclusion_into_vat_issue():
     ctx = context()
     ctx.plan.issues[0].law = '부가가치세법'
     assert 'tax_scope_mismatch' in claims.check_claims(draft(ctx, 'H의 법인세 과세표준을 조정할 수 있습니다.'), ctx, '질문')['C1']
+    assert 'tax_scope_mismatch' in claims.check_claims(draft(ctx, '용역비를 손금으로 인정받지 못합니다.'), ctx, '질문')['C1']
+
+
+def test_claim_cannot_move_h_tax_effect_into_i_issue():
+    record = record_from_result(source(law_name='법인세법'))
+    plan = QuestionPlan(issues=[Issue(id='I1', request_quote='질문', subject='H', law='법인세법', question='H'),
+                                Issue(id='I2', request_quote='질문', subject='I', law='법인세법', question='I')])
+    ctx = context_from_records([record], plan=plan)
+    value = AnswerDraft(claims=[AnswerClaim(id='C1', issue_id='I2', kind='legal',
+                                           text='H사는 비용을 손금으로 인정받지 못합니다.',
+                                           citations=[ClaimCitation(evidence_id=record.id,
+                                                                    quote='조건을 충족한 경우에만 적용한다.')])])
+    assert 'subject_scope_mismatch' in claims.check_claims(value, ctx, '질문')['C1']
 
 
 @pytest.mark.asyncio
@@ -131,10 +144,17 @@ def test_multi_subject_multi_tax_plan_cannot_drop_required_pair():
 async def test_search_retains_each_tax_and_reports_missing(monkeypatch):
     monkeypatch.setattr(planning.config, 'TAVILY_API_KEY', '')
     plan = planning.fallback_plan('법인세와 부가가치세', ['법인세법', '부가가치세법'])
-    search = AsyncMock(side_effect=lambda queries, law, **kw: [source()] if law == '법인세법' else [])
+    search = AsyncMock(side_effect=lambda queries, law, **kw: [source(law_name='법인세법')] if law == '법인세법' else [])
+    async def assess(issues, records):
+        return {issue.id: {'status': 'sufficient' if records.get(issue.id) else 'missing',
+                           'relevant_ids': [r.id for r in records.get(issue.id, [])],
+                           'missing_requirements': []} for issue in issues}
+    monkeypatch.setattr(planning, 'assess_issues', assess)
     ctx = await planning.retrieve_issues(plan, '질문', str(uuid4()), search)
     assert {call.args[1] for call in search.call_args_list} == {'법인세법', '부가가치세법'}
-    assert {s['status'] for s in ctx.coverage.values()} == {'candidates', 'missing'}
+    assert {s['status'] for s in ctx.coverage.values()} == {'sufficient', 'missing'}
+    assert all(call.kwargs['issue_mode'] for call in search.call_args_list)
+    assert all(len(call.args[0]) >= 2 for call in search.call_args_list)
 
 
 def test_unknown_id_quote_and_historical_context_are_blocked():
@@ -147,6 +167,105 @@ def test_unknown_id_quote_and_historical_context_are_blocked():
     assert claims.check_claims(value, ctx, '질문')['C1']
     ctx.plan.dates = ['2021년']
     assert 'historical_version_required' in claims.check_claims(draft(ctx), ctx, '질문')['C1']
+
+
+def test_historical_question_can_describe_source_without_claiming_past_application():
+    ctx = context()
+    ctx.plan.dates = ['2025년']
+    value = draft(ctx, '확보한 원문은 조건을 충족한 경우에만 적용한다고 정합니다. 2025년 사건에 적용되는지는 별도 확인해야 합니다.')
+    value.claims[0].kind = 'source_summary'
+    assert claims.check_claims(value, ctx, '질문')['C1'] == []
+    value.claims[0].text = '확보한 원문은 조건을 충족한 경우에만 적용한다고 정합니다.'
+    value.claims[0].conditions = ['2025년 사건에 이 규정이 적용되는지는 별도 확인해야 합니다.']
+    assert claims.check_claims(value, ctx, '질문')['C1'] == []
+    rendered = claims.render_claims(value.claims, ctx)
+    assert rendered.count('적용 시점:') == 1
+    assert '2025년 사건에 이 규정이 적용되는지는' not in rendered
+    value.claims[0].text = '2025년 사건에는 조건을 충족한 경우에만 적용합니다.'
+    assert 'source_scope_unstated' in claims.check_claims(value, ctx, '질문')['C1']
+
+
+def test_render_leads_with_supported_rule_and_consolidates_date_caveat():
+    ctx = context()
+    ctx.plan.dates = ['2025년']
+    caveat = AnswerClaim(id='C2', issue_id='I1', text='대표자 소득처분은 별도 확인이 필요합니다.',
+                         kind='guidance', citations=[], conditions=['2025년 적용 법령 확인 필요'])
+    rule = draft(ctx, '제공된 원문은 비용의 사업 관련성을 기준으로 설명합니다. 2025년 적용 여부는 별도 확인이 필요합니다.').claims[0]
+    rule.kind = 'source_summary'
+    answer = claims.render_claims([caveat, rule], ctx)
+    assert answer.index('제공된 원문은') < answer.index('대표자 소득처분은')
+    assert '2025년 적용 법령 확인 필요' not in answer
+    assert answer.count('적용 시점:') == 1
+
+
+def test_structured_answer_groups_verified_item_claims_without_new_tax_rules():
+    ctx = context()
+    ctx.plan.dates = ['2025년']
+    source_id = ctx.records[0].id
+    rows = [
+        AnswerClaim(id='C1', issue_id='I1', kind='source_summary',
+                    text='음식점 이용료 3,000만 원: 업무 관련성을 확인해야 합니다. 2025년 적용은 별도 확인이 필요합니다.',
+                    conditions=['제공된 원문 기준이며 거래 시점의 적용 법령은 별도 확인해야 합니다.'],
+                    citations=[ClaimCitation(evidence_id=source_id, quote='조건을 충족할 경우에만 적용한다.')]),
+        AnswerClaim(id='C2', issue_id='I1', kind='source_summary',
+                    text='골프장 이용료 2,000만 원: 참석자와 목적을 확인해야 합니다. 2025년 적용은 별도 확인이 필요합니다.',
+                    conditions=['확보한 원문 기준이며 거래 시점의 적용 법령은 별도 확인해야 합니다.'],
+                    citations=[ClaimCitation(evidence_id=source_id, quote='조건을 충족할 경우에만 적용한다.')]),
+        AnswerClaim(id='C3', issue_id='I1', kind='guidance',
+                    text='결제내역과 참석자 자료를 대조하세요.', citations=[]),
+        AnswerClaim(id='C4', issue_id='I1', kind='source_summary',
+                    text='골프장 이용료 2,000만 원: 증빙도 확인해야 합니다.',
+                    citations=[ClaimCitation(evidence_id=source_id, quote='조건을 충족할 경우에만 적용한다.')]),
+    ]
+    answer = claims.render_structured_answer(
+        rows, ctx, '음식점 이용료 3,000만 원\n골프장 이용료 2,000만 원\n호텔비 500만 원')
+    assert '| 음식점 이용료 | 3,000만 원 |' in answer
+    assert '| 골프장 이용료 | 2,000만 원 |' in answer
+    assert answer.count('| 골프장 이용료 |') == 1
+    assert '별도 판단을 확인하지 못한 항목:** 호텔비' in answer
+    assert '## 항목별 검토' in answer
+    assert '## 확인한 근거' in answer
+    assert '**추가로 확인할 사항**' in answer
+    assert '## 1. 결론' not in answer
+    assert answer.count('적용 시점:') == 1
+    assert '확인할 조건: 제공된 원문 기준' not in answer
+    assert '세율' not in answer
+
+
+def test_source_summary_accepts_explicit_scope_in_conditions():
+    ctx = context()
+    value = draft(ctx, '조건을 충족하면 적용합니다.')
+    value.claims[0].kind = 'source_summary'
+    value.claims[0].conditions = ['확보한 원문 기준의 설명입니다.']
+    assert 'source_scope_unstated' not in claims.check_claims(value, ctx, '질문')['C1']
+    value.claims[0].conditions = []
+    assert 'source_scope_unstated' in claims.check_claims(value, ctx, '질문')['C1']
+
+
+def test_simple_answer_uses_plain_prose_without_numbered_sections():
+    ctx = context()
+    answer = claims.render_structured_answer(draft(ctx).claims, ctx, '일반 질문')
+    assert answer.startswith('조건 충족')
+    assert '## 1.' not in answer
+    assert '**확인한 근거**' in answer
+
+
+def test_duplicate_single_tax_issues_are_rejected_and_fallback_is_compact():
+    query = '2025년에 개인사업자가 노트북을 구입했습니다. 부가가치세 매입세액 공제 요건과 증빙, 예외를 설명해 주세요.'
+    plan = planning.fallback_plan(query, ['부가가치세법'])
+    assert len(plan.issues) == 1
+    plan.issues.append(plan.issues[0].model_copy(update={'id': 'I2'}))
+    with pytest.raises(ValueError, match='duplicate_subject_tax_scope'):
+        planning.validate_plan(plan, query, ['부가가치세법'])
+
+
+def test_repeated_unanswered_issues_render_one_limitation():
+    plan = QuestionPlan(issues=[Issue(id=f'I{i}', request_quote='질문', subject='사업자',
+                                      law='부가가치세법', question='질문') for i in (1, 2, 3)])
+    ctx = context_from_records([], plan=plan)
+    answer = claims.render_claims([], ctx)
+    assert answer.count('판단을 보류합니다') == 1
+    assert answer.count('부가가치세') == 1
 
 
 def test_prose_citation_cannot_bypass_checks_by_omitting_brackets():
@@ -192,15 +311,16 @@ async def test_judge_invented_ids_never_pass(monkeypatch):
 async def test_release_snapshot_and_diagnostic_are_persistable(monkeypatch):
     ctx = context()
     value = draft(ctx)
+    value.claims[0].citations = [ClaimCitation(evidence_id='E1', quote='E1:P2')]
     monkeypatch.setattr(claims, 'call_llm_structured', AsyncMock(return_value=value.model_dump()))
     monkeypatch.setattr(claims, 'judge_claims', AsyncMock(return_value=(None, 'TimeoutError')))
     monkeypatch.setattr(claims.config, 'ANSWER_JUDGE_MODE', 'shadow')
     answer, report = await claims.generate_verified_answer('질문', ctx)
-    assert '조건 충족' in answer
+    assert '판단을 보류' in answer
     assert report['checks']['legal_application'] == 'not_assessed'
     assert report['judge_error'] == 'TimeoutError'
-    assert report['citations'][0]['text'] == ctx.records[0].text
-    assert report['citations'][0]['version_id'] == ctx.records[0].version_id
+    assert report['citations'] == []
+    assert report['evidence_checks'][0]['id'] == ctx.records[0].id
 
 
 @pytest.mark.asyncio

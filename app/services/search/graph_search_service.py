@@ -2,6 +2,8 @@
 import asyncio
 import logging
 import re
+import traceback
+from pathlib import Path
 
 import config
 from app.services.graph.index_service import article_key, effective_now
@@ -23,8 +25,14 @@ async def expand_graph(results, query=''):
         logger.info('[GRAPH] expansion completed base=%d added=%d', len(results), len(expanded) - len(results))
         return expanded
     except Exception as error:
-        # No raw driver exceptions: these may include credentials or query data.
-        logger.warning('[GRAPH] expansion unavailable (%s); base results retained', type(error).__name__)
+        # Keep the failing application location, never raw driver messages or query text.
+        frames = traceback.extract_tb(error.__traceback__)
+        app_frame = next((frame for frame in reversed(frames)
+                          if 'app/services/' in frame.filename.replace('\\', '/')), None)
+        location = (f'{Path(app_frame.filename).name}:{app_frame.lineno}'
+                    if app_frame else 'external_dependency')
+        logger.warning('[GRAPH] expansion unavailable (%s at %s); base results retained',
+                       type(error).__name__, location)
         return results
 
 

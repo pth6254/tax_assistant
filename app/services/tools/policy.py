@@ -5,11 +5,50 @@ from pydantic import ValidationError
 from app.services.law.reference_parser import extract_law_reference, parse_law_reference
 from app.services.tools.registry import TOOL_SCHEMAS
 
-DOCUMENT_INTENT = re.compile(r"내\s*(?:문서|계약서|서류|자료)|업로드|첨부|(?:PDF|pdf|문서|계약서).{0,12}(?:검색|찾아|내용|요약)")
+DOCUMENT_INTENT = re.compile(
+    r"(?<![가-힣])(?:내|제|저의|우리)\s*(?:문서|계약서|서류|자료|파일)|"
+    r"(?:업로드|첨부)(?:한|된|해\s*둔|했던)\s*(?:문서|계약서|서류|자료|파일|PDF)|"
+    r"(?:PDF|pdf|문서|계약서|파일).{0,30}(?:찾아\s*줘|찾아주세요|검색해\s*줘|검색해\s*주세요|요약해\s*줘|요약해\s*주세요|내용\s*보여)"
+)
+
+
+def has_lookup_intent(query):
+    """A reference in an explanation is not a request to execute a lookup."""
+    try:
+        if parse_law_reference(query.strip().rstrip("?.!")).article is not None:
+            return True
+    except ValueError:
+        pass
+    reference = extract_law_reference(query)
+    if reference and re.search(r"보여\s*(?:줘|주세요)|조회\s*(?:해\s*줘|해\s*주세요|해주세요)", query):
+        return True
+    if not reference and re.search(r"관련|근거|어떤|찾", query):
+        return False  # Discovering the applicable article is ordinary retrieval.
+    return bool(re.search(r"(?:원문|조문)(?:을|를)?\s*(?:보여|조회(?:해\s*(?:줘|주세요)|해주세요|[?.!]*$)|그대로|[?.!]*$)", query))
 CALC_TAX = {
     "income_tax": r"소득|수입", "capital_gains": r"양도|매도", "inheritance": r"상속|유산",
     "gift": r"증여", "vat": r"부가세|부가가치세|매출|매입|VAT", "penalty_tax": r"가산세",
 }
+FINANCIAL_INCOME = re.compile(r"금융\s*(?:소득|종합)|이자\s*소득|배당\s*소득")
+
+
+def financial_income_scope(query, history=None):
+    if FINANCIAL_INCOME.search(query):
+        return True
+    if any(re.search(pattern, query, re.I) for pattern in CALC_TAX.values()):
+        return False
+    previous = next((m.get("content", "") for m in reversed(history or []) if m.get("role") == "user"), "")
+    return bool(FINANCIAL_INCOME.search(previous))
+
+
+FINANCIAL_INPUT_MESSAGE = (
+    "금융소득 금액만으로 최종 납부세액을 확정할 수 없습니다. 다음 조건을 알려주세요.\n\n"
+    "- 소득이 발생하는 연도\n- 이자소득과 배당소득 각각의 금액(세전인지 세후인지)\n"
+    "- 근로·사업·연금 등 다른 소득의 종류와 금액\n- 이미 원천징수된 세금과 적용할 소득공제\n\n"
+    "현재 계산기는 금융소득 종합과세의 비교과세·배당세액공제를 반영하는 전용 계산을 지원하지 않습니다. "
+    "위 조건을 확인하더라도 일반 소득세 계산 결과를 금융소득의 확정세액으로 제시할 수는 없습니다."
+)
+
 ALIASES = {
     "income": "연소득|소득|총수입|수입", "expense": "필요경비|경비", "personal_deduction_count": "공제인원|공제 인원|기본공제 인원",
     "other_deductions": "기타공제|기타 공제", "transfer_price": "양도가액|양도 가액|매도가|매도금액",
@@ -90,12 +129,7 @@ def check_proposal(tool, params, query, history, *, calculation_intent=False):
     if tool == "document_search":
         return bool(DOCUMENT_INTENT.search(query)), "document_request_required", {}
     if tool == "law_lookup":
-        exact_query = False
-        try:
-            exact_query = parse_law_reference(query.strip().rstrip("?.!")).article is not None
-        except ValueError:
-            pass
-        if not exact_query and not re.search(r"원문|조회|보여|조문\s*그대로", query):
+        if not has_lookup_intent(query):
             return False, "explicit_lookup_request_required", {}
         try:
             selected = parse_law_reference(params.get("article_no", ""))
@@ -114,6 +148,8 @@ def check_proposal(tool, params, query, history, *, calculation_intent=False):
         ok = bool(expected) and re.sub(r"\s", "", expected) == re.sub(r"\s", "", params.get("law_name", ""))
         return ok, "law_not_from_user", {}
     scope_text = query if any(re.search(p, query, re.I) for p in CALC_TAX.values()) else "\n".join(texts)
+    if tool == "income_tax" and financial_income_scope(query, history):
+        return False, "unsupported_financial_income_calculation", {}
     if re.search(r"법인세.{0,10}(?:계산|얼마)|법인소득", scope_text):
         return False, "unsupported_calculation", {}
     if not calculation_intent or not re.search(CALC_TAX[tool], scope_text, re.I):

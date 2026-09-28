@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import math
+import hashlib
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -11,7 +12,8 @@ import httpx
 
 from app.services.inference.llm.errors import LLMGenerationIncomplete, LLMRequestError
 from app.services.inference.llm.policy import EXTRACTION_PURPOSES, llm_purpose
-from config import LLM_REMOTE_MAX_TOKENS
+from config import LLM_REMOTE_MAX_TOKENS, OPENROUTER_REQUESTS_PER_MINUTE
+from app.services.inference.llm.pacing import wait_for_slot
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +28,7 @@ class OpenAICompatibleLLMProvider:
         self.provider = provider
         self.reasoning_effort = reasoning_effort
         self.timeout = timeout
+        self._pacing_key = (base_url.rstrip('/'), model, hashlib.sha256(api_key.encode()).hexdigest())
         self._usage_totals: dict[str, float | int] = {}
         self._client = httpx.AsyncClient(
             base_url=base_url.rstrip("/") + "/",
@@ -84,6 +87,8 @@ class OpenAICompatibleLLMProvider:
         try:
             async with asyncio.timeout(self.timeout):
                 for attempt in range(3):
+                    if self.provider == 'openrouter':
+                        await wait_for_slot(self._pacing_key, OPENROUTER_REQUESTS_PER_MINUTE)
                     async with self._client.stream("POST", "chat/completions", json=payload) as response:
                         delay = self._retry_delay(response, attempt) if response.status_code == 429 else None
                         if response.status_code != 429 or attempt == 2 or delay is None:

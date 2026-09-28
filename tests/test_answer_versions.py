@@ -134,3 +134,33 @@ async def test_regeneration_stream_commits_after_final_chunk(monkeypatch):
     assert events[1]['text'] == 'fresh answer'
     assert commit.await_args.args[2:] == (regen, 'fresh answer', [])
     assert commit.await_args.kwargs['verification'] == events[2]['data']
+
+
+@pytest.mark.asyncio
+async def test_regeneration_returns_financial_clarification_as_a_saved_version(monkeypatch):
+    from app.services import chat_service
+    conn = AsyncMock()
+    pool = MagicMock()
+    pool.acquire.return_value = MagicMock(__aenter__=AsyncMock(return_value=conn),
+                                         __aexit__=AsyncMock(return_value=False))
+    monkeypatch.setattr(chat_service, 'get_pool', AsyncMock(return_value=pool))
+    monkeypatch.setattr(chat_service, 'needs_history', lambda _: False)
+    monkeypatch.setattr(chat_service, 'history_route', lambda *_: None)
+    question = '금융소득 1억원 세금 얼마나 납부할까?'
+
+    async def prepare(*args, **kwargs):
+        kwargs['on_tool_event']({'type': 'tool', 'tool': 'income_tax', 'status': 'needs_input',
+                                'context': '소득 연도와 다른 소득을 확인해 주세요.', 'id': 'primary'})
+        return '', '', [], None
+
+    monkeypatch.setattr(chat_service, '_fetch_rag_and_web_context', prepare)
+    save = AsyncMock()
+    monkeypatch.setattr(chat_service, '_save_history', save)
+    commit = AsyncMock(return_value=2)
+    regen = Regeneration(4, 1, question, [])
+    with patch('app.services.answer_version_service.commit_regeneration', commit):
+        events = [e async for e in chat_service.stream_chat_response(question, str(uuid.uuid4()),
+                  str(uuid.uuid4()), regeneration=regen)]
+    assert any(e.get('text', '').startswith('소득 연도') for e in events)
+    assert commit.await_args.kwargs['verification']['status'] == 'limited'
+    save.assert_not_awaited()

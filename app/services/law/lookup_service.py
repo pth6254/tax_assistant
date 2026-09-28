@@ -3,6 +3,7 @@ from app.database import get_pool
 from app.schemas.law import LawArticleDetail, LawReferenceTarget, ParsedLawReference
 from app.services.law.reference_parser import InvalidLawReference, LawReference, normalize_article_no, parse_law_reference
 from app.services.law.structure_parser import resolve_reference_target
+from app.services.law.source_recovery import recover_article
 
 # ── 조문 원문 조회 ───────────────────────────────────────────────
 
@@ -39,6 +40,8 @@ async def get_law_article(law_name: str, article_no: str) -> LawArticleDetail | 
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(_ARTICLE_LOOKUP_SQL, law_name, article_no)
+        if row:
+            row = await recover_article(row, conn)
     if not row:
         return None
     reference = None

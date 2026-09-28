@@ -72,7 +72,8 @@ _LAW_KW: dict[str, list[str]] = {
     "종합부동산세법":        ["종합부동산세", "종부세", "공시가격", "다주택자", "주택 보유세"],
     "개별소비세법":          ["개별소비세", "특별소비세"],
     "교통에너지환경세법":    ["교통에너지환경세", "교통세"],
-    "주세법":                ["주세", "주류세"],
+    # '주세' alone also occurs inside the polite ending '주세요'.
+    "주세법":                ["주세법", "주류세"],
     "인지세법":              ["인지세"],
     "농어촌특별세법":        ["농어촌특별세", "농특세"],
     "교육세법":              ["교육세"],
@@ -613,7 +614,9 @@ def _failed_tool_answer(events):
             return message + "\n\n근거를 확보하지 못해 이번 요청의 세무 판단은 유보합니다. 조회 실패가 해당 규정이나 권리가 없다는 뜻은 아닙니다."
         if event.get("tool") in {*CALCULATORS, "none"} and event.get("status") not in {"ok", "selecting", "running"}:
             if event.get("tool") == "none":
-                return "도구나 필수 입력을 확정하지 못해 실행하지 않았습니다. 조회할 대상 또는 계산할 세목과 조건을 구체적으로 알려주세요."
+                if event.get("status") == "selection_error":
+                    return "요청을 처리할 도구를 선택하는 과정에서 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
+                return event.get("context") or "계산할 세목과 계산에 사용할 금액·조건을 알려주세요."
             return event.get("context", "계산을 완료하지 못했습니다.") + "\n\n세액을 산출하지 않았습니다. 계산 실패는 납부세액이 0원이라는 뜻이 아닙니다."
     return None
 
@@ -643,7 +646,7 @@ async def process_chat(query: str, conversation_id: str, user_id: str, *, tool_e
 
     failure = _failed_tool_answer(events)
     if failure:
-        verification = unavailable_verification()
+        verification = unavailable_verification(events)
         if verification_out is not None:
             verification_out.append(verification)
         await _save_history(conv_id, query, failure, is_first=len(history) == 0, tools=_terminal_tools(events),
@@ -780,13 +783,20 @@ async def _stream_chat_response_impl(
 
     failure = _failed_tool_answer(events)
     if failure:
-        if regeneration:
+        verification = unavailable_verification(events)
+        if regeneration and verification['status'] == 'withheld':
             raise ValueError(failure)
         yield {"type": "chunk", "text": failure}
-        verification = unavailable_verification()
         yield {"type": "verification", "data": verification}
-        await _save_history(conv_id, query, failure, is_first=len(history) == 0, tools=_terminal_tools(events),
-                            verification=verification)
+        if regeneration:
+            from app.services.answer_version_service import commit_regeneration
+            pool = await get_pool()
+            async with pool.acquire() as conn:
+                await commit_regeneration(conn, conv_id, regeneration, failure, _terminal_tools(events),
+                                          verification=verification)
+        else:
+            await _save_history(conv_id, query, failure, is_first=len(history) == 0, tools=_terminal_tools(events),
+                                verification=verification)
         return
 
     if isinstance(context, EvidenceContext):

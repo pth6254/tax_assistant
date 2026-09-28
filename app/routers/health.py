@@ -1,4 +1,5 @@
 """Service liveness, readiness, and external dependency diagnostics."""
+import asyncio
 import logging
 
 import httpx
@@ -8,6 +9,8 @@ from fastapi.responses import JSONResponse
 
 from app.database import get_pool
 from app.services.embedding_service import get_embedding_provider
+from app.services.graph.store import connect as graph_connect
+import config
 from config import (
     CHAT_MODEL,
     EMBEDDING_MODEL,
@@ -153,6 +156,18 @@ async def _embedding_status() -> dict:
         }
 
 
+async def _graph_status() -> dict:
+    if not (config.GRAPH_RAG_ENABLED or config.HISTORY_GRAPH_RAG_ENABLED):
+        return {"status": "disabled", "connected": False}
+    try:
+        async with graph_connect() as driver:
+            await asyncio.wait_for(driver.verify_connectivity(), config.GRAPH_TIMEOUT_SEC)
+        return {"status": "ok", "connected": True}
+    except Exception as exc:
+        logger.warning("Graph dependency check failed (%s)", type(exc).__name__)
+        return {"status": "unreachable", "connected": False}
+
+
 @router.get("/live")
 async def liveness():
     return {"status": "alive"}
@@ -193,12 +208,14 @@ async def dependencies():
     llm = llm_tasks["answer"]
     routing_llm = llm_tasks["tool_selection"]
     embedding = await _embedding_status()
+    graph = await _graph_status()
     ready = (
         database["status"] == "ok"
         and llm["status"] == "ok"
         and routing_llm["status"] == "ok"
         and all(status["status"] == "ok" for status in llm_tasks.values())
         and embedding["status"] == "ok"
+        and graph["status"] in {"ok", "disabled"}
     )
     return {
         "status": "ready" if ready else "degraded",
@@ -207,6 +224,7 @@ async def dependencies():
         "routing_llm": routing_llm,
         "llm_tasks": llm_tasks,
         "embedding": embedding,
+        "graph": graph,
     }
 
 

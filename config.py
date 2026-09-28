@@ -27,6 +27,9 @@ OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 LLM_TIMEOUT_SEC: float = float(os.getenv("LLM_TIMEOUT_SEC", "180"))
 # Paid/remote providers always have an output budget (including reasoning tokens).
 LLM_REMOTE_MAX_TOKENS: int = int(os.getenv("LLM_REMOTE_MAX_TOKENS", "8192"))
+OPENROUTER_REQUESTS_PER_MINUTE: int = int(os.getenv("OPENROUTER_REQUESTS_PER_MINUTE", "18"))
+if OPENROUTER_REQUESTS_PER_MINUTE < 0:
+    raise ValueError("OPENROUTER_REQUESTS_PER_MINUTE must be nonnegative")
 if LLM_REMOTE_MAX_TOKENS <= 0:
     raise ValueError("LLM_REMOTE_MAX_TOKENS must be positive")
 LLM_MAX_CONTINUATIONS: int = int(os.getenv("LLM_MAX_CONTINUATIONS", "2"))

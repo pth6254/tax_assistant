@@ -9,32 +9,45 @@ from app.schemas.tool_call import ToolSelection
 from app.services.ai_pipeline import chat_prompt, structured_chain
 from app.services.llm_client import call_llm
 from app.services.inference.llm.errors import LLMRequestError
-from app.services.law.reference_parser import extract_law_reference, parse_law_reference, InvalidLawReference
+from app.services.law.reference_parser import parse_law_reference, InvalidLawReference
 from app.services.law.coverage_service import NATIONAL_TAX_LAWS
 from app.services.tools.registry import TOOL_SCHEMAS
 from app.services.tools.executor import ToolRun, execute_tool
-from app.services.tools.policy import DOCUMENT_INTENT, check_proposal
+from app.services.tools.policy import DOCUMENT_INTENT, CALC_TAX, ALIASES, check_proposal, has_lookup_intent
+from app.services.tools.policy import financial_income_scope, FINANCIAL_INPUT_MESSAGE
 
 logger = logging.getLogger(__name__)
-# 금액 표현: 숫자 또는 한글 단위(억/천만/백만/만원)
-_AMOUNT_RE = re.compile(r"\d|[일이삼사오육칠팔구십백천]+\s*(?:억|천만|백만|만\s*원)")
-# 세금계산서의 '계산'은 세액 산출 요청이 아니다.
-_INTENT_RE = re.compile(r"얼마|계산(?!서)|세액|세금.{0,6}(?:나오|내야|납부|부과)|내야\s*(?:하|할|되)")
+_AMOUNT_RE = re.compile(r"(?:\d[\d,.]*|[일이삼사오육칠팔구십백천]+)\s*(?:억|천만|백만|천|만|원)")
+_CALC_ACTION = re.compile(r"(?:계산|산출)(?:을|를)?\s*(?:해\s*(?:줘|주세요|봐)|해주세요|해라|하라|하시오|부탁|좀|[.!?]*$)")
+_TAX_AMOUNT_QUESTION = re.compile(
+    r"(?:세금|세액|납부액|환급액|소득세|양도세|상속세|증여세|부가세|부가가치세|가산세)"
+    r"(?:은|는|이|가|을|를)?\s*얼마(?:나)?\s*(?:야|예요|인가|인지|입니까|나와|나오|내|납부|부과|되|정도|[?!]*$)"
+)
 
 def has_calculation_intent(query: str) -> bool:
     """Explicit calculation requests may lack inputs; a year alone is not money."""
-    without_dates = re.sub(r"\d{4}\s*(?:년|[-./]\d{1,2}[-./]\d{1,2})", "", query)
-    explicit_request = bool(re.search(r"계산(?:\s*(?:해|부탁|좀)|\s*[.!?]*$)", query))
-    return explicit_request or (bool(_AMOUNT_RE.search(without_dates)) and bool(_INTENT_RE.search(query)))
+    # Numbers, statutory references, credits and calculation methods describe
+    # facts/topics. Require an actual request to produce a numeric result.
+    return bool(_CALC_ACTION.search(query) or _TAX_AMOUNT_QUESTION.search(query) or (
+        _AMOUNT_RE.search(query) and re.search(r"(?:세액|납부액|환급액)(?:을|를)?\s*(?:알려|구해)", query)
+    ))
+
+
+def is_calculation_followup(query, history):
+    last_question = next((m.get("content", "") for m in reversed(history or []) if m.get("role") == "user"), "")
+    if not has_calculation_intent(last_question):
+        return False
+    return bool(re.fullmatch(
+        r"\s*(?:(?:그럼|그러면|대신)\s*)?(?:(?:소득|수입|매출|매입|경비|증여액)(?:은|는|이|가|을|를)?\s*)?"
+        r"\d[\d,.]*\s*(?:억|천만|백만|천|만)?\s*원?(?:이면|이라면|으로|으로 바꾸면)?\s*[?.!]*\s*", query
+    ) and _AMOUNT_RE.search(query))
 
 
 
 def has_tool_intent(query: str) -> bool:
-    reference = extract_law_reference(query)
     return (
         has_calculation_intent(query)
-        or bool(reference and reference.article is not None)
-        or bool(re.search(r"원문|조문", query)) or bool(DOCUMENT_INTENT.search(query))
+        or has_lookup_intent(query) or bool(DOCUMENT_INTENT.search(query))
     )
 
 
@@ -58,7 +71,9 @@ async def select_tool(query: str, history: list[dict] | None = None) -> tuple[st
         "세액 계산은 income_tax(종합소득세), capital_gains(양도소득세), inheritance(상속세), "
         "gift(증여세), vat(부가가치세), penalty_tax(가산세)를 사용하세요. "
         "금액은 원 단위 정수로 변환하세요. 사용자와 이전 대화에 없는 필수 입력은 추측하지 마세요. "
-        "도구가 불필요하거나 필수 입력이 없으면 {\"tool\":\"none\"}. "
+        "설명·요건·절차·법적 분석처럼 도구가 불필요한 요청만 {\"tool\":\"none\"}. "
+        "계산이나 조회를 명시적으로 요청했지만 입력이 부족하면 해당 도구와 확인된 인자만 반환하세요. "
+        "입력 부족과 도구 불필요를 혼동하지 마세요. "
         "사용자 신원이나 SQL은 인자로 넣지 마세요. "
         "법령명과 가지번호·항·호·목은 정확히 보존하세요. "
         "출력: {\"tool\":\"도구명\",\"params\":{입력값}}\n"
@@ -75,13 +90,15 @@ async def select_tool(query: str, history: list[dict] | None = None) -> tuple[st
 
 
 async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] | None = None, on_event=None) -> ToolRun | None:
-    last_question = next((m.get("content", "") for m in reversed(history or []) if m.get("role") == "user"), "")
     # A changed amount after an actual calculation is a follow-up; "그럼" alone is not.
-    calculation_followup = has_calculation_intent(last_question) and bool(
-        re.search(r"\d[\d,.]*\s*(?:억|만|천|원)|다시\s*(?:해|계산)", query)
-    )
+    calculation_followup = is_calculation_followup(query, history)
     if not has_tool_intent(query) and not calculation_followup:
         return None
+    if (has_calculation_intent(query) or calculation_followup) and financial_income_scope(query, history):
+        result = ToolRun("income_tax", "needs_input", FINANCIAL_INPUT_MESSAGE,
+                         error_code="unsupported_financial_income_calculation")
+        _emit_result(result, {}, on_event)
+        return result
     if on_event:
         on_event({"type": "tool", "id": "primary", "tool": "none", "status": "selecting"})
     try:
@@ -91,18 +108,32 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
         raise  # Preserve rate-limit/credit/timeout classification for the UI.
     except Exception as exc:
         logger.warning("Tool selection failed (%s)", type(exc).__name__)
-        result = ToolRun("none", "selection_error", "도구 입력을 확정하지 못했습니다. 필요한 조건을 확인하고 결과를 추측하지 마세요.")
+        result = ToolRun("none", "selection_error", "요청을 처리할 도구를 선택하는 과정에서 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+                         error_code="tool_selection_failed", retryable=True)
         _emit_result(result, {}, on_event)
         return result
     if selection is None:
-        if not (has_calculation_intent(query) or calculation_followup or DOCUMENT_INTENT.search(query)
-                or re.search(r"원문.*(?:보여|조회)|조문.*조회", query)):
+        if DOCUMENT_INTENT.search(query):
+            # An explicit document search already has its query; `none` is not
+            # proof that a file or an input is missing. Ownership is checked by
+            # the executor/search service as for a model-selected call.
+            selection = ("document_search", {"query": query[:500]})
+        elif not (has_calculation_intent(query) or calculation_followup or has_lookup_intent(query)):
             if on_event:
                 on_event({"type": "tool", "id": "primary", "tool": "none", "status": "no_tool_needed"})
             return None
-        result = ToolRun("none", "needs_input", "실행할 도구나 필수 입력을 확정하지 못했습니다. 필요한 조건을 확인하고 세액·문서 내용을 추측하지 마세요.")
-        _emit_result(result, {}, on_event)
-        return result
+        else:
+            if has_calculation_intent(query) or calculation_followup:
+                matches = [tool for tool, pattern in CALC_TAX.items() if re.search(pattern, query, re.I)]
+                tool = matches[0] if len(matches) == 1 else "none"
+                fields = [ALIASES.get(key, key).split("|")[0] for key in TOOL_SCHEMAS[tool].model_fields] if tool != "none" else []
+                message = ("세액 계산에 사용할 값을 확인해 주세요: " + ", ".join(fields) + "."
+                           if fields else "계산할 세목과 계산에 사용할 금액·조건을 알려주세요.")
+            else:
+                tool, message = "law_lookup", "원문을 조회할 법령명과 조·항·호 번호를 알려주세요."
+            result = ToolRun(tool, "needs_input", message, error_code="calculation_inputs_required" if has_calculation_intent(query) or calculation_followup else "lookup_target_required")
+            _emit_result(result, {}, on_event)
+            return result
     allowed, reason, proofs = check_proposal(*selection, query, history,
         calculation_intent=has_calculation_intent(query) or calculation_followup)
     if not allowed:
@@ -114,8 +145,9 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
                 on_event({"type": "tool", "id": "primary", "tool": selection[0],
                           "status": "no_tool_needed", "error_code": reason})
             return None
-        from app.services.tools.policy import ALIASES
         missing = reason.split(":", 1)[1].split(",") if reason.startswith("unconfirmed_inputs:") else []
+        if reason == "missing_input":
+            missing = [key for key in TOOL_SCHEMAS[selection[0]].model_fields if key not in selection[1]]
         labels = [ALIASES.get(key, key).split("|")[0] for key in missing]
         result = ToolRun(selection[0], "invalid_arguments" if reason == "invalid_input" else "needs_input", "입력값 또는 조회 대상을 사용자 발언에서 확인하지 못했습니다."
                          + (" 확인할 입력: " + ", ".join(labels) if labels else " 조회 대상과 계산 조건을 구체적으로 알려주세요."),

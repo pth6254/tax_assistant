@@ -58,12 +58,16 @@ def summarize_verification(answer: str, context: str, calc_context: str | None,
     }
 
 
-def unavailable_verification() -> dict:
+def unavailable_verification(events=None) -> dict:
     """Tool failure or archival lookup did not undergo final-answer checks."""
-    return {"schema_version": "1.0", "status": "withheld",
+    terminal = next((event for event in reversed(events or [])
+                     if event.get("scope") != "issue" and event.get("status") not in {"running", "selecting", "no_tool_needed"}), {})
+    needs_input = terminal.get("status") in {"needs_input", "invalid_arguments"}
+    return {"schema_version": "1.0", "status": "limited" if needs_input else "withheld",
             "checks": {"citation": "not_assessed", "calculation": "not_applicable",
                        "legal_application": "not_assessed"},
-            "citations": [], "note": "필요한 자료를 확보하지 못해 이번 세무 판단을 보류했습니다."}
+            "citations": [], "note": (terminal.get("context") or "계산·조회 조건을 추가로 확인해야 합니다.") if needs_input
+            else "필요한 자료를 확보하지 못해 이번 세무 판단을 보류했습니다."}
 
 
 def unassessed_verification() -> dict:

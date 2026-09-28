@@ -72,7 +72,7 @@ class AnswerClaim(Contract):
     id: str
     issue_id: str
     text: str = Field(min_length=1, max_length=3000)
-    kind: Literal["legal", "document", "fact", "guidance"]
+    kind: Literal["legal", "source_summary", "document", "fact", "guidance"]
     citations: list[ClaimCitation] = Field(default_factory=list, max_length=8)
     conditions: list[str] = Field(default_factory=list)
     depends_on: list[str] = Field(default_factory=list)

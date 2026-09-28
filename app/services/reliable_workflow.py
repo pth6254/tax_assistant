@@ -55,6 +55,7 @@ async def prepare_context(query, laws, user_id, history, search, on_event=None):
         records.extend(found)
         coverage[issue.id] = {"status": "candidates" if tool and tool.status == "ok" else "failed",
                               "error": tool.error_code if tool else "no_tool_needed",
+                              "message": str(tool.context) if tool and tool.status != "ok" else "",
                               "evidence_ids": [r.id for r in found]}
         if tool and tool.calculation:
             coverage[issue.id]["calculation"] = {"tool": tool.calculation.tool,

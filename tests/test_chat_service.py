@@ -105,6 +105,11 @@ def test_match_generic_deduction_word_not_special_law():
     assert _match_laws_by_keyword("종합소득세 기본공제 금액은 얼마인가요?") == ["소득세법"]
 
 
+def test_polite_ending_does_not_select_liquor_tax():
+    assert _match_laws_by_keyword("법인세 처리 방법을 설명해 주세요.") == ["법인세법"]
+    assert _match_laws_by_keyword("주세법의 과세 대상을 설명해 주세요.") == ["주세법"]
+
+
 # ── 실제 최종 답변 템플릿 ────────────────────────────────────────
 
 @pytest.fixture

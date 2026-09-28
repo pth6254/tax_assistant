@@ -1,5 +1,7 @@
 """Health endpoint tests."""
+from contextlib import asynccontextmanager
 from dataclasses import replace
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -50,6 +52,7 @@ def test_dependencies_reports_embedding_degradation_without_503(client, mock_poo
     with (
         patch("app.routers.health._embedding_status", AsyncMock(return_value=embedding)),
         patch("app.routers.health._llm_status", AsyncMock(return_value=llm)),
+        patch("app.routers.health._graph_status", AsyncMock(return_value={"status": "ok", "connected": True})),
     ):
         response = client.get("/api/health/dependencies")
 
@@ -72,12 +75,52 @@ def test_dependencies_reports_routing_model_degradation(client, mock_pool, monke
             {"status": "ok", "model": "openai/gpt-6-luna"},
             {"status": "model_missing", "model": "openai/gpt-5-nano"},
         ])),
+        patch("app.routers.health._graph_status", AsyncMock(return_value={"status": "ok", "connected": True})),
     ):
         response = client.get("/api/health/dependencies")
     assert response.status_code == 200
     assert response.json()["status"] == "degraded"
     assert response.json()["routing_llm"]["status"] == "model_missing"
     conn.fetchval.side_effect = None
+
+
+def test_dependencies_reports_graph_degradation_without_marking_core_unready(client, mock_pool):
+    _, conn = mock_pool
+    conn.fetchval.side_effect = ["PostgreSQL 17.0 on x86_64", "20260719_0001"]
+    with (
+        patch("app.routers.health._embedding_status", AsyncMock(return_value={"status": "ok"})),
+        patch("app.routers.health._llm_status", AsyncMock(return_value={"status": "ok"})),
+        patch("app.routers.health._graph_status", AsyncMock(return_value={"status": "unreachable", "connected": False})),
+    ):
+        response = client.get("/api/health/dependencies")
+    assert response.status_code == 200
+    assert response.json()["status"] == "degraded"
+    assert response.json()["graph"] == {"status": "unreachable", "connected": False}
+    conn.fetchval.side_effect = None
+
+
+@pytest.mark.asyncio
+async def test_graph_dependency_checks_neo4j_connectivity(monkeypatch):
+    from app.routers import health
+
+    monkeypatch.setattr(health.config, "GRAPH_RAG_ENABLED", True)
+    verify = AsyncMock()
+
+    @asynccontextmanager
+    async def connected():
+        yield SimpleNamespace(verify_connectivity=verify)
+
+    monkeypatch.setattr(health, "graph_connect", connected)
+    assert await health._graph_status() == {"status": "ok", "connected": True}
+    verify.assert_awaited_once()
+
+    @asynccontextmanager
+    async def disconnected():
+        raise ConnectionError("Neo4j unavailable")
+        yield
+
+    monkeypatch.setattr(health, "graph_connect", disconnected)
+    assert await health._graph_status() == {"status": "unreachable", "connected": False}
 
 
 @pytest.mark.asyncio

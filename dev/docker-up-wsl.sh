@@ -76,6 +76,33 @@ for model in required:
     print(f"  - {model}")
 PY
 
+# A targeted backend rebuild otherwise leaves an exited optional Neo4j
+# container stopped, even while GraphRAG remains enabled in the backend.
+STARTS_BACKEND=false
+if [[ $# -eq 0 ]]; then
+  STARTS_BACKEND=true
+else
+  for service in "$@"; do
+    if [[ "$service" == "backend" ]]; then
+      STARTS_BACKEND=true
+      break
+    fi
+  done
+fi
+if [[ "$STARTS_BACKEND" == true ]] && python - <<'PY'
+import os
+from dotenv import dotenv_values
+
+settings = dotenv_values('.env')
+current = str(os.getenv('GRAPH_RAG_ENABLED', settings.get('GRAPH_RAG_ENABLED') or 'false')).lower() == 'true'
+history = str(os.getenv('HISTORY_GRAPH_RAG_ENABLED', settings.get('HISTORY_GRAPH_RAG_ENABLED') or 'true')).lower() == 'true'
+raise SystemExit(0 if current or history else 1)
+PY
+then
+  echo "[INFO] GraphRAG 사용 설정 감지: Neo4j 준비 상태 확인"
+  docker compose up -d --wait neo4j
+fi
+
 docker compose up -d --build "$@"
 
 echo
