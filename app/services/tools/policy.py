@@ -41,14 +41,6 @@ def financial_income_scope(query, history=None):
     return bool(FINANCIAL_INCOME.search(previous))
 
 
-FINANCIAL_INPUT_MESSAGE = (
-    "금융소득 금액만으로 최종 납부세액을 확정할 수 없습니다. 다음 조건을 알려주세요.\n\n"
-    "- 소득이 발생하는 연도\n- 이자소득과 배당소득 각각의 금액(세전인지 세후인지)\n"
-    "- 근로·사업·연금 등 다른 소득의 종류와 금액\n- 이미 원천징수된 세금과 적용할 소득공제\n\n"
-    "현재 계산기는 금융소득 종합과세의 비교과세·배당세액공제를 반영하는 전용 계산을 지원하지 않습니다. "
-    "위 조건을 확인하더라도 일반 소득세 계산 결과를 금융소득의 확정세액으로 제시할 수는 없습니다."
-)
-
 ALIASES = {
     "income": "연소득|소득|총수입|수입", "expense": "필요경비|경비", "personal_deduction_count": "공제인원|공제 인원|기본공제 인원",
     "other_deductions": "기타공제|기타 공제", "transfer_price": "양도가액|양도 가액|매도가|매도금액",

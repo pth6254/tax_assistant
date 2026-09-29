@@ -224,7 +224,7 @@ def test_structured_answer_groups_verified_item_claims_without_new_tax_rules():
     assert answer.count('| 골프장 이용료 |') == 1
     assert '별도 판단을 확인하지 못한 항목:** 호텔비' in answer
     assert '## 항목별 검토' in answer
-    assert '## 확인한 근거' in answer
+    assert '**확인한 근거**' in answer
     assert '**추가로 확인할 사항**' in answer
     assert '## 1. 결론' not in answer
     assert answer.count('적용 시점:') == 1
@@ -248,6 +248,153 @@ def test_simple_answer_uses_plain_prose_without_numbered_sections():
     assert answer.startswith('조건 충족')
     assert '## 1.' not in answer
     assert '**확인한 근거**' in answer
+
+
+def test_prose_groups_repeated_labels_but_preserves_distinct_rules_and_conditions():
+    ctx = context()
+    ctx.plan.dates = ['2025년']
+    title = '대표이사의 개인 여행 경비 800만 원'
+    explanations = [
+        '업무와 직접 관련 없는 비용은 손금에 산입하지 않습니다.',
+        '복리후생비 요건을 충족하지 못하면 인정되기 어렵습니다. 2025년 적용은 미확정입니다.',
+    ]
+    rows = [AnswerClaim(id=f'C{i}', issue_id='I1', kind='source_summary',
+                        text=f'{title}: {text}', citations=[],
+                        conditions=['확보한 원문 기준이며 2025년 적용 여부는 미확정입니다.'])
+            for i, text in enumerate(explanations, 1)]
+    rows += [
+        AnswerClaim(id='C3', issue_id='I1', kind='source_summary',
+                    text='소득처분: 사외유출과 임원 귀속이 확인되는 경우 상여처분을 검토합니다.', citations=[]),
+        AnswerClaim(id='C4', issue_id='I1', kind='guidance',
+                    text='확인할 자료: 여행 일정과 업무 목적을 대조하세요.', citations=[]),
+        AnswerClaim(id='C5', issue_id='I1', kind='guidance',
+                    text='확인할 자료: 원천징수 요건은 별도로 확인하세요.', citations=[]),
+    ]
+    before = [row.model_dump() for row in rows]
+    answer = claims.render_structured_answer(rows, ctx)
+    assert answer.count(title) == 1
+    assert answer.count('**확인할 자료:**') == 1
+    for text in explanations:
+        assert text in answer
+    assert '사외유출과 임원 귀속이 확인되는 경우' in answer
+    assert '여행 일정과 업무 목적을 대조하세요.' in answer
+    assert '원천징수 요건은 별도로 확인하세요.' in answer
+    assert answer.count('**적용 시점:**') == 1
+    assert [row.model_dump() for row in rows] == before
+
+
+def test_repeated_labels_are_not_merged_across_issues_or_intervening_topics():
+    ctx = context()
+    ctx.plan.issues.append(ctx.plan.issues[0].model_copy(update={'id': 'I2', 'law': '부가가치세법'}))
+    rows = [
+        AnswerClaim(id='C1', issue_id='I1', text='여행 경비: 법인세 요건입니다.', kind='legal', citations=[]),
+        AnswerClaim(id='C2', issue_id='I1', text='소득처분: 귀속을 확인하세요.', kind='legal', citations=[]),
+        AnswerClaim(id='C3', issue_id='I1', text='여행 경비: 다른 적용 조건입니다.', kind='legal', citations=[]),
+        AnswerClaim(id='C4', issue_id='I2', text='여행 경비: 부가가치세 요건입니다.', kind='legal', citations=[]),
+    ]
+    answer = claims.render_structured_answer(rows, ctx)
+    assert answer.count('**여행 경비:**') == 3
+    for row in rows:
+        assert row.text.split(': ', 1)[1] in answer
+
+
+def test_common_year_conditions_share_footer_without_removing_specific_limits():
+    ctx = context()
+    ctx.plan.dates = ['2025년']
+    row = draft(ctx).claims[0]
+    row.kind = 'source_summary'
+    common = ['2025년 적용 법령 버전은 미확정', '2025년 적용 여부 미확정',
+              '2025년 적용 여부는 별도 확인이 필요합니다.']
+    specific = ['2025년 원천징수 신고기한은 미확정',
+                '대표이사 귀속 여부 확인 필요', '상환 여부에 따라 판단이 달라집니다.']
+    row.conditions = common + specific
+    answer = claims.render_structured_answer([row], ctx)
+    assert answer.count('**적용 시점:**') == 1
+    for condition in common:
+        assert condition not in answer
+    for condition in specific:
+        assert condition in answer
+    # Without a source-summary footer, no condition can be hidden by this rule.
+    row.kind = 'legal'
+    answer = claims.render_structured_answer([row], ctx)
+    for condition in common:
+        assert condition in answer
+
+
+def test_long_item_explanations_use_readable_sections_instead_of_wide_table():
+    ctx = context()
+    explanation = '개별 지출의 목적과 실제 귀속을 확인해야 합니다. ' * 14
+    rows = [AnswerClaim(id=f'C{i}', issue_id='I1', kind='legal', citations=[],
+                        text=f'{name}: {explanation}')
+            for i, name in enumerate(['출장비', '선물비'], 1)]
+    answer = claims.render_structured_answer(rows, ctx, '- 출장비 800만 원\n- 선물비 200만 원')
+    assert '| 항목 |' not in answer
+    assert '### 출장비' in answer and '### 선물비' in answer
+    assert answer.count(explanation.strip()) == 2
+
+
+def test_single_item_multiple_claims_do_not_create_single_row_table():
+    ctx = context()
+    rows = [AnswerClaim(id=f'C{i}', issue_id='I1', kind='legal', citations=[],
+                        text=f'출장비: {text}') for i, text in enumerate(['업무 목적 확인.', '귀속자 확인.'], 1)]
+    answer = claims.render_structured_answer(rows, ctx, '출장비 800만 원')
+    assert '| 항목 |' not in answer
+    assert answer.count('출장비') == 1
+    assert '업무 목적 확인.' in answer and '귀속자 확인.' in answer
+
+
+def test_answer_preserves_order_lists_emphasis_and_subjects():
+    ctx = context()
+    ctx.plan.issues[0].subject = '대표이사'
+    ctx.plan.issues.append(ctx.plan.issues[0].model_copy(update={'id': 'I2', 'subject': '회사'}))
+    intro = draft(ctx, '**조건 충족 시 적용합니다.**').claims[0]
+    rows = [intro,
+            AnswerClaim(id='C2', issue_id='I1', kind='legal', text='출장비: 업무 목적 확인.', citations=[]),
+            AnswerClaim(id='C3', issue_id='I1', kind='legal', text='선물비: 수령인 확인.', citations=[]),
+            AnswerClaim(id='C4', issue_id='I1', kind='guidance',
+                        text='1. 지출내역을 준비하세요.\n2. 업무 자료와 대조하세요.', citations=[])]
+    answer = claims.render_structured_answer(rows, ctx, '1. 출장비: 800만 원\n2. 선물비: 200만 원')
+    assert '대표이사 ·' in answer and '회사 ·' in answer
+    assert answer.index(intro.text) < answer.index('| 항목 |')
+    assert '1. 지출내역을 준비하세요.\n2. 업무 자료와 대조하세요.' in answer
+    assert '- 1.' not in answer
+    assert answer.index('추가로 확인할 사항') < answer.index('**확인한 근거**')
+
+
+def test_repaired_claims_follow_question_order_without_rewriting_or_skipping_dependencies():
+    query = '공제 요건과 신고 절차, 준비할 서류를 설명해주세요.'
+    filing = AnswerClaim(id='C1', issue_id='I1', kind='legal', text='신고 설명입니다.',
+                         citations=[], question_part='신고 절차')
+    deduction = AnswerClaim(id='C2', issue_id='I1', kind='legal', text='공제 설명입니다.',
+                            citations=[], question_part='공제 요건')
+    rows = [filing, deduction]
+    before = [row.model_dump() for row in rows]
+    assert claims.order_claims_for_display(rows, query) == [deduction, filing]
+    answer = claims.render_structured_answer(rows, context(), query)
+    assert answer.index(deduction.text) < answer.index(filing.text)
+    assert [row.model_dump() for row in rows] == before
+    deduction.depends_on = ['C1']
+    assert claims.order_claims_for_display(rows, query) == [filing, deduction]
+
+
+def test_invalid_or_ambiguous_display_anchors_leave_claims_in_original_order():
+    rows = [AnswerClaim(id=f'C{i}', issue_id='I1', kind='legal', text=f'설명 {i}', citations=[],
+                        question_part=anchor) for i, anchor in enumerate(['<script>내용</script>', '공제'], 1)]
+    assert claims.order_claims_for_display(rows, '공제 요건과 추가 공제') == rows
+    assert claims.order_claims_for_display(rows, '') == rows
+
+
+def test_unspecified_year_uses_one_scope_note_without_hiding_specific_missing_inputs():
+    ctx = context()
+    ctx.plan.missing_inputs = ['거래·사건의 적용 시점', '과거 증여 내역']
+    row = draft(ctx).claims[0]
+    row.kind = 'source_summary'
+    row.conditions = ['질문의 거래·사건 연도에 적용되는 법령 버전은 미확정']
+    answer = claims.render_structured_answer([row], ctx)
+    assert answer.count('**법령 적용:**') == 1
+    assert '거래·사건의 적용 시점' not in answer
+    assert row.conditions[0] not in answer
+    assert '과거 증여 내역' in answer
 
 
 def test_duplicate_single_tax_issues_are_rejected_and_fallback_is_compact():

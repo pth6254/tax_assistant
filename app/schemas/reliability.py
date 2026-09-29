@@ -76,6 +76,7 @@ class AnswerClaim(Contract):
     citations: list[ClaimCitation] = Field(default_factory=list, max_length=8)
     conditions: list[str] = Field(default_factory=list)
     depends_on: list[str] = Field(default_factory=list)
+    question_part: str = Field(default="", description="이 주장이 답하는 요청의 사용자 질문 연속 원문. 표시 순서에만 사용.")
 
 
 class AnswerDraft(Contract):

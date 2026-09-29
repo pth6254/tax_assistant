@@ -8,6 +8,25 @@ const CHECKS = {
 const PROGRESS = { planning: '질문의 요청과 쟁점을 확인하고 있습니다…', retrieving: '쟁점별 근거를 찾고 있습니다…',
   generating: '확보한 근거로 답변을 작성하고 있습니다…', checking: '답변의 근거와 조건을 대조하고 있습니다…' }
 
+function FormulaDetails({ calculation }) {
+  if (!calculation?.execution) return null
+  const { plan, execution } = calculation
+  const labels = Object.fromEntries([...(plan?.values || []), ...(plan?.steps || [])].map(item => [item.id, item.label]))
+  const operations = { add: '+', subtract: '−', multiply: '×', divide: '÷', min: '최솟값', max: '최댓값', progressive: '구간별 세율', round: '원 단위 처리' }
+  return <details className="formula-details">
+    <summary>계산에 사용한 값과 산식</summary>
+    <p>{plan?.scope}</p>
+    <ul>{plan?.values?.map(value => <li key={value.id}>
+      {value.label}: {value.value}{value.unit === 'KRW' ? '원' : ''} · {{ user: '사용자 제공', assumption: '예시 가정', law: '원문 수치', constant: '연산 상수' }[value.origin]}
+    </li>)}</ul>
+    <ol>{execution.steps.map(step => <li key={step.id}>
+      {step.label}: {step.args.map(id => labels[id] || id).join(` ${operations[step.op]} `)}
+      {step.args.length === 1 ? ` (${operations[step.op]})` : ''} = {step.value}{step.unit === 'KRW' ? '원' : ''}
+    </li>)}</ol>
+    <p>숫자 연산은 코드로 수행했으며, 법령 적용과 가정은 별도로 확인해야 합니다.</p>
+  </details>
+}
+
 export default function VerificationPanel({ verification, loading, progress, onCitationClick }) {
   if (loading) return <p className="verification-progress" role="status">{PROGRESS[progress] || PROGRESS.checking}</p>
   if (!verification) return null
@@ -31,6 +50,9 @@ export default function VerificationPanel({ verification, loading, progress, onC
         </li>)}
       </ul>}
       {verification.plan?.missing_inputs?.length > 0 && <p>추가 확인: {verification.plan.missing_inputs.join(', ')}</p>}
+      <FormulaDetails calculation={verification.formula_calculation} />
+      {Object.entries(verification.formula_calculations || {}).map(([id, report]) =>
+        <FormulaDetails key={id} calculation={report.formula_calculation} />)}
       {citations.length > 0 && <div className="verification-sources">
         <strong>대조한 조문</strong>
         {citations.map((source, index) => source.text ? <details key={source.evidence_id || index}>

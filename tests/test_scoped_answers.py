@@ -119,9 +119,8 @@ async def test_financial_income_never_uses_business_calculator(monkeypatch):
     question = '금융소득으로 1억을 벌게 된다면 금융종합소득과세로 세금 얼마나 납부하게 될까?'
     events = []
     result = await planner.run_tools_for_query(question, user_id='unused', on_event=events.append)
-    assert result.error_code == 'unsupported_financial_income_calculation'
-    assert all(word in result.context for word in ['연도', '배당소득', '원천징수', '지원하지 않습니다'])
-    assert unavailable_verification(events)['status'] == 'limited'
+    assert result.tool == 'formula_calculation' and result.status == 'planned'
+    assert events == []  # Orchestration emits progress when evidence retrieval starts.
     assert not policy.check_proposal('income_tax', {}, question, [], calculation_intent=True)[0]
     select.assert_not_called()
 

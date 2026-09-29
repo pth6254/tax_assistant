@@ -5,11 +5,18 @@ import ToolCallCard from './ToolCallCard'
 import VerificationPanel from './VerificationPanel'
 import Notice from '../ui/Notice'
 import Icon from '../ui/Icon'
+import { isPendingTool } from './toolState'
+import './answerPresentation.css'
 const CITATION_RE = /\[(법률|시행령|시행규칙)\]\s*([^\n\[]+?)\s*(제\s*\d+\s*조(?:\s*의\s*\d+)?(?:\s*제\s*\d+\s*항)?(?:\s*제\s*\d+\s*호(?:\s*의\s*\d+)?)?(?:\s*[가-힣]\s*목)?)/g
 export default function MessageBubble({ message, onCitationClick, onOpenCalculator, onRetry, onEdit, onRegenerate, onSelectVersion }) {
   const isUser = message.role === 'user', body = useRef()
   const [editing, setEditing] = useState(false), [draft, setDraft] = useState(message.content)
   const [shareFeedback, setShareFeedback] = useState('')
+  const tools = message.tools || []
+  const collapseTools = Boolean(message.content) && !message.verificationLoading &&
+    !['streaming', 'error', 'stopped'].includes(message.status) && tools.length > 0 &&
+    tools.every(tool => !isPendingTool(tool) && ['ok', 'no_tool_needed'].includes(tool.status))
+  const toolCards = tools.map(t => <ToolCallCard key={t.id} tool={t} onCitationClick={onCitationClick} onOpenCalculator={onOpenCalculator} onRetry={onRetry} />)
   const shareAnswer = async () => {
     setShareFeedback('')
     try {
@@ -29,6 +36,13 @@ export default function MessageBubble({ message, onCitationClick, onOpenCalculat
       ALLOW_DATA_ATTR: false,
       FORBID_TAGS: ['img', 'video', 'audio', 'iframe', 'form', 'input', 'button', 'textarea', 'select', 'style'],
     })
+    // Keep the table semantic and keyboard-scrollable without widening the page.
+    for (const table of body.current.querySelectorAll('table')) {
+      const scroll = document.createElement('div')
+      scroll.className = 'answer-table-scroll'; scroll.tabIndex = 0
+      scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', '답변 표')
+      table.replaceWith(scroll); scroll.append(table)
+    }
     // Archive answers already have exact version links. Never open the current-law viewer.
     if (message.tools?.some(tool => tool.tool === 'history_lookup')) return
     // Link only text nodes after sanitization; model-generated attributes cannot become actions.
@@ -59,9 +73,13 @@ export default function MessageBubble({ message, onCitationClick, onOpenCalculat
       <button className="button secondary" type="submit" disabled={!draft.trim()}>수정 후 보내기</button>
     </form> : message.content}</div>
       {onEdit && !editing && <div className="message-actions user-actions"><button className="icon-button message-action" type="button" aria-label="마지막 질문 수정" title="질문 수정" onClick={() => { setDraft(message.content); setEditing(true) }}><Icon name="edit" size={17} /></button></div>}</> : <>
-      <div className="answer-label"><Icon name="book" size={18} /><span>세무 AI</span><span className="muted small">근거와 적용 조건을 함께 확인하세요</span></div>
-      {message.tools?.map(t => <ToolCallCard key={t.id} tool={t} onCitationClick={onCitationClick} onOpenCalculator={onOpenCalculator} onRetry={onRetry} />)}
+      <div className="answer-label"><Icon name="book" size={18} /><span>세무 AI</span></div>
+      {!collapseTools && toolCards}
       <div ref={body} className="markdown-bubble" onClick={e => { const target = e.target.closest('button.citation-link'); if (target && body.current.contains(target)) onCitationClick?.(target.dataset.law, target.dataset.article) }} />
+      {collapseTools && <details className="answer-tools">
+        <summary>조회·계산 내역 · {tools.length}건</summary>
+        {toolCards}
+      </details>}
       <VerificationPanel verification={message.verification} loading={message.verificationLoading} progress={message.verificationProgress} onCitationClick={onCitationClick} />
       {message.status === 'stopped' && <Notice tone="info">생성을 중지했습니다. 표시된 내용은 미완성이고 저장되지 않았을 수 있습니다.</Notice>}
       {message.status === 'error' && <Notice onRetry={onRetry}>{message.error}</Notice>}

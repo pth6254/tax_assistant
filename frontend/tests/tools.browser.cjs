@@ -9,6 +9,7 @@ const assert = require('node:assert/strict')
     const page = await browser.newPage({ viewport: { width: 1440, height: 1050 } })
     const errors = []
     let calculatorFailure = false
+    let streamCompleted = false
     page.on('pageerror', e => errors.push(e.message))
     const tools = [
       { tool: 'law_lookup', status: 'ok', params: { law_name: '소득세법', article_no: '제55조' }, context: '소득세법 제55조 저장 원문' },
@@ -31,24 +32,31 @@ const assert = require('node:assert/strict')
       ]
       else if (path.endsWith('/messages')) body = tools.map((tool, i) => ({
         role: 'assistant', content: '도구 실행 결과 ' + (i + 1), tools: [{ id: 'primary', type: 'tool', ...tool }],
-      }))
+      })).concat(streamCompleted ? [{ role: 'assistant', content: '관련 문서를 찾지 못했습니다.',
+        tools: [{ id: 'primary', tool: 'document_search', status: 'not_found', context: '관련 자료 없음' }] }] : [])
       else if (path === '/api/law-articles/lookup') body = {
         law_name: '소득세법', article_no: '제55조', article_title: '테스트 조문',
         article_text: '합성 원문', source_url: '', effective_date: '2026-01-01',
       }
-      else if (path === '/api/chat/stream') return route.fulfill({
+      else if (path === '/api/chat/stream') {
+        streamCompleted = true
+        return route.fulfill({
         contentType: 'text/event-stream',
         body: [
           { type: 'tool', id: 'primary', tool: 'document_search', status: 'not_found', context: '관련 자료 없음' },
           { type: 'chunk', text: '관련 문서를 찾지 못했습니다.' },
         ].map(e => 'data: ' + JSON.stringify(e) + '\n\n').join('') + 'data: [DONE]\n\n',
-      })
+        })
+      }
       await route.fulfill({ json: body })
     })
     await page.goto(process.env.UI_TEST_URL || 'http://127.0.0.1:4173')
     await page.locator('input[type=email]').fill('portfolio@example.test')
     await page.locator('input[type=password]').fill('test-password')
     await page.getByRole('button', { name: '로그인', exact: true }).last().click()
+    await page.locator('.answer-tools').first().waitFor()
+    assert.equal(await page.getByRole('button', { name: '조문 원문 열기 →' }).isVisible(), false)
+    for (const summary of await page.locator('.answer-tools > summary').all()) await summary.click()
     await page.getByRole('button', { name: '조문 원문 열기 →' }).waitFor()
     for (const name of ['법령 원문 조회', '내 문서 검색', '소득세 계산']) {
       assert.equal(await page.getByRole('region', { name }).count(), 1)

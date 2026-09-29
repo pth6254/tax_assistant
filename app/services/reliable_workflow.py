@@ -51,6 +51,18 @@ async def prepare_context(query, laws, user_id, history, search, on_event=None):
         except TimeoutError:
             coverage[issue.id] = {"status": "failed", "error": "tool_timeout", "evidence_ids": []}
             continue
+        if tool and tool.tool == 'formula_calculation':
+            from app.services.calculator.formula_workflow import calculate_reference
+            from app.services.tools.executor import ToolRun
+            formula_context, calculation = await calculate_reference(
+                issue.request_quote, [*history, {"role": "user", "content": query}], user_id, search, tool_event)
+            if calculation is None:
+                # Preserve the original request and explain verified rules when
+                # the numeric plan cannot be released, as in standalone chat.
+                plan.issues = [item.model_copy(update={"kind": "analysis"}) if item.id == issue.id else item
+                               for item in plan.issues]
+            tool = ToolRun('formula_calculation', 'ok' if calculation else 'not_found',
+                           formula_context, calculation, error_code=None if calculation else 'formula_not_verified')
         found = list(tool.context.records) if tool and isinstance(tool.context, EvidenceContext) else []
         records.extend(found)
         coverage[issue.id] = {"status": "candidates" if tool and tool.status == "ok" else "failed",
@@ -61,6 +73,8 @@ async def prepare_context(query, laws, user_id, history, search, on_event=None):
             coverage[issue.id]["calculation"] = {"tool": tool.calculation.tool,
                                                 "params": tool.calculation.params,
                                                 "context": tool.calculation.context}
+            if tool.calculation.verification:
+                coverage[issue.id]["calculation"]["verification"] = tool.calculation.verification
     return context_from_records(records, plan=plan, coverage=coverage)
 
 
@@ -91,8 +105,12 @@ async def answer_context(query, context, user_id, search, on_event=None):
                                   assumptions=context.plan.assumptions,
                                   missing_inputs=context.plan.missing_inputs)
         extra = await retrieve_issues(retry_plan, query, user_id, search, on_progress=on_event)
+        merged_coverage = context.coverage | extra.coverage
+        for issue_id, state in context.coverage.items():
+            if state.get('formula_diagnostics'):
+                merged_coverage[issue_id] = dict(merged_coverage[issue_id], formula_diagnostics=state['formula_diagnostics'])
         return context_from_records([*context.records, *extra.records], plan=context.plan,
-                                    coverage=context.coverage | extra.coverage)
+                                    coverage=merged_coverage)
     try:
         async with asyncio.timeout(240):
             return await generate_verified_answer(query, context, repair=repair, on_progress=on_event)

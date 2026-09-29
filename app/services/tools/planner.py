@@ -14,7 +14,7 @@ from app.services.law.coverage_service import NATIONAL_TAX_LAWS
 from app.services.tools.registry import TOOL_SCHEMAS
 from app.services.tools.executor import ToolRun, execute_tool
 from app.services.tools.policy import DOCUMENT_INTENT, CALC_TAX, ALIASES, check_proposal, has_lookup_intent
-from app.services.tools.policy import financial_income_scope, FINANCIAL_INPUT_MESSAGE
+from app.services.tools.policy import financial_income_scope
 
 logger = logging.getLogger(__name__)
 _AMOUNT_RE = re.compile(r"(?:\d[\d,.]*|[일이삼사오육칠팔구십백천]+)\s*(?:억|천만|백만|천|만|원)")
@@ -70,6 +70,8 @@ async def select_tool(query: str, history: list[dict] | None = None) -> tuple[st
         "원문 조회는 law_lookup, 내 업로드 문서 검색은 document_search. "
         "세액 계산은 income_tax(종합소득세), capital_gains(양도소득세), inheritance(상속세), "
         "gift(증여세), vat(부가가치세), penalty_tax(가산세)를 사용하세요. "
+        "위 계산기의 지원 대상 밖인 세액 계산은 formula_calculation을 선택하고 params는 빈 객체로 두세요. "
+        "일반 설명이나 기존 계산기의 단순 입력 부족을 formula_calculation으로 보내지 마세요. "
         "금액은 원 단위 정수로 변환하세요. 사용자와 이전 대화에 없는 필수 입력은 추측하지 마세요. "
         "설명·요건·절차·법적 분석처럼 도구가 불필요한 요청만 {\"tool\":\"none\"}. "
         "계산이나 조회를 명시적으로 요청했지만 입력이 부족하면 해당 도구와 확인된 인자만 반환하세요. "
@@ -95,10 +97,7 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
     if not has_tool_intent(query) and not calculation_followup:
         return None
     if (has_calculation_intent(query) or calculation_followup) and financial_income_scope(query, history):
-        result = ToolRun("income_tax", "needs_input", FINANCIAL_INPUT_MESSAGE,
-                         error_code="unsupported_financial_income_calculation")
-        _emit_result(result, {}, on_event)
-        return result
+        return ToolRun("formula_calculation", "planned", "공식 근거를 확인한 산식으로 참고 계산을 준비합니다.")
     if on_event:
         on_event({"type": "tool", "id": "primary", "tool": "none", "status": "selecting"})
     try:
@@ -134,6 +133,10 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
             result = ToolRun(tool, "needs_input", message, error_code="calculation_inputs_required" if has_calculation_intent(query) or calculation_followup else "lookup_target_required")
             _emit_result(result, {}, on_event)
             return result
+    if selection[0] == 'formula_calculation':
+        if has_calculation_intent(query) or calculation_followup:
+            return ToolRun('formula_calculation', 'planned', '공식 근거를 확인한 산식으로 참고 계산을 준비합니다.')
+        return None
     allowed, reason, proofs = check_proposal(*selection, query, history,
         calculation_intent=has_calculation_intent(query) or calculation_followup)
     if not allowed:

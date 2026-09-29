@@ -50,6 +50,7 @@ CASES = {
 
 async def main(output, case='consulting'):
     import config
+    from app.services.calculator import formula_workflow
     from app.services.answer_verification import unavailable_verification
     from app.services.llm_client import _get_provider
     async def response_status(response):
@@ -85,6 +86,16 @@ async def main(output, case='consulting'):
     if client is not None:
         client.event_hooks['response'].append(response_status)
     question = CASES[case]
+    # Public smoke fixtures only: retain proposals/reviews for diagnosing a
+    # rejected formula without publishing them in chat or tracing private input.
+    formula_calls = []
+    original_formula_llm = formula_workflow.call_llm_structured
+    async def record_formula(messages, schema, **kwargs):
+        value = await original_formula_llm(messages, schema, **kwargs)
+        formula_calls.append({'purpose': kwargs.get('purpose'), 'result': value})
+        Path(output + '.formula.json').write_text(json.dumps(formula_calls, ensure_ascii=False, indent=2), encoding='utf-8')
+        return value
+    formula_workflow.call_llm_structured = record_formula
     events = []
     def progress(event):
         events.append(event)
@@ -99,7 +110,8 @@ async def main(output, case='consulting'):
                     answer, verification = failure, unavailable_verification(events)
                 else:
                     print(json.dumps({'stage': 'prepared', 'evidence': len(context.records),
-                                      'issues': len(context.plan.issues), 'plan_status': context.plan.status}), flush=True)
+                                      'issues': len(context.plan.issues) if context.plan else 0,
+                                      'plan_status': context.plan.status if context.plan else 'tool_result'}), flush=True)
                     answer, verification = await chat._answer_evidence_context(question, context, calc, str(uuid4()), progress)
         result = {'question': question, 'answer': answer, 'verification': verification,
                   'runtime': {'openrouter': config.LLM_PROVIDER == 'openrouter',
@@ -110,6 +122,7 @@ async def main(output, case='consulting'):
         print(json.dumps({'completed': True, 'status': verification['status'], 'metrics': verification.get('metrics'),
                           'runtime': result['runtime'], 'judge_error': verification.get('judge_error')}), flush=True)
     finally:
+        formula_workflow.call_llm_structured = original_formula_llm
         await close_live_clients()
 
 

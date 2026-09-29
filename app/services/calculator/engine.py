@@ -27,6 +27,7 @@ class CalcRun:
     context: str
     tool: str
     params: dict
+    verification: dict | None = None
 
 
 def format_calculation_context(result: CalculationResult) -> str:

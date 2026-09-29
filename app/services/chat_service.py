@@ -527,6 +527,10 @@ async def _fetch_rag_and_web_context(
         return context, "웹 검색 생략", history, None
     event_options = {"on_event": on_tool_event} if on_tool_event else {}
     tool_run = await run_tools_for_query(query, user_id=user_id, history=history, **event_options)
+    if tool_run and tool_run.tool == 'formula_calculation':
+        from app.services.calculator.formula_workflow import calculate_reference
+        context, calc_run = await calculate_reference(query, history, user_id, hybrid_search, on_tool_event)
+        return context, '웹 검색 생략', history, calc_run
     calc_run = tool_run.calculation if tool_run else None
     if tool_run and tool_run.status != "ok" and (tool_run.tool in CALCULATORS or tool_run.tool == "none"):
         return tool_run.context, "웹 검색 생략", history, None
@@ -590,7 +594,7 @@ def _trace_stream_output(events: list[dict]) -> dict:
 
 def _calc_meta(calc_run: CalcRun | None) -> dict | None:
     """프론트엔드 계산기 화면 프리필용 메타데이터(도구명 + 파라미터)."""
-    return {"tool": calc_run.tool, "params": calc_run.params} if calc_run else None
+    return {"tool": calc_run.tool, "params": calc_run.params} if calc_run and calc_run.tool != 'formula_calculation' else None
 
 
 
@@ -878,6 +882,8 @@ def _terminal_tools(events: list[dict]) -> list[dict]:
 
 
 async def _answer_evidence_context(query, context, calc_run, user_id, on_progress=None):
+    if calc_run and calc_run.tool == 'formula_calculation' and calc_run.verification:
+        return calc_run.context, calc_run.verification
     if context.plan is None and any(r.origin == "user_document" for r in context.records) and re.search(r"요약|설명|비교", query):
         from app.schemas.reliability import Issue, QuestionPlan
         context = EvidenceContext(str(context), context.records, plan=QuestionPlan(issues=[
