@@ -4,6 +4,7 @@ Never selects the latest archive version or modifies live rows/embeddings.
 Law identity, MST, effective date, XML hash and parsed metadata must all match.
 """
 from datetime import date
+from collections import OrderedDict
 import logging
 from urllib.parse import parse_qs, urlparse
 
@@ -11,6 +12,18 @@ from app.services.evidence import digest, has_missing_items
 from app.services.law.parser_service import parse_articles
 
 logger = logging.getLogger(__name__)
+_parsed_snapshots = OrderedDict()
+
+
+def _snapshot_articles(snapshot):
+    """Reuse parsing of a verified immutable XML; hashes are checked by caller."""
+    key = (snapshot['id'], snapshot['content_hash'])
+    if key not in _parsed_snapshots:
+        _parsed_snapshots[key] = parse_articles(snapshot['raw_xml'])
+        while len(_parsed_snapshots) > 24:
+            _parsed_snapshots.popitem(last=False)
+    _parsed_snapshots.move_to_end(key)
+    return _parsed_snapshots[key]
 
 _SNAPSHOT = '''SELECT s.id, s.raw_xml, s.content_hash
     FROM law_history.versions v JOIN law_history.snapshots s ON s.version_id=v.id
@@ -33,7 +46,7 @@ async def recover_article(row, conn):
         snapshot = await conn.fetchrow(_SNAPSHOT, mst, row['law_name'], effective)
         if not snapshot or digest(snapshot['raw_xml']) != snapshot['content_hash']:
             return row
-        articles = parse_articles(snapshot['raw_xml'])
+        articles = _snapshot_articles(snapshot)
         matching = [article for article in articles if article.law_name == row['law_name']
                     and article.article_no == row['article_no']
                     and date.fromisoformat(article.effective_date) == effective

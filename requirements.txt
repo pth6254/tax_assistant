@@ -22,6 +22,7 @@ idna==3.11
 iniconfig==2.3.0
 langchain-core==1.4.9
 langsmith==0.12.1
+kiwipiepy==0.24.0
 neo4j==5.28.2
 numpy==2.4.4
 packaging==26.2

@@ -20,7 +20,7 @@ async def main(args):
         nodes, edges, unresolved = build_graph(rows)
         print(f'articles={len(nodes)} resolved_citations={len(edges)} unresolved={unresolved}')
         if args.apply:
-            await save_graph(nodes, edges)
+            await save_graph(nodes, edges, replace_all=args.all)
             if args.all:
                 print(await save_snapshot(nodes, edges))
             print('Graph synchronized; PostgreSQL and embeddings unchanged.')

@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from pydantic import BaseModel
 
@@ -43,6 +43,7 @@ class HybridSearchResult:
     effective_date: str = ""
     content_hash: str = ""
     original_text: str = ""
+    retrieval_scores: dict[str, float] = field(default_factory=dict)
 
 
 class ParsedLawReference(BaseModel):

@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 from app.database import get_pool
 from app.schemas.law import LawArticle, LawSummary
+from app.services.law.index_metadata import vector_metadata
 from app.services.law.api_service import get_law_detail, search_law, search_law_all_pages
 from app.services.law.parser_service import parse_articles
 from config import EMBED_DIM, EMBED_MODEL
@@ -241,12 +242,16 @@ async def _embed_and_update(
 
             async with pool.acquire() as conn:
                 await conn.executemany(
-                    "UPDATE law_articles SET embedding = $1, embedding_v2 = $2 WHERE id = $3",
+                    """UPDATE law_articles SET embedding = $1, embedding_v2 = $2,
+                        index_metadata = $4 WHERE id = $3 AND content_hash = $5""",
                     [
                         (
                             embeddings[index] if embeddings else None,
                             embeddings_v2[index] if embeddings_v2 else None,
                             db_id,
+                            vector_metadata(batch[index][0].article_text, texts[index],
+                                            v1=bool(embeddings), v2=bool(embeddings_v2)),
+                            _make_hash(batch[index][0].article_text),
                         )
                         for index, db_id in enumerate(db_ids)
                     ],
@@ -274,7 +279,8 @@ async def _embed_and_update(
 async def embed_clauses_for_articles(items: list[tuple[LawArticle, int]]) -> int:
     """긴 조문(should_split 기준)의 항 단위 보조 임베딩을 생성해 law_article_clauses에 저장한다.
 
-    기존 항 임베딩이 있으면 삭제 후 재생성 (idempotent).
+    임베딩 생성 후 부모 원문을 잠그고 검사하여 항 인덱스를 원자적으로 교체한다.
+    임베딩/삽입 실패 또는 원문 변경 시 기존 항 인덱스를 보존한다.
 
     Returns:
         생성된 항 임베딩 수
@@ -301,34 +307,48 @@ async def embed_clauses_for_articles(items: list[tuple[LawArticle, int]]) -> int
     if not rows:
         return 0
 
-    pool = await get_pool()
-    article_ids = list({r[0] for r in rows})
-    async with pool.acquire() as conn:
-        await conn.execute(
-            "DELETE FROM law_article_clauses WHERE article_id = ANY($1)", article_ids
-        )
-
-    inserted = 0
+    # Network work happens before any deletion or DB transaction.
+    prepared = []
     for batch_start in range(0, len(rows), _EMBED_BATCH_SIZE):
         batch = rows[batch_start : batch_start + _EMBED_BATCH_SIZE]
         embeddings, embeddings_v2 = await embed_texts_for_storage([r[3] for r in batch])
-        async with pool.acquire() as conn:
-            await conn.executemany(
-                """INSERT INTO law_article_clauses
-                   (article_id, clause_label, clause_text, embedding, embedding_v2)
-                   VALUES ($1, $2, $3, $4, $5)""",
-                [
-                    (
-                        row[0], row[1], row[2],
-                        embeddings[index] if embeddings else None,
-                        embeddings_v2[index] if embeddings_v2 else None,
-                    )
-                    for index, row in enumerate(batch)
-                ],
-            )
-        inserted += len(batch)
+        if ((not embeddings and not embeddings_v2)
+                or (embeddings and len(embeddings) != len(batch))
+                or (embeddings_v2 and len(embeddings_v2) != len(batch))):
+            raise ValueError('clause_embedding_count_mismatch')
+        expected_articles = {db_id: article for article, db_id in items}
+        prepared.extend((row[0], row[1], row[2],
+                         embeddings[index] if embeddings else None,
+                         embeddings_v2[index] if embeddings_v2 else None,
+                         vector_metadata(expected_articles[row[0]].article_text, row[3],
+                                         v1=bool(embeddings), v2=bool(embeddings_v2)))
+                        for index, row in enumerate(batch))
 
-    return inserted
+    article_ids = sorted({r[0] for r in rows})
+    expected = {db_id: article for article, db_id in items if db_id in article_ids}
+    pool = await get_pool()
+    async with pool.acquire() as conn, conn.transaction():
+        parents = await conn.fetch(
+            '''SELECT id, content_hash, article_text, law_name, article_no,
+                      effective_date, amendment_date FROM law_articles
+               WHERE id=ANY($1::bigint[]) ORDER BY id FOR UPDATE''', article_ids)
+        if len(parents) != len(article_ids):
+            raise ValueError('clause_parent_missing')
+        for parent in parents:
+            article = expected[parent['id']]
+            if (parent['content_hash'] != _make_hash(article.article_text)
+                    or parent['article_text'] != article.article_text
+                    or parent['law_name'] != article.law_name
+                    or parent['article_no'] != article.article_no
+                    or parent['effective_date'].replace('-', '') != article.effective_date.replace('-', '')
+                    or parent['amendment_date'].replace('-', '') != article.amendment_date.replace('-', '')):
+                raise ValueError('clause_parent_changed')
+        await conn.execute('DELETE FROM law_article_clauses WHERE article_id=ANY($1::bigint[])', article_ids)
+        await conn.executemany(
+            '''INSERT INTO law_article_clauses
+               (article_id, clause_label, clause_text, embedding, embedding_v2, index_metadata)
+               VALUES ($1, $2, $3, $4, $5, $6)''', prepared)
+    return len(prepared)
 
 
 # ── 공개 함수 ────────────────────────────────────────────────────

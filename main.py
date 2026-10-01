@@ -9,6 +9,7 @@ React 프론트엔드 실행:
     npm run dev
 """
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -18,6 +19,8 @@ from app.database import close_pool, get_pool
 from app.routers import auth, chat, upload, calculator, law, tax_schedule, users, conversations, health, consultation_cases, law_explorer
 from app.services.embedding_service import close_http_client
 from app.services.llm_client import close_llm_client
+from app.services.search.bm25_search_service import warm_bm25_index, close_bm25_index
+import config
 from config import (
     CHAT_MODEL, LLM_PROVIDER, EMBEDDING_PROVIDER, EMBEDDING_MODEL,
     LLM_TASK_SETTINGS,
@@ -30,6 +33,14 @@ logging.basicConfig(
 )
 
 
+async def _warm_search_index():
+    try:
+        await warm_bm25_index()
+    except Exception as error:
+        logging.getLogger(__name__).warning('BM25 startup warmup unavailable (%s)',
+                                             type(error).__name__)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup
@@ -39,8 +50,15 @@ async def lifespan(app: FastAPI):
     for task, settings in LLM_TASK_SETTINGS.items():
         print(f"🧭 {task}: {settings.provider} / {settings.model} / {settings.reasoning_effort or 'default'}")
     print(f"🔢 임베딩: {EMBEDDING_PROVIDER} / {EMBEDDING_MODEL}")
+    warmup = None
+    if config.SEARCH_LEXICAL_BACKEND == 'bm25':
+        # Build the read-only lexical index in the background; health stays available.
+        warmup = asyncio.create_task(_warm_search_index())
     yield
     # shutdown
+    await close_bm25_index()
+    if warmup:
+        await asyncio.gather(warmup, return_exceptions=True)
     await close_pool()
     await close_http_client()
     await close_llm_client()

@@ -51,11 +51,25 @@ def relevance(query, article):
 async def _expand(results, query=''):
     from app.services.search.hybrid_search_service import _row_to_article_result
 
+    # Bound DB fan-out and reuse identities within one expansion. Every article
+    # still comes through the canonical source/version checks in lookup_service.
+    semaphore = asyncio.Semaphore(4)
+    lookups = {}
+    async def fetch(identity):
+        async with semaphore:
+            return await get_law_article(*identity)
+    async def prefetch(identities):
+        missing = list(dict.fromkeys(identity for identity in identities if identity not in lookups))
+        articles = await asyncio.gather(*(fetch(identity) for identity in missing))
+        lookups.update(zip(missing, articles))
+
     seeds = {}
+    await prefetch((r.law_name, r.article_no) for r in results[:3]
+                   if r.article_no and r.source_type != 'interpretation')
     for result in results[:3]:
         if not result.article_no or result.source_type == 'interpretation':
             continue
-        article = await get_law_article(result.law_name, result.article_no)
+        article = lookups[(result.law_name, result.article_no)]
         if article and effective_now(article.model_dump()):
             header = article.article_no + (f' [{article.article_title}]' if article.article_title else '')
             if result.content == f'{header}\n{article.article_text}':
@@ -65,7 +79,7 @@ async def _expand(results, query=''):
     edges = await neighbors(list(seeds), bidirectional=True)
     seen = {(r.law_name, r.article_no) for r in results if r.article_no}
     additions = []
-    verified_definitions = {}
+    candidate_edges = []
     for edge in edges:
         if edge['source_key'] not in seeds:
             continue
@@ -77,7 +91,17 @@ async def _expand(results, query=''):
             family = lambda name: re.sub(r'\s*시행(?:령|규칙)$', '', name).replace(' ', '')
             if family(identity[0]) != family(seed.law_name):
                 continue  # A cross-family citation alone is not query relevance.
-        article = await get_law_article(*identity)
+        candidate_edges.append(edge)
+    identities = [(edge['law_name'], edge['article_no']) for edge in candidate_edges]
+    identities.extend((edge.get('alias_definition_law'), edge.get('alias_definition_article') or '제1조')
+                      for edge in candidate_edges if edge.get('alias_definition_key'))
+    await prefetch(identities)
+    for edge in candidate_edges:
+        identity = (edge['law_name'], edge['article_no'])
+        if identity in seen:
+            continue
+        seed = seeds[edge['source_key']]
+        article = lookups[identity]
         if (not article or not effective_now(article.model_dump())
                 or article_key(article.model_dump()) != edge['target_key']):
             continue  # Removed/changed graph targets cannot become evidence.
@@ -85,10 +109,8 @@ async def _expand(results, query=''):
         if proof_key:
             proof_law = edge.get('alias_definition_law')
             proof_identity = (proof_law, edge.get('alias_definition_article') or '제1조')
-            if proof_identity not in verified_definitions:
-                proof = await get_law_article(*proof_identity)
-                verified_definitions[proof_identity] = article_key(proof.model_dump()) if proof else ''
-            if verified_definitions[proof_identity] != proof_key:
+            proof = lookups[proof_identity]
+            if not proof or article_key(proof.model_dump()) != proof_key:
                 continue
         score = relevance(query, article)
         if query and score < (2 if edge.get('direction') == 'incoming' else 1):

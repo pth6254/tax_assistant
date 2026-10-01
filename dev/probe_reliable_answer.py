@@ -86,6 +86,9 @@ async def main(output, case='consulting'):
     if client is not None:
         client.event_hooks['response'].append(response_status)
     question = CASES[case]
+    if '--warm-bm25' in sys.argv and config.SEARCH_LEXICAL_BACKEND == 'bm25':
+        from app.services.search.bm25_search_service import warm_bm25_index
+        await warm_bm25_index()
     # Public smoke fixtures only: retain proposals/reviews for diagnosing a
     # rejected formula without publishing them in chat or tracing private input.
     formula_calls = []
@@ -123,6 +126,8 @@ async def main(output, case='consulting'):
                           'runtime': result['runtime'], 'judge_error': verification.get('judge_error')}), flush=True)
     finally:
         formula_workflow.call_llm_structured = original_formula_llm
+        from app.services.search.bm25_search_service import close_bm25_index
+        await close_bm25_index()
         await close_live_clients()
 
 

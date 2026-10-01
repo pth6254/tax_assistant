@@ -13,8 +13,12 @@ def digest(text):
 
 def has_missing_items(text):
     sections = re.split(r"[①-⑳㉑-㉟]", text)
+    # Some official XML bodies list alternatives as 가./나. directly under a
+    # paragraph. Presence of that list prevents a truncation false positive;
+    # it does not establish whether a requested numeric 호/목 exists.
+    listed = r"(?:^|\n)\s*(?:\d+|[가나다라마바사아자차카타파하])\s*\."
     return any(re.search(r"다음\s*각\s*호", part)
-               and not re.search(r"(?:^|\n)\s*\d+\s*\.", part) for part in sections)
+               and not re.search(listed, part) for part in sections)
 
 
 class EvidenceContext(str):

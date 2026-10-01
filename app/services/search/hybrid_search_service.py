@@ -22,6 +22,10 @@ import logging
 import re
 import time
 import uuid as _uuid
+from dataclasses import replace
+from langsmith import traceable
+from langsmith.run_helpers import get_current_run_tree
+import config
 
 from app.database import get_pool
 from app.schemas.law import HybridSearchResult
@@ -31,9 +35,35 @@ from app.services.embedding_service import embed_texts
 from app.services.law.reference_parser import extract_law_reference
 from app.services.law.lookup_service import get_law_article
 from app.services.search.graph_search_service import expand_graph
+from app.services.search.bm25_search_service import search_bm25_articles
+from app.services.search.query_embedding_cache import cached_embed_queries
+from app.services.search.query_constraints import extract_constraints
+from app.services.search.fuzzy_terms import expand_fuzzy_terms
+from app.services.search.diversity import mmr_order
 from config import EMBEDDING_VERSION, SIMILARITY_THRESHOLD, TOP_K
 
 logger = logging.getLogger(__name__)
+ISSUE_TITLE_RESCUE = True
+_LAW_NAME_ALIASES = {'상증세법': '상속세 및 증여세법', '부가세법': '부가가치세법',
+                     '조특법': '조세특례제한법', '국기법': '국세기본법'}
+
+
+def _canonical_lookup_law(name):
+    """Expand a bounded law-name alias, never arbitrary similar legal terms."""
+    compact = name.replace(' ', '')
+    for alias, canonical in _LAW_NAME_ALIASES.items():
+        for suffix in ('', ' 시행령', ' 시행규칙'):
+            if compact == (alias + suffix).replace(' ', ''):
+                return canonical + suffix
+    return name
+
+
+def _embedding_queries(queries: list[str]) -> list[str]:
+    """Qwen query-side instruction; document vectors remain untouched."""
+    if not config.SEARCH_QUERY_INSTRUCTION_ENABLED or 'qwen3-embedding' not in config.EMBEDDING_MODEL.lower():
+        return queries
+    task = 'Given a South Korean tax-law question, retrieve the statutory provisions that directly answer it'
+    return [f'Instruct: {task}\nQuery: {query}' for query in queries]
 
 # ── 우선순위 테이블 ──────────────────────────────────────────────
 
@@ -99,6 +129,7 @@ SELECT
 FROM law_articles
 WHERE is_current = TRUE
   AND {_EMBEDDING_COLUMN} IS NOT NULL
+  AND (index_metadata = '{{}}'::jsonb OR index_metadata->>'source_hash' = content_hash)
   AND ($2::text IS NULL OR tax_type = $2)
 ORDER BY {_EMBEDDING_COLUMN}::halfvec(2560) <=> $1::vector::halfvec(2560)
 LIMIT $3
@@ -116,6 +147,7 @@ FROM law_article_clauses c
 JOIN law_articles la ON la.id = c.article_id
 WHERE la.is_current = TRUE
   AND c.{_EMBEDDING_COLUMN} IS NOT NULL
+  AND (c.index_metadata = '{{}}'::jsonb OR c.index_metadata->>'source_hash' = la.content_hash)
   AND ($2::text IS NULL OR la.tax_type = $2)
 ORDER BY c.{_EMBEDDING_COLUMN}::halfvec(2560) <=> $1::vector::halfvec(2560)
 LIMIT $3
@@ -311,49 +343,218 @@ def _rrf_merge(
     return [result_map[key] for key in sorted_keys[:top_k]]
 
 
-def _fuse_issue_rankings(rankings: list[list[HybridSearchResult]], top_k: int) -> list[HybridSearchResult]:
+def _fuse_issue_rankings(rankings: list[list[HybridSearchResult]], top_k: int,
+                         k: int = 60, weights: list[float] | None = None) -> list[HybridSearchResult]:
     """Fuse vector and keyword lists by server-owned source identity."""
     scores: dict[tuple[str, str], float] = {}
     results: dict[tuple[str, str], HybridSearchResult] = {}
-    for ranking in rankings:
+    for index, ranking in enumerate(rankings):
+        weight = weights[index] if weights is not None else 1.0
         for rank, result in enumerate(ranking):
             key = (result.law_name, result.article_no)
-            scores[key] = scores.get(key, 0.0) + 1.0 / (60 + rank + 1)
+            scores[key] = scores.get(key, 0.0) + weight / (k + rank + 1)
             if key not in results or result.similarity_score > results[key].similarity_score:
-                results[key] = result
+                prior = results[key].retrieval_scores if key in results else {}
+                results[key] = replace(result, retrieval_scores={**prior, **result.retrieval_scores})
+            else:
+                results[key].retrieval_scores.update(result.retrieval_scores)
     keys = sorted(scores, key=lambda key: (-scores[key], results[key].priority,
                                             -results[key].similarity_score, key))
+    for key in keys:
+        results[key].retrieval_scores['rrf'] = scores[key]
     return [results[key] for key in keys[:top_k]]
 
 
+def _preserve_dense_leaders(rows, primary):
+    """Keep two primary-query official provisions through candidate fusion.
+
+    Admission to the bounded candidate pool is not a relevance approval. It
+    prevents multiple low-ranking lexical matches from evicting every leader.
+    """
+    leaders = [r for r in primary if r.origin_kind == 'official_law'
+               and r.article_no and r.source_type != 'interpretation'][:2]
+    present = {(r.law_name, r.article_no) for r in rows}
+    additions = [r for r in leaders if (r.law_name, r.article_no) not in present]
+    return rows + additions, additions
+
+
+def _longest_common_run(left: str, right: str) -> int:
+    """Longest continuous title phrase shared with the user's question."""
+    previous = [0] * (len(right) + 1)
+    longest = 0
+    for char in left:
+        current = [0] * (len(right) + 1)
+        for index, other in enumerate(right, 1):
+            if char == other:
+                current[index] = previous[index - 1] + 1
+                longest = max(longest, current[index])
+        previous = current
+    return longest
+
+
+def _rescue_title_hits(rows: list[HybridSearchResult], candidates: list[HybridSearchResult],
+                       original_query: str) -> tuple[list[HybridSearchResult], list[HybridSearchResult]]:
+    """Admit at most two clear title matches without evicting fused evidence."""
+    question = re.sub(r'[^가-힣A-Za-z0-9]', '', original_query).lower()[:2000]
+    present = {(row.law_name, row.article_no) for row in rows}
+    ranked = []
+    for row in candidates:
+        key = (row.law_name, row.article_no)
+        if key in present or row.origin_kind != 'official_law' or row.priority != 0 or not row.article_no:
+            continue
+        header = row.content.split('\n', 1)[0]
+        title = header.split('[', 1)[-1].rstrip(']') if '[' in header else ''
+        title = re.sub(r'[^가-힣A-Za-z0-9]', '', title).lower()[:120]
+        if not title:
+            continue
+        match = _longest_common_run(question, title)
+        if match < 6 or match / len(title) < 0.35:
+            continue
+        ranked.append((match / len(title), match, row.priority, row.similarity_score, row))
+    ranked.sort(key=lambda item: (-item[0], -item[1], item[2], -item[3]))
+    additions = [item[-1] for item in ranked[:2]]
+    return rows + additions, additions
+
+
+def _retrieval_outputs(output):
+    # LangSmith versions can pass the result directly or wrap it as output.
+    rows = output.get('output', []) if isinstance(output, dict) else output
+    return {'articles': [{'source_id': r.source_id, 'law': r.law_name, 'article': r.article_no,
+                          'scores': r.retrieval_scores} for r in rows]}
+
+
+@traceable(name='issue_hybrid_retrieval', run_type='retriever',
+           process_inputs=lambda inputs: {'law_filter': inputs.get('law_filter'),
+                                          'query_count': len(inputs.get('queries', []))},
+           process_outputs=_retrieval_outputs)
 async def _search_issue_candidates(queries: list[str], law_filter: str,
-                                   original_query: str) -> list[HybridSearchResult]:
-    """Wider per-issue vector retrieval plus independent official keyword search."""
+                                   original_query: str,
+                                   diagnostics: dict | None = None) -> list[HybridSearchResult]:
+    """Independent dense and BM25 branches; all results retain source identity."""
+    started = time.perf_counter()
+    diagnostics = diagnostics if diagnostics is not None else {}
+    timings = diagnostics.setdefault('timings_ms', {})
+    constraint_query = original_query or queries[0]
+    constraints = extract_constraints(constraint_query) if config.SEARCH_REGEX_ENABLED else None
+    if constraints:
+        diagnostics['regex'] = {'reference_count': len(constraints.references),
+                                'date_count': constraints.date_count,
+                                'protected_value_count': constraints.amount_count,
+                                'lookup_only': constraints.lookup_only}
+        if constraints.lookup_only:
+            # A literal original request cannot be broadened to another law or
+            # article with a similar name/number by lexical/vector/graph search.
+            direct_hits = await asyncio.gather(*[
+                _lookup_referenced_article(r.canonical, law_filter) for r in constraints.references[:6]])
+            hits = list({(r.law_name, r.article_no): r for r in direct_hits if r}.values())
+            diagnostics['exact_reference_route'] = True
+            diagnostics['final_ids'] = [(r.law_name, r.article_no) for r in hits]
+            timings['total'] = round((time.perf_counter() - started) * 1000, 2)
+            run = get_current_run_tree()
+            if run:
+                try:
+                    run.add_metadata({'retrieval': diagnostics})
+                except Exception:
+                    logger.warning('[SEARCH] retrieval diagnostics could not be attached')
+            return hits
+    if config.SEARCH_FUZZY_ENABLED:
+        expanded = [expand_fuzzy_terms(q) for q in queries]
+        queries = [q for q, _ in expanded]
+        # Only dictionary expansions, never user amounts/source text, in trace.
+        diagnostics['fuzzy'] = {'expansion_count': sum(len(terms) for _, terms in expanded),
+                                'terms': list(dict.fromkeys(t for _, terms in expanded for t in terms))}
     candidate_k, result_k = TOP_K * 3, TOP_K + 3
-    vectors = await embed_texts(queries)
-    vector_rankings = await asyncio.gather(*[
-        _search_law_articles(vector, law_filter, candidate_k) for vector in vectors
-    ])
+    async def dense():
+        branch_start = time.perf_counter()
+        try:
+            embedding_start = time.perf_counter()
+            vectors = await cached_embed_queries(_embedding_queries(queries), embedder=embed_texts,
+                                                 diagnostics=diagnostics)
+            timings['embedding'] = round((time.perf_counter() - embedding_start) * 1000, 2)
+            rows = await asyncio.gather(*[
+                _search_law_articles(vector, law_filter, candidate_k) for vector in vectors])
+            for ranking in rows:
+                for row in ranking:
+                    row.retrieval_scores['vector'] = row.similarity_score
+            return rows
+        except Exception as error:
+            logger.warning('[SEARCH] vector branch unavailable (%s)', type(error).__name__)
+            diagnostics['vector_error'] = type(error).__name__
+            return []
+        finally:
+            timings['dense'] = round((time.perf_counter() - branch_start) * 1000, 2)
+    async def keyword(query):
+        branch_start = time.perf_counter()
+        try:
+            if config.SEARCH_LEXICAL_BACKEND == 'bm25':
+                try:
+                    hits = await search_bm25_articles(query, law_filter, candidate_k, diagnostics)
+                    diagnostics['lexical_backend'] = 'bm25'
+                    return hits
+                except Exception as error:
+                    diagnostics['bm25_error'] = type(error).__name__
+                    logger.warning('[SEARCH] BM25 unavailable (%s); using indexed keyword search',
+                                   type(error).__name__)
+            diagnostics['lexical_backend'] = 'trigram'
+            return await _search_keyword_articles(query, law_filter, candidate_k)
+        except Exception as error:
+            logger.warning('[SEARCH] keyword branch unavailable (%s)', type(error).__name__)
+            diagnostics.setdefault('keyword_errors', []).append(type(error).__name__)
+            return []
+        finally:
+            timings['lexical'] = round((time.perf_counter() - branch_start) * 1000, 2)
+    vector_rankings, keyword_hits = await asyncio.gather(dense(), keyword(queries[0]))
+    if diagnostics is not None:
+        diagnostics['vector_counts'] = [len(rows) for rows in vector_rankings]
+        diagnostics['vector_ids'] = [[(row.law_name, row.article_no) for row in rows]
+                                     for rows in vector_rankings]
     rankings = [[row for row in ranking if row.similarity_score >= SIMILARITY_THRESHOLD]
                 for ranking in vector_rankings]
-    try:
-        keyword_hits = await _search_keyword_articles(queries[0], law_filter, candidate_k)
-    except Exception as error:
-        logger.warning('[SEARCH] keyword branch unavailable (%s)', type(error).__name__)
-        keyword_hits = []
-    rankings.append(keyword_hits)
-    results = _fuse_issue_rankings(rankings, result_k)
+    if diagnostics is not None:
+        diagnostics['threshold_counts'] = [len(rows) for rows in rankings]
+    keyword_rankings = [keyword_hits]
+    if diagnostics is not None:
+        diagnostics['keyword_ids'] = [[(row.law_name, row.article_no) for row in hits]
+                                      for hits in keyword_rankings]
+    rankings.extend(keyword_rankings)
+    bm25 = diagnostics.get('lexical_backend') == 'bm25'
+    fusion_k = config.SEARCH_RRF_K if bm25 else 60
+    weights = [1.0] * len(vector_rankings) + [config.SEARCH_LEXICAL_WEIGHT if bm25 else 1.0]
+    diagnostics['rrf_k'], diagnostics['rrf_weights'] = fusion_k, weights
+    results = _fuse_issue_rankings(rankings, result_k, fusion_k, weights)
+    if ISSUE_TITLE_RESCUE:
+        pool = list({(row.law_name, row.article_no): row for ranking in [*vector_rankings, *keyword_rankings]
+                     for row in ranking}.values())
+        results, rescued = _rescue_title_hits(results, pool, original_query or queries[0])
+        if diagnostics is not None:
+            diagnostics['title_rescue_ids'] = [(row.law_name, row.article_no) for row in rescued]
+    if bm25:
+        results, rescued = _preserve_dense_leaders(results, rankings[0] if vector_rankings else [])
+        diagnostics['dense_rescue_ids'] = [(row.law_name, row.article_no) for row in rescued]
+    if diagnostics is not None:
+        diagnostics['fused_ids'] = [(row.law_name, row.article_no) for row in results]
     # Refined queries may identify missing articles even when the original
     # question contained no reference. Resolve those against the official DB.
+    lookup_queries = [*queries, original_query]
+    if config.SEARCH_REGEX_ENABLED:
+        lookup_queries += [ref.canonical for text in [*queries, original_query] if text
+                           for ref in extract_constraints(text).references[:6]]
     directs = await asyncio.gather(*[
         _lookup_referenced_article(text, law_filter)
-        for text in dict.fromkeys([*queries, original_query]) if text
+        for text in dict.fromkeys(lookup_queries) if text
     ])
     direct_rows = [row for row in directs if row and (law_filter == "ALL" or
                    row.law_name == law_filter or row.law_name.startswith(law_filter + " 시행"))]
     if direct_rows:
-        results = list({(row.law_name, row.article_no): row for row in [*direct_rows, *results]}.values())[:result_k]
+        limit = result_k + (2 if ISSUE_TITLE_RESCUE else 0) + (2 if bm25 else 0)
+        results = list({(row.law_name, row.article_no): row for row in [*direct_rows, *results]}.values())[:limit]
+    if diagnostics is not None:
+        diagnostics['direct_ids'] = [(row.law_name, row.article_no) for row in direct_rows]
+    graph_start = time.perf_counter()
     results = await expand_graph(results, original_query or queries[0])
+    timings['graph'] = round((time.perf_counter() - graph_start) * 1000, 2)
+    if diagnostics is not None:
+        diagnostics['graph_ids'] = [(row.law_name, row.article_no) for row in results]
     async def recover(result):
         if result.origin_kind != 'official_law' or not has_missing_items(result.content):
             return result
@@ -361,9 +562,50 @@ async def _search_issue_candidates(queries: list[str], law_filter: str,
         if replacement and not has_missing_items(replacement.content):
             replacement.similarity_score = result.similarity_score
             replacement.graph_evidence = result.graph_evidence
+            replacement.retrieval_scores = dict(result.retrieval_scores)
             return replacement
         return result
-    return list(await asyncio.gather(*(recover(result) for result in results)))
+    final = list(await asyncio.gather(*(recover(result) for result in results)))
+    if config.SEARCH_MMR_ENABLED and len(final) >= 3:
+        mmr_start = time.perf_counter()
+        pins = {(r.law_name, r.article_no) for r in direct_rows}
+        pins.update((r.law_name, r.article_no) for r in final if r.graph_evidence)
+        pins.update(map(tuple, diagnostics.get('title_rescue_ids', [])))
+        pins.update(map(tuple, diagnostics.get('dense_rescue_ids', [])))
+        try:
+            vectors = await _candidate_vectors(final)
+            final = mmr_order(final, vectors, pinned=pins, lambda_mult=config.SEARCH_MMR_LAMBDA)
+            diagnostics['mmr'] = {'lambda': config.SEARCH_MMR_LAMBDA, 'vector_count': len(vectors),
+                                  'pinned_count': len(pins), 'preserves_candidates': True}
+        except Exception as error:
+            diagnostics['mmr_error'] = type(error).__name__
+            logger.warning('[SEARCH] MMR unavailable (%s); candidate order retained', type(error).__name__)
+        timings['mmr'] = round((time.perf_counter() - mmr_start) * 1000, 2)
+    if diagnostics is not None:
+        diagnostics['final_ids'] = [(row.law_name, row.article_no) for row in final]
+    timings['total'] = round((time.perf_counter() - started) * 1000, 2)
+    run = get_current_run_tree()
+    if run:
+        try:
+            run.add_metadata({'retrieval': diagnostics})
+        except Exception:
+            logger.warning('[SEARCH] retrieval diagnostics could not be attached')
+    return final
+
+
+async def _candidate_vectors(results):
+    """Use only vectors tied to these exact official source rows and hashes."""
+    expected = {int(r.source_id): r for r in results
+                if r.origin_kind == 'official_law' and r.source_id.isdigit()}
+    if not expected:
+        return {}
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(f'''SELECT id, content_hash, {_EMBEDDING_COLUMN} AS vector
+            FROM law_articles WHERE is_current=TRUE AND id=ANY($1::bigint[])
+              AND (index_metadata='{{}}'::jsonb OR index_metadata->>'source_hash'=content_hash)''', list(expected))
+    return {str(r['id']): r['vector'] for r in rows if r['vector'] is not None
+            and r['content_hash'] == expected[r['id']].content_hash}
 
 
 async def _search_all(
@@ -399,12 +641,14 @@ async def _lookup_referenced_article(
     직접 질의를 안정적으로 찾지 못한다 (평가셋 direct-02로 확인된 약점).
     법령명은 질문에서 우선 추출하고, 없으면 세목 필터(law_filter)를 사용한다.
     """
-    reference = extract_law_reference(query)
+    references = extract_constraints(query).references if config.SEARCH_REGEX_ENABLED else ()
+    reference = (references[0] if references and references[0].law_name else extract_law_reference(query))
     if not reference or not reference.article_no:
         return None
     law_name = reference.law_name or (law_filter if law_filter != "ALL" else None)
     if not law_name:
         return None
+    law_name = _canonical_lookup_law(law_name)
 
     article_no = reference.article_no
     article = await get_law_article(law_name, article_no)
@@ -451,6 +695,7 @@ async def hybrid_search(
     original_query: str = "",
     official_only: bool = False,
     issue_mode: bool = False,
+    diagnostics: dict | None = None,
 ) -> list[HybridSearchResult]:
     """law_articles + documents를 동시에 검색하고 우선순위 순으로 병합한다.
 
@@ -461,7 +706,7 @@ async def hybrid_search(
         return []
 
     if official_only and issue_mode:
-        return await _search_issue_candidates(queries, law_filter, original_query)
+        return await _search_issue_candidates(queries, law_filter, original_query, diagnostics)
 
     t0 = time.perf_counter()
 

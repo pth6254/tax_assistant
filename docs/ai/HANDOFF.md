@@ -1,5 +1,43 @@
 # 세션 인수인계
 
+## 2026-09-30 원문·색인 보정 및 세 검색 알고리즘
+
+- 코드: `law/index_metadata.py`, `index_repair.py`, `scripts/repair_law_indexes.py`, `evaluation/index_repair_audit.py`; Alembic `20260930_0010`. 검색: `query_constraints.py`(Regex), `fuzzy_terms.py`(거리 1 사전 확장), `diversity.py`(MMR), 공식 쟁점 Hybrid 연결. 읽기 A/B: `issue_retrieval_probe.py --no-algorithms`, `search_algorithms_probe.py`.
+- 보호: 원 질문/금액/날짜/부정 의미/참조는 유지한다. Fuzzy 모호 후보는 미확장, 원문만 요구한 명시 참조는 정확 조회, MMR은 모든 후보와 직접/그래프/보완·상위 2개를 보존한다. coverage·원문 인용·주장 의미 검사는 별도다. 생성/Judge OpenRouter GPT-6 Luna, 임베딩 Ollama Qwen3를 유지한다.
+- 보정 실행 기록/원본·벡터·항·그래프 백업은 Git 제외 `evaluation/runs/search-quality-20260930/`에 저장한다. `repair/`는 핵심 세법 계획/376행 백업, `repair-rest/`는 나머지 현행 법령 계획/행별 백업이다. container `/tmp`는 재빌드 전에 반드시 호스트로 복사한다.
+- 복원: 해당 plan/모든 backup/state를 컨테이너에 복사하고 `python scripts/repair_law_indexes.py rollback --plan <그 계획>`을 실행한다. 최신 수집/다른 보정 실행이면 덮어쓰지 않는다. 복원 후 `python scripts/sync_law_graph.py --all --apply`, `python scripts/audit_law_graph.py`를 실행한다. 그래프 원본 사본은 `repair/graph-before.json`; 별도 역사 그래프/대화 스냅샷은 수정하지 않았다.
+- 전체 현행 그래프 동기화에서만 이전 원문 키 `TaxArticle`와 연결을 정리한다. 개별 법령 동기화/빈 전체 snapshot은 다른 데이터 삭제를 허용하지 않는다. `TaxTemporalArticle`/`TaxGraphSnapshot`은 보존한다.
+- 확대 보정 중 Ollama 임베딩 1건의 300초 ReadTimeout을 확인했다. DB 변경 전에 발생했으며 완료 2,163행의 백업/체크포인트를 보존해 정상 재개했다. 직접 원인까지 확인한 것은 아니다. 장기 배치에서 재발 시 임베딩 서버 로그/네트워크와 서버 재기동을 점검한다.
+- 완료(2026-10-01): 원문 복원 **1,503개** + 누락 항 색인 생성 **1,471개** = 보정 **2,974조문/13,203항**, lineage 감사 오류 **0**. 현행 전체 **6,675조문/16,437항**, 활성 벡터 누락/분할 대상 항 미생성 **0**. `repair-letter/`에 원문/보관 XML이 같은 부가가치세법 시행규칙 제50조 1행의 추가 plan/백업(9항)을 보관한다. 원문 숫자 호 존재 여부는 계속 별도 검사한다.
+- 그래프: 전체 현행 **6,675노드/11,216 CITES**, stale/missing/duplicate/원문 증거 문제 **0**. `index-audit.json`, `graph-audit.json`, `corpus-after.json`에 저장했다. 관측 스냅샷은 **2026-10-01**이며 당시 법적 적용 기간을 추정한 결과가 아니다. 미해결 인용 **4,952개**는 대상 법령/세부 항이 없는 등의 이유로 연결을 보류한다.
+- 같은 보정 코퍼스 A/B `repaired-baseline.json`→`algorithms-final.json`: 필수 근거 38/38, MRR 0.746053 유지; hard negative 5→4, P50 0.380→0.362/P95 0.429→0.374초, 오류 0. `algorithms-first.json`은 보호 후보를 앞으로 올려 MRR이 낮아진 실패 기록이다. 보호한 원 순위를 고정하고 다른 후보만 MMR로 다양화했다. `typos-exact.json` 16입력에서는 필수 근거 13/15→15/15, 원문 조회의 요청 외 후보 23→0, 오류 0이었다.
+- 미완료 데이터 검수: 누락 의심 본문 **27행(소득세법 3행)**은 동일 시행본 복원이 확인되지 않았다. 임의 원문 교체/다른 MST/과거 버전 적용은 하지 않는다. 저장 원문·XML 구조·목록 탐지 오탐을 개별 점검하고 공식 동일 버전이 확보되면 새 보정 plan/백업으로 처리한다. 기존 metadata 없는 벡터의 입력 이력은 미입증이다. 이 기록으로 전체 코퍼스 법적 정확성/최신성/독립 골드 승인을 주장하지 않는다.
+- 다음 평가: 개발에 사용하지 않은 전문가 정답/필수·무관 근거·오타·부정·과거 시점/복합 쟁점 holdout을 LangSmith에서 검수한다. 후보 회수/순위와 답변 근거 충족/법적 해석/Judge false pass·false block을 각각 측정한다. 현재 draft 라벨과 단일 실행은 세무 정답 골드가 아니다. 새 관리자 화면은 없다.
+- 최종 이미지 전체 백엔드 **956 passed, 2 skipped, 5 subtests passed**, diff 검사 통과. 실행 설정은 세 플래그 true/λ=0.85, Ollama `qwen3-embedding:4b`/OpenRouter `openai/gpt-6-luna`. `gift-live.json`은 증여 공제/신고/서류 6/6 공개·limited, `vat-live.json`은 매입세액 요건/불공제 4/4 공개·checked, 두 Judge 오류 0. 대화 DB는 수정하지 않았다. 최신 컨테이너에서 공개 smoke를 재현할 때 `python dev/probe_reliable_answer.py <새 출력 파일> compound|general --warm-bm25`를 사용한다. 최종 검증 상태도 세무 정확성 입증이 아니다.
+- 잔여 원문 점검 대상의 정확한 행 ID·해시·법령명·참조·시행일·MST URL은 `remaining-original-review.json`(27개)에 저장했다. 자동 보정 승인/원문 누락 확정 목록이 아니다. 당시 실제 schema/코드를 우선하고 서비스/데이터 재수집 여부를 확인한 뒤 새로운 계획을 작성한다.
+
+## 2026-09-30 BM25 Hybrid RAG
+
+- 구현/설정/작동 범위는 README의 `공식 법령 Hybrid RAG`와 ADR-068을 참고한다. 기본 BM25이며 `SEARCH_LEXICAL_BACKEND=trigram`으로 이전 키워드 경로를 선택할 수 있다. 임베딩 Ollama Qwen3-embedding:4b, 생성/Judge OpenRouter GPT-6 Luna를 유지한다.
+- 실제 DB draft/dev 39문항 비교는 `evaluation/runs/hybrid-bm25-20260930/{trigram-all,bm25-body-all,bm25-fields-all,bm25-final-all}.json`(Git 제외). 최종 38/38, MRR 0.755994, P50 0.365초/P95 0.422초, hard negative 4, 실행 오류 0. 기존은 38/38, MRR 0.730075, P50 0.474초/P95 0.725초다. 해당 개발셋으로 설정을 조정했으므로 holdout 성적이 아니다. 첫 BM25 질문 5.645초, 색인 준비 38.957초였으며 독립 반복 측정이 필요하다.
+- 검색 색인은 PostgreSQL에서 읽은 canonical 공식 현행 조문 6,664개다. 각 프로세스는 자신의 색인과 Kiwi 모델을 보유하므로 worker 수를 늘릴 때 메모리/초기 준비 비용을 확인한다. BM25 cold 대기는 12초 제한이며 초과 시 pg_trgm fallback을 사용한다. 같은 시행본 XML의 읽기 복구를 색인에 반영했으나 기존 벡터/그래프의 해시는 바꾸지 않았다.
+- 재색인 준비: `evaluation/current_index_audit.py --all-core-recovery --manifest /tmp/core-repair.json`으로 ID/기존·복구 해시/시행일/원문 URL/스냅샷 ID를 기록한다. DB 쓰기는 없다. 중복 행/unique 충돌, 범위별 백업과 복원, 승인 필수·무관 라벨, 본문/벡터/항/그래프의 정합 갱신을 준비한 뒤 파일럿을 적용해야 한다. 이번에 `embed_clauses_for_articles`의 삭제 선행 문제는 해결했다(네트워크 완료 후 잠금·대조·transaction 교체).
+- 관련성 재순서는 기존 coverage Judge에 중요도 순 ID 선택을 지시하는 수준이다. 전용 CrossEncoder 모델은 도입하지 않았다. 별도 reranker는 실제 쟁점별 holdout, 추가 지연/메모리, 오답 후보 혼입률을 비교한 뒤 선택한다. HNSW 추가 튜닝/스키마 변경·사용자 문서 BM25도 이번 범위에 추가하지 않았다.
+- LangSmith 실제 게시에서 월간 unique traces usage limit 초과 429를 확인했다. 검색 결과는 정상 반환했으며 로컬 probe는 기본 tracing OFF, `--trace`일 때만 켠다. 이 외부 한도가 해소되기 전 게시 성공을 주장하지 않는다. 서비스 추적 설정/구독 변경은 없다.
+- 실제 모델 스모크: `gift-smoke.json`은 4/4 공개이나 제53조 공제 한도 설명이 누락된 실패 진단이다. 실제 보완 질의에서 `상증세법 제53조`를 약칭 그대로 조회하던 문제를 확인해 정해진 법령 약칭/시행령/시행규칙만 정식명으로 연결했다. `gift-alias-smoke.json`은 **5/5 공개, 1/1 쟁점 답변, Judge 오류 0**, 제53조 원문/공제 설명을 포함한다. 여전히 limited이며 구체 첨부서류·전자신고·납부 상세 절차가 coverage 부족으로 남아 있다. 이 상태를 세무 정답/완결성 개선 완료로 보고하지 않는다.
+- `core-repair-manifest.json`은 376개, DB 쓰기 0이며 위 단계의 실제 실행 결과다. 후보 목록은 대량 교정을 승인하거나 안전한 롤백 파일을 대신하지 않는다. 원본 교체 시 사본·벡터·항·그래프를 함께 검증해야 한다.
+- 최종 이미지 전체 테스트 **931 passed, 2 skipped, 5 subtests passed**, `git diff --check` 통과, `/api/health/ready` DB 정상/Alembic `20260928_0009`. 서비스 Docker 재빌드 완료. 색인 준비 후 한 번 측정한 컨테이너 전체 메모리는 약 953MiB였으며 BM25만의 추가 메모리로 해석하지 않는다. 이후 worker/코퍼스 확대 시 별도 측정이 필요하다.
+
+## 2026-09-29 RAG 검색 진단
+
+- 코드: `hybrid_search_service.py`의 선택적 `diagnostics`, 공식 법률 조문 제목 보완(max 2), 실험용 비활성 `SEARCH_QUERY_INSTRUCTION_ENABLED`; 읽기 전용 `evaluation/issue_retrieval_probe.py` 및 `evaluation/current_index_audit.py`.
+- 실험 명령: `python evaluation/issue_retrieval_probe.py /tmp/issue-retrieval.json --all` 및 `python evaluation/current_index_audit.py --all-core-recovery` (백엔드 컨테이너에서 실행). 이번 실행의 JSON은 Git 제외 `evaluation/runs/rag-improvement-20260929/`에 보관. 전자는 고정 2질의로 실제 검색 함수를 부르지만, 실제 LLM 질문 계획·coverage·답변 전체를 재현하지 않는다.
+- draft 39문항 중 필수 라벨이 있는 38문항에서 후보 확보 37→38, MRR 0.727→0.730, hard negative 4건 동일. 새로 잡힌 `corp-03`은 세목이 명시되지 않은 질문이며 법인세법·소득세법 조문이 각각 10위·9위로 추가됐다. 실제 coverage Judge는 지방세도 함께 선택했다. 따라서 이를 세무 적합성 개선으로 인증하지 않는다. 동일 이미지에서 제목 보완을 끄고 Qwen instruction만 켠 A/B는 37/38과 MRR 0.727로 기준과 같아 기본 비활성이다.
+- 현행 인덱스 감사: 조문 6,675/항 8,352의 활성 v1 벡터 누락은 0; 분할 조건을 충족하지만 항 벡터가 없는 조문 1,471; 누락 의심 본문 1,530. 다섯 핵심 세법의 누락 의심 379개 중 376개가 동일 시행본 보관 XML에서 더 긴 원문으로 읽기 복구 가능했다. 기존 DB 행·벡터·그래프는 수정하지 않았다.
+- 다음 데이터 작업: 376개 각각의 원본 행 ID·해시·시행일·MST와 XML 스냅샷을 확정하고 중복 행을 분리한다. 제한된 파일럿의 재임베딩/항 인덱스 생성 전후에 승인된 필수·무관 조문 라벨과 실제 질문 답변을 비교한 뒤 확대한다. 현행 `embed_clauses_for_articles`는 항을 먼저 삭제하고 이후 임베딩을 생성하므로 실패 시 빈 인덱스가 남을 수 있다. 대량 실행 전 원자적 갱신·복원 경로가 필요하다.
+- 운영자 평가는 LangSmith를 사용한다. 현 평가 라벨 39개는 draft이며 법적 정답 승인이나 충분한 hard negative 검수가 없어 대량 재색인의 품질 게이트로 사용할 수 없다.
+- 최종 이미지 전체 백엔드 테스트 **911 passed, 2 skipped, 5 subtests passed**; 재실행 진단 JSON `final.json`의 recall 1.0(38/38), MRR 0.730075, hard negative 4, 오류 0. 검색 코드 외 화면 변경은 없다.
+
 ## 2026-09-28 근거 기반 범용 참고 계산
 
 - 구현: `app/schemas/formula.py`, `app/services/calculator/formula_engine.py`, `formula_workflow.py`. 금융소득 즉시 보류를 없애고 공식 원문·명시적 가정·제한된 산식·Decimal·필수 Judge를 사용한다. 범용 계산기 API/새 테이블은 추가하지 않았다. 기존 전용 계산기의 입력 부족/DB 실패 경계는 유지한다.

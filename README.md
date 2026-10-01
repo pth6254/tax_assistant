@@ -1,5 +1,66 @@
 # 세무 AI 어시스턴트
 
+### 공식 법령 Hybrid RAG (2026-09-30)
+
+일반 분석·복합 질문과 참고 계산의 쟁점 검색에 **Ollama Qwen3 벡터 + 한국어 BM25 + GraphRAG**, **Fuzzy·Regex·MMR**을 적용한다. 생성·Judge는 기존 OpenRouter GPT-6 Luna를 유지한다.
+
+```mermaid
+flowchart LR
+    Q[쟁점별 질의] --> C[Regex 참조·수치 보호]
+    C --> E[명시적 원문 요청은 정확 조회]
+    C --> F[Fuzzy 사전 확장]
+    F --> V[Ollama 임베딩 + pgvector]
+    F --> B[Kiwi 형태소 분석 + BM25]
+    V --> R[가중 RRF · 조문 중복 제거]
+    B --> R
+    R --> G[직접 조회 · 검증된 GraphRAG]
+    G --> M[MMR 후보 다양화 · 근거 보존]
+    M --> J[관련성 Judge · 부족 근거 재검색]
+    E --> J
+    J --> A[주장별 검증 · 채팅 근거 패널]
+```
+
+- BM25는 형태소의 희소도(IDF), 빈도 포화(TF), 조문 길이를 반영한다. 제목·본문은 각각 BM25를 계산해 `제목 × 2 + 본문`으로 합한다. 벡터 코사인·BM25·RRF 점수는 별도로 보존하며 코사인 임계값을 BM25에 적용하지 않는다.
+- 두 벡터 질의와 첫 질의의 BM25를 병렬 실행한다. 각 경로 15개 후보를 RRF `k=10`, 벡터 각 1/BM25 0.5로 결합해 8개를 채택한다. 기존 제목 보완 최대 2개와 주 질의의 상위 공식 조문 보존 최대 2개를 추가하고, 직접 조회·그래프의 기존 원문/예산 제한을 적용한다. 후보 채택은 법적 관련성 승인과 구별한다.
+- PostgreSQL 공식 현행 원문에서 프로세스별 읽기 전용 역색인을 만든다. 같은 시행본의 검증된 XML로 누락 본문을 복구해 색인하고, 미래 시행·무결성 실패·복구 불가한 호 누락 자료는 제외한다. 반환 직전에 원본 행·해시·세목·시행일을 다시 대조한다. 사용자 업로드·과거 시점 검색·유권해석은 이 공유 BM25 색인에 포함하지 않는다.
+- 시작 때 백그라운드로 준비하고 60초마다 DB revision을 확인한다. 원문 변경은 새 색인 완성 후 교체하며 갱신 실패 시 이전 색인 중 유효한 자료만 반환한다. 준비 대기/실패에는 기존 pg_trgm 키워드 검색으로 돌아가며, 벡터 경로 장애도 다른 경로의 정상 후보를 막지 않는다.
+- 날짜가 바뀌면 DB 수정 없이 새로 시행되는 조문도 색인 갱신 대상으로 삼는다. 직접 조회는 정해진 법령 약칭(상증세법·부가세법·조특법·국기법)을 정식명으로 연결하며, 임의로 비슷한 법령명을 선택하지 않는다.
+- Fuzzy는 고정 세무 사전의 유일한 1회 편집 후보만 최대 2개 검색어로 덧붙인다. 원 질문·명시적 법령/조문·금액·날짜·부정 의미는 유지한다. Regex는 가지번호/항/호/목과 복수 조문을 구별하고, 원문만 묻는 요청을 정확 조회로 제한한다. 자유 입력 정규식 검색이나 날짜의 법적 적용 승인은 제공하지 않는다.
+- MMR은 쟁점별 후보의 실제 부모 벡터로 중복도를 계산해 재정렬한다. 상위 2개와 직접 조회·그래프·보완 후보의 기존 위치를 고정하고 다른 후보만 정렬한다. 모든 근거 후보를 유지하며 별도 모델 호출은 추가하지 않는다.
+- 질의 임베딩은 제공자·주소·모델·버전·질의로 구분해 최대 512개/600초 보관한다. 같은 동시 배치 호출은 한 번만 실행하며 실패 결과는 저장하지 않는다. XML 파싱 캐시는 검증된 스냅샷 해시 기준 최대 24개다. 그래프 조문 조회는 같은 요청에서 중복을 없애고 동시 4개로 제한한다.
+- BM25 자체는 기존 PostgreSQL 테이블을 읽고 프로세스별 색인을 만든다. 원문 보정에는 아래의 벡터 입력 이력 스키마를 사용한다. 형태소 분석기 때문에 이미지와 프로세스 메모리가 늘며 worker마다 색인을 보유한다. 최초 색인은 로컬 실험에서 약 39~42초였고 이 시간은 질문별 검색 지표와 분리한다. 현행 법령 수가 크게 늘면 PostgreSQL BM25 확장/OpenSearch 등 외부 역색인과 비교해야 한다.
+
+설정은 `SEARCH_LEXICAL_BACKEND=bm25|trigram`(기본 bm25), `SEARCH_BM25_REFRESH_SEC=60`, `SEARCH_BM25_TITLE_WEIGHT=2`, `SEARCH_RRF_K=10`, `SEARCH_LEXICAL_WEIGHT=0.5`, `SEARCH_EMBED_CACHE_SIZE=512`, `SEARCH_EMBED_CACHE_TTL_SEC=600`이다. TTL/size를 0으로 두면 해당 임베딩 캐시는 재사용하지 않는다. 기존 `pg_trgm` 인덱스는 fallback에 사용한다.
+
+`SEARCH_FUZZY_ENABLED`, `SEARCH_REGEX_ENABLED`, `SEARCH_MMR_ENABLED`는 기본 true이며 개별 비활성화할 수 있다. `SEARCH_MMR_LAMBDA=0.85`(0~1)로 순위 관련성과 다양성의 비중을 조정한다. 신규 Alembic `20260930_0010`은 공식 부모/항 벡터의 실제 입력 이력을 `index_metadata`에 기록한다.
+
+로컬 진단: 최신 컨테이너에서 `python evaluation/issue_retrieval_probe.py /tmp/trigram.json --all --trigram`, `python evaluation/issue_retrieval_probe.py /tmp/bm25.json --all`. BM25 색인은 측정 전에 준비한다. 기본적으로 LangSmith 게시를 끄고 `--trace`로 명시적으로 켤 수 있다. 운영 채팅의 `issue_hybrid_retrieval`에는 출처 ID·경로별 점수·캐시·단계별 시간·fallback을 남기며, 검색 trace 자체에는 질문/원문 전체를 넣지 않는다.
+
+39개 draft/dev 질문 중 필수 라벨이 있는 38개에서 기존 pg_trgm 결합 대비 최종 BM25 결합은 후보 확보 **38/38 유지**, MRR **0.730→0.756**, 검색 P50 **0.474→0.365초**, P95 **0.725→0.422초**, hard negative 후보 **4건 동일**, 실행 오류 **0**이었다. 단일 로컬 실행이며 개발 라벨로 순위 설정을 조정했으므로 독립 holdout/세무 정답률은 아니다. BM25 첫 질의는 5.645초였고 초기 색인 준비는 별도다. 실험 JSON은 Git 제외 `evaluation/runs/hybrid-bm25-20260930/`에 보관한다.
+
+원문·색인 보정은 같은 시행본 공식 보관 XML만 사용한다. 고정 계획·원본/벡터/항 백업·임베딩 사전 준비·부모 행 잠금/대조·transaction 교체·rollback을 지원한다. 다른 시행본이나 모델 추측으로 원문을 대체하지 않는다. 운영 평가는 LangSmith이며 관리자 화면은 추가하지 않는다.
+
+다음 명령은 백엔드 컨테이너에서 실행한다. 각 보정은 새로운 디렉터리에 계획/백업을 저장하고 컨테이너 재생성 전에 호스트에 보존해야 한다. `apply` 기본값은 20행 파일럿이며 `--limit 0`은 계획 전체 적용이다.
+
+```bash
+python scripts/repair_law_indexes.py preview --plan /tmp/law-repair/plan.json --scope all --include-clauses --graph-backup
+python scripts/repair_law_indexes.py apply --plan /tmp/law-repair/plan.json
+python scripts/repair_law_indexes.py apply --plan /tmp/law-repair/plan.json --limit 0
+python evaluation/index_repair_audit.py
+python scripts/sync_law_graph.py --all --apply
+python scripts/audit_law_graph.py
+```
+
+`rollback --plan <동일 계획>`은 해당 실행의 원문/벡터/항을 백업으로 복원한다. 후속 변경이 있으면 거부하며, 복원 후 현행 그래프를 다시 동기화한다. `--all --apply` 그래프 동기화는 현행 `TaxArticle`의 오래된 키를 정리하고 별도 역사 스냅샷은 유지한다.
+
+알고리즘 비교 진단은 `python evaluation/issue_retrieval_probe.py /tmp/baseline.json --all --no-algorithms`, 같은 명령의 플래그 없는 실행, `python evaluation/search_algorithms_probe.py /tmp/algorithms.json`을 사용한다. 마지막 명령은 오타·복수/인용 조문·알 수 없는 법령·부정 의미를 같은 코퍼스로 비교한다. draft 라벨은 독립적인 세무 정답 평가가 아니다. 최신 실행 결과와 남은 제한은 `docs/ai/CURRENT_STATUS.md`와 `HANDOFF.md`를 따른다.
+
+2026-10-01까지 원문 복원 1,503개와 누락 항 색인 생성 1,471개를 처리했다. 보정한 2,974개 조문/13,203개 항의 입력 이력·구조 감사 오류 0, 현행 전체 6,675개 조문/16,437개 항의 활성 벡터 누락과 항 미생성 0이다. 그래프는 6,675노드/11,216인용 관계로 맞췄다. 동일 시행본 복구가 확인되지 않은 누락 의심 27행은 별도 검수 대상으로 남겼으며 다른 버전으로 교체하지 않았다.
+
+같은 보정 코퍼스의 39개 draft 질문에서 세 알고리즘 적용 전후 필수 근거 38/38·MRR 0.746053을 유지하고 hard negative 후보 5→4, P50 0.380→0.362초/P95 0.429→0.374초를 측정했다. 별도 오타/복수 참조 등 16입력에서는 필수 근거 13/15→15/15, 원문 조회의 요청 외 후보 23→0이었다. 단일 개발 진단이며 독립 holdout/세무 정답률은 아니다.
+
+최종 이미지 전체 백엔드 테스트는 **956 passed, 2 skipped, 5 subtests passed**. 실제 증여 공제·신고·서류 질문 6/6 주장 공개·limited, 부가가치세 요건/불공제 질문 4/4 공개·checked, 두 Judge 오류 0이었다. 실제 서비스 설정에서 세 알고리즘이 활성화돼 있으며 새 질문/다시 답변에 적용된다. 이 확인이 세무 정답/완결성 인증을 뜻하지 않는다.
+
 ### 다양한 문서 형식의 사용자 RAG (2026-09-26)
 
 내 문서에서 **PDF(텍스트·스캔 OCR), DOCX, HWPX, PPTX, HTML/HTM**을 업로드할 수 있습니다. 형식별 추출 결과를 페이지·슬라이드·구역·제목·문단·표 행·명시적 조/항/호 경계의 구조화 청크로 만든 뒤 Qwen3 임베딩 → 사용자별 pgvector 검색 경로에 저장합니다. PDF는 텍스트가 부족한 페이지만 한국어·영어 Tesseract OCR을 실행합니다. 검색 근거에 확인 가능한 페이지·슬라이드·표 행 위치를 표시하며, 원본은 사용자별로 보관합니다. HTML 등 비-PDF 원본은 실행되지 않도록 다운로드만 허용합니다.
@@ -850,6 +911,7 @@ python scripts/evaluate.py run --dataset evaluation/datasets/retrieval.json --mo
 python scripts/evaluate.py suite --mode live --include-draft --output evaluation/runs/review-batch
 ```
 새 결과는 Git/Docker 빌드에서 제외되는 `evaluation/runs/`에 보존합니다. 정답 데이터와 관측 결과는 별도 파일이며, 미판정 후보는 오답으로 간주하지 않습니다.
+쟁점별 검색 후보 추적은 `python evaluation/issue_retrieval_probe.py /tmp/issue-retrieval.json --all`, 현행 법령 인덱스의 읽기 전용 감사는 `python evaluation/current_index_audit.py --all-core-recovery`로 실행할 수 있습니다. 두 진단은 백엔드 컨테이너에서 실행하며 DB를 수정하지 않습니다. 제목 일치 보완은 공식 법률 조문 후보를 최대 2건 추가하며 최종 관련성·시점·주장 검증을 대신하지 않습니다.
 출처·기준일·검수 이력이 없는 기존 39문항은 draft로 이관했습니다. 합성 계약 통과를 세무 정답률로 표시하지 않습니다.
 답변의 의미·법적 적용은 기준별 인간 검수를 요구하며 키워드/인용 존재만으로 통과시키지 않습니다. 반복 실행은 `--repeat N`, 동일 데이터셋 비교는 `compare`를 사용합니다.
 기존 `eval_rag.py`·`eval_graph_rag.py`는 제거했습니다. 실행 명령은 `scripts/evaluate.py`로 통일하고, CLI 구현은 `evaluation/cli.py`에 둡니다. 과거 결과 파일은 보존합니다.

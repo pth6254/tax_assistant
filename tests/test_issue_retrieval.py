@@ -7,7 +7,10 @@ import pytest
 from app.schemas.reliability import Issue, QuestionPlan, AnswerDraft, AnswerClaim, ClaimCitation, JudgeReport, ClaimJudgment
 from app.services import question_planning, issue_coverage, claim_verification
 from app.services.evidence import context_from_records, record_from_result
-from app.services.search.hybrid_search_service import _fuse_issue_rankings, issue_keyword_terms
+from app.services.search.hybrid_search_service import (
+    _embedding_queries, _fuse_issue_rankings, _rescue_title_hits, issue_keyword_terms,
+)
+from app.services.search import hybrid_search_service
 from tests.test_reliability_workflow import source
 
 
@@ -108,6 +111,34 @@ def test_keyword_and_vector_rankings_fuse_by_article_identity():
     assert [row.article_no for row in result] == ["제1조", "제2조"]
     assert result[0].similarity_score == 0.8
     assert "가공거래" in issue_keyword_terms("H회사 가공거래 매입세액 확인", "부가가치세법")
+
+
+def test_title_rescue_adds_official_statutes_without_displacing_fused_results():
+    baseline = source(law_name="지방세법", article_no="제101조", source_id="101")
+    corporation = source(law_name="법인세법", article_no="제72조", source_id="72",
+                         content="제72조 [중소기업의 결손금 소급공제에 따른 환급]\n본문")
+    income = source(law_name="소득세법", article_no="제85조의2", source_id="85",
+                    content="제85조의2 [결손금 소급공제에 따른 환급]\n본문")
+    forged = source(law_name="사용자 문서", article_no="제1조", source_id="upload",
+                    content="제1조 [결손금 소급공제에 따른 환급]\n본문",
+                    origin_kind="user_document")
+    decree = source(law_name="법인세법 시행령", article_no="제110조", source_id="110",
+                    content="제110조 [결손금 소급공제에 따른 환급]\n본문", priority=1)
+    results, added = _rescue_title_hits(
+        [baseline], [baseline, corporation, income, forged, decree],
+        "상황 설명 " * 80 + "결손금 소급공제 신청 방법")
+    assert results[0] is baseline
+    assert len(added) == 2
+    assert {row.source_id for row in added} == {"72", "85"}
+    assert all(row.origin_kind == "official_law" and row.priority == 0 for row in added)
+
+
+def test_qwen_query_instruction_is_opt_in(monkeypatch):
+    monkeypatch.setattr(hybrid_search_service.config, "EMBEDDING_MODEL", "qwen3-embedding:4b")
+    monkeypatch.setattr(hybrid_search_service.config, "SEARCH_QUERY_INSTRUCTION_ENABLED", False)
+    assert _embedding_queries(["법인세법 결손금"]) == ["법인세법 결손금"]
+    monkeypatch.setattr(hybrid_search_service.config, "SEARCH_QUERY_INSTRUCTION_ENABLED", True)
+    assert _embedding_queries(["법인세법 결손금"])[0].endswith("Query: 법인세법 결손금")
 
 
 def test_invoice_case_searches_receiver_and_supplier_separately():

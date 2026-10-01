@@ -3,6 +3,7 @@ config.py — 환경변수 중앙 관리
 모든 설정값은 여기서만 읽어서, 다른 모듈은 이 파일만 import합니다.
 """
 import os
+import math
 from dataclasses import dataclass, field
 from dotenv import load_dotenv
 
@@ -191,6 +192,29 @@ NEO4J_USER: str = os.getenv("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD: str = os.getenv("NEO4J_PASSWORD", "")
 NEO4J_DATABASE: str = os.getenv("NEO4J_DATABASE", "neo4j")
 SIMILARITY_THRESHOLD: float = float(os.getenv("SIMILARITY_THRESHOLD", "0.4"))
+SEARCH_QUERY_INSTRUCTION_ENABLED: bool = os.getenv("SEARCH_QUERY_INSTRUCTION_ENABLED", "false").lower() in {"1", "true", "yes"}
+SEARCH_LEXICAL_BACKEND: str = os.getenv('SEARCH_LEXICAL_BACKEND', 'bm25')
+SEARCH_BM25_REFRESH_SEC: float = float(os.getenv('SEARCH_BM25_REFRESH_SEC', '60'))
+SEARCH_BM25_TITLE_WEIGHT: float = float(os.getenv('SEARCH_BM25_TITLE_WEIGHT', '2'))
+SEARCH_RRF_K: int = int(os.getenv('SEARCH_RRF_K', '10'))
+SEARCH_LEXICAL_WEIGHT: float = float(os.getenv('SEARCH_LEXICAL_WEIGHT', '0.5'))
+SEARCH_EMBED_CACHE_TTL_SEC: float = float(os.getenv('SEARCH_EMBED_CACHE_TTL_SEC', '600'))
+SEARCH_EMBED_CACHE_SIZE: int = int(os.getenv('SEARCH_EMBED_CACHE_SIZE', '512'))
+SEARCH_FUZZY_ENABLED: bool = os.getenv('SEARCH_FUZZY_ENABLED', 'true').lower() in {'1', 'true', 'yes'}
+SEARCH_REGEX_ENABLED: bool = os.getenv('SEARCH_REGEX_ENABLED', 'true').lower() in {'1', 'true', 'yes'}
+SEARCH_MMR_ENABLED: bool = os.getenv('SEARCH_MMR_ENABLED', 'true').lower() in {'1', 'true', 'yes'}
+SEARCH_MMR_LAMBDA: float = float(os.getenv('SEARCH_MMR_LAMBDA', '0.85'))
+if not math.isfinite(SEARCH_MMR_LAMBDA) or not 0 <= SEARCH_MMR_LAMBDA <= 1:
+    raise ValueError('SEARCH_MMR_LAMBDA must be between 0 and 1')
+if SEARCH_LEXICAL_BACKEND not in {'bm25', 'trigram'}:
+    raise ValueError("SEARCH_LEXICAL_BACKEND must be either 'bm25' or 'trigram'")
+if (not all(math.isfinite(v) for v in (SEARCH_BM25_REFRESH_SEC, SEARCH_EMBED_CACHE_TTL_SEC,
+                                     SEARCH_BM25_TITLE_WEIGHT, SEARCH_LEXICAL_WEIGHT))
+        or SEARCH_BM25_TITLE_WEIGHT < 0
+        or SEARCH_BM25_REFRESH_SEC <= 0 or SEARCH_EMBED_CACHE_TTL_SEC < 0 or SEARCH_EMBED_CACHE_SIZE < 0):
+    raise ValueError('Search refresh must be positive; cache limits must be nonnegative')
+if SEARCH_RRF_K < 1 or not 0 < SEARCH_LEXICAL_WEIGHT <= 1:
+    raise ValueError('RRF k must be positive and lexical weight must be in (0, 1]')
 
 # ── 업로드 제한 ─────────────────────────────────────────────────
 MAX_UPLOAD_MB: int = int(os.getenv("MAX_UPLOAD_MB", "50"))  # 사용자 문서 최대 크기 (MB)

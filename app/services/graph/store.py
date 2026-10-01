@@ -37,7 +37,9 @@ async def neighbors(keys: list[str], bidirectional: bool = False) -> list[dict]:
         return [dict(record) for record in records]
 
 
-async def save_graph(nodes: list[dict], edges: list[dict]):
+async def save_graph(nodes: list[dict], edges: list[dict], *, replace_all: bool = False):
+    if replace_all and not nodes:
+        raise ValueError('empty_current_graph_snapshot')
     async with connect() as driver:
         await driver.execute_query(
             'CREATE CONSTRAINT tax_article_key IF NOT EXISTS '
@@ -62,5 +64,29 @@ async def save_graph(nodes: list[dict], edges: list[dict]):
                     r.alias_definition_law = row.alias_definition_law
             ''', edges=edges)
             await result.consume()
+            if replace_all:
+                # --all is a complete current-law snapshot. Old content keys
+                # belong in the separate temporal graph, not current CITES.
+                result = await tx.run('''
+                    MATCH (n:TaxArticle) WHERE NOT n.key IN $current_keys
+                    DETACH DELETE n
+                ''', current_keys=[node['key'] for node in nodes])
+                await result.consume()
         async with driver.session(database=config.NEO4J_DATABASE) as session:
             await session.execute_write(write)
+
+
+async def graph_backup():
+    """Read the current CITES graph for rollback without touching historical KG."""
+    async with connect() as driver:
+        nodes, _, _ = await driver.execute_query(
+            'MATCH (n:TaxArticle) RETURN properties(n) AS node ORDER BY n.key',
+            database_=config.NEO4J_DATABASE, routing_='r')
+        edges, _, _ = await driver.execute_query('''
+            MATCH (s:TaxArticle)-[r:CITES]->(t:TaxArticle)
+            RETURN s.key AS source, t.key AS target, r.reference AS reference,
+                   r.evidence AS evidence, coalesce(r.alias_definition_key,'') AS alias_definition_key,
+                   coalesce(r.alias_definition_article,'') AS alias_definition_article,
+                   coalesce(r.alias_definition_law,'') AS alias_definition_law
+            ORDER BY source, target, reference''', database_=config.NEO4J_DATABASE, routing_='r')
+        return {'nodes': [dict(r['node']) for r in nodes], 'edges': [dict(r) for r in edges]}

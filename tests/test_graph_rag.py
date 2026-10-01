@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -7,6 +7,43 @@ from app.services.law.relation_extractor import extract_relations
 from app.services.search import graph_search_service as service
 from app.services.search.hybrid_search_service import _row_to_article_result, format_hybrid_context
 from app.schemas.law import LawArticleDetail
+
+
+@pytest.mark.asyncio
+async def test_full_graph_sync_rejects_empty_snapshot_before_connecting(monkeypatch):
+    from app.services.graph import store
+    connect = MagicMock()
+    monkeypatch.setattr(store, 'connect', connect)
+    with pytest.raises(ValueError, match='empty_current_graph_snapshot'):
+        await store.save_graph([], [], replace_all=True)
+    connect.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('full', [False, True])
+async def test_only_explicit_complete_graph_sync_retires_old_current_keys(monkeypatch, full):
+    from contextlib import asynccontextmanager
+    from app.services.graph import store
+    tx = AsyncMock()
+    tx.run.return_value = AsyncMock()
+    session = AsyncMock()
+    async def execute_write(callback):
+        await callback(tx)
+    session.execute_write.side_effect = execute_write
+    driver = MagicMock()
+    driver.execute_query = AsyncMock()
+    driver.session.return_value.__aenter__ = AsyncMock(return_value=session)
+    driver.session.return_value.__aexit__ = AsyncMock(return_value=None)
+    @asynccontextmanager
+    async def connect():
+        yield driver
+    monkeypatch.setattr(store, 'connect', connect)
+    await store.save_graph([{'key':'current'}], [], replace_all=full)
+    retirement = [call for call in tx.run.call_args_list if 'DETACH DELETE' in call.args[0]]
+    assert bool(retirement) is full
+    if full:
+        assert retirement[0].kwargs['current_keys'] == ['current']
+        assert 'TaxArticle' in retirement[0].args[0]
 
 
 def article(number='제1조', text='제1조(목적) 본문', law='시험법'):
@@ -95,6 +132,7 @@ async def test_expansion_and_stale_target(monkeypatch):
     monkeypatch.setattr(service, 'neighbors', AsyncMock(return_value=[edge, edge]))
     expanded = await service.expand_graph(results)
     assert len(expanded) == 2
+    assert lookup.await_count == 2  # one seed + one target despite duplicate edges
     assert expanded[0] is results[0]
     assert expanded[1].similarity_score == 0
     assert '관계 검색 보조 근거' in format_hybrid_context(expanded)
