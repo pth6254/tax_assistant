@@ -1,5 +1,16 @@
 # 프로젝트 공통 컨텍스트
 
+## 현행 기준 — 2026-10-01
+
+- 생성·계획·Judge는 OpenRouter `openai/gpt-6-luna`, 임베딩은 Ollama `qwen3-embedding:4b`/v1/2,560차원이다. 코드의 Ollama 기본값과 실제 서비스의 명시적 OpenRouter 설정을 구분한다.
+- 실행·재빌드는 WSL의 `dev/docker-up-wsl.sh backend frontend`를 사용한다. llama.cpp overlay는 선택형 실험이다. 웹 3001/백엔드 8001, 현재 코드의 Alembic head는 `20260930_0010`이다.
+- 공식 현행 쟁점 검색: Regex/Fuzzy → 벡터·BM25 병렬 → 가중 RRF/후보 보존 → 직접 조회/검증된 CITES GraphRAG → MMR → 근거 충족 검사/부족 쟁점 재검색. 업로드·유권해석·과거 법령은 공유 BM25에 포함하지 않는다.
+- 일반 분석은 `QuestionPlan` → `EvidenceRecord` → `AnswerClaim` → 공개 검사/구조화 표시이며, 계산은 전용 계산기 또는 공식 근거 기반 Decimal 산식 경로를 사용한다. 생성 초안은 사용자에게 전송하지 않는다.
+- 전용 Reranker 모델·API·컨테이너는 없다. 후보 풀 확대와 Qwen3-Reranker 시험은 [추가 개선 제안](RAG_IMPROVEMENT_PLAN.md)이다. MMR과 근거 충족 Judge는 구현된 별도 기능이다.
+- 운영자 검수는 LangSmith, 사용자 확인은 기존 SSE·채팅 근거 패널이다. 검증 날짜·결과·잔여 작업은 [현재 상태](CURRENT_STATUS.md)와 [인수인계](HANDOFF.md)에 기록한다.
+
+아래 날짜별 절은 변경 이력이다. 그 뒤의 목적·구조·불변 규칙은 현행 코드에 맞춰 갱신한다.
+
 ## 2026-10-01 세무 검토 답변의 구조와 표시
 
 - 최초 주장 생성에서 `presentation_role`(conclusion/explanation/procedure/checklist)을 지정한다. 기본 explanation으로 이전 계약을 읽을 수 있다. 역할은 표시 용도이며 근거·코드 검사·Judge·공개 승인에 영향을 주지 않는다. 출력 후 별도 모델로 요약/재작성하지 않는다.
@@ -123,18 +134,18 @@
 - 명시적 따옴표 정의와 정식 법령명 조문 인용은 `KnowledgeAssertion` 후보로 추출한다. `reviewed` 관계만 과거 법령 RAG에 연결하며 검색 시 원문 해시와 실제 발췌를 재확인한다. 법적 의미·사건 적용시점의 자동 검증은 아니다.
 - 현재 현행 채팅은 기존 CITES GraphRAG, 버전 지정/기준일 과거 채팅은 검수된 Knowledge Graph 보충을 사용한다. 수집 완료된 과거 5,400개 스냅샷의 구조·관계 후보 백필은 끝났지만, 자동 추출 후보는 법적 검수 완료 관계가 아니다. 상세 운영은 `docs/TAX_KNOWLEDGE_GRAPH.md`.
 
-## 생성 모델 작업별 설정 (2026-09-25)
+## 생성 모델 작업별 설정 (2026-10-01 기준)
 
-- `app/services/llm_client.py`는 `answer`, `history_answer`, `citation_extraction`, `query_classification`, `tool_selection`, `document_classification`의 고정된 호출 목적별 설정을 선택한다.
-- 기본은 6개 모두 `LLM_PROVIDER`/`CHAT_MODEL`을 상속해 OpenRouter `openai/gpt-6-luna`를 사용한다. 작업별 `LLM_TASK_<NAME>_*` 설정으로 provider·모델·endpoint·추론 수준·thinking·timeout·temperature·출력 예산을 분리할 수 있다.
+- `app/services/llm_client.py`는 `answer`, `history_answer`, `citation_extraction`, `query_classification`, `tool_selection`, `document_classification`, `question_planning`, `answer_judge`의 8개 고정 호출 목적별 설정을 선택한다.
+- 모두 `LLM_PROVIDER`/`CHAT_MODEL`을 상속한다. 현행 서비스는 OpenRouter `openai/gpt-6-luna`를 명시한다. 작업별 `LLM_TASK_<NAME>_*` 설정으로 provider·모델·endpoint·추론 수준·thinking·timeout·temperature·출력 예산을 분리할 수 있다.
 - 로컬 Ollama 작업은 `THINK_ENABLED`로 thinking을 제어하며 원격 모델의 `REASONING_EFFORT`를 Ollama에 적용한다고 주장하지 않는다. 법령·계산 근거 검증은 모델 선택과 독립적으로 유지한다.
 
-마지막 구조 검토: 2026-08-01
+마지막 구조 검토: 2026-10-01
 
 ## 1. 프로젝트 목적
 
 대한민국 세무 법령에 특화된 Agentic RAG 기반 AI 어시스턴트다. 일반적인 답변 생성보다
-공식 법령 근거의 정확성, 법령 위계, 계산의 결정성, 민감 데이터의 로컬 처리를 우선한다.
+공식 법령 근거의 정확성, 법령 위계, 계산의 결정성, 출처·사용자 권한·외부 전송 범위의 명시를 우선한다.
 
 초기 n8n 프로토타입에서 이미지형 PDF 처리, 조문 단위 검색, 법령 위계 반영, 인용 검증의
 한계를 확인한 뒤 FastAPI 기반 코드 구조로 전면 재설계했다.
@@ -144,12 +155,12 @@
 - 국가법령정보 API에서 법률·시행령·시행규칙·법령해석례 수집
 - 법령 XML을 조문 단위로 파싱하고 SHA-256 해시로 개정 감지
 - 조·항·호·목 및 가지번호 구조화와 실제 본문 대조
-- PostgreSQL·pgvector 기반 법령 및 사용자 PDF 하이브리드 검색
+- PostgreSQL·pgvector와 한국어 BM25·검증된 GraphRAG 기반 공식 현행 검색, 사용자별 다중 형식 문서 벡터 검색
 - 법률 → 시행령 → 시행규칙 → 유권해석 → 사용자 문서 순의 근거 우선순위
 - 내부 검색 품질이 부족할 때만 공공기관 중심 웹 검색
-- 로컬 Ollama 생성·v1 임베딩과 선택형 OpenRouter 원격 생성, 향후 재도입 가능한 llama.cpp provider 코드
-- DB 세율표 기반 세금 계산기 tool calling
-- 답변의 법령 인용과 계산 금액을 검증하는 citation guard
+- OpenRouter 생성·계획·Judge와 로컬 Ollama v1 임베딩, 선택형 Ollama/llama.cpp 생성 어댑터
+- DB 세율표 기반 전용 계산기와 공식 근거를 대조하는 Decimal 참고 산식
+- 질문·도구 입력·근거 충족·주장·인용·금액 검사와 검증된 주장만 표시하는 답변 조립
 - JWT httpOnly 쿠키 인증, 대화 관리, 세무 일정, 다중 형식 사용자 문서 업로드
 - Alembic, Docker Compose healthcheck, pytest 및 RAG 골든셋 평가
 - `evaluation/`: 정답·hard negative·검수 상태를 분리한 요소별 평가. 독립 실행기 `scripts/evaluate.py`, 합성 계약과 실제 세무 품질 점수 구분, 인간 루브릭 검수 및 재현 가능한 실행 기록.
@@ -161,14 +172,18 @@ React + Nginx
     → FastAPI routers
         → services
             ├─ law: 수집·XML 파싱·법령 참조/본문 구조화
-            ├─ search: 법령·PDF 검색과 조건부 웹 검색
-            ├─ calculator: 결정론적 세금 계산
-            ├─ document: PDF 추출·청킹
-            ├─ chat_service: RAG 오케스트레이션
+            ├─ search: BM25·벡터·Graph·Regex/Fuzzy/MMR·문서별 검색
+            ├─ calculator / formula_workflow: 전용 계산·근거 기반 산식
+            ├─ document: 다중 형식 추출·구조화 청킹
+            ├─ chat_service / reliable_workflow: 질문별 실행·SSE
+            ├─ question_planning / issue_coverage: 쟁점 계획·근거 충족
+            ├─ evidence / claim_verification: 출처 보존·주장 검사·표시
             ├─ llm_client: Ollama·llama.cpp·OpenRouter 생성 어댑터
             └─ citation_guard: 생성 결과 검증
         → PostgreSQL + pgvector
-        → Ollama v1 임베딩 / 생성은 설정에 따라 Ollama·OpenRouter·llama.cpp
+        → Ollama v1 임베딩 / OpenRouter 생성·계획·Judge
+        → Neo4j: 현행 CITES / 별도 과거 그래프
+        → LangSmith: 운영 추적·평가·검수
 ```
 
 주요 컨테이너:
@@ -184,7 +199,7 @@ React + Nginx
 | `tax_law_history_indexer` | 선택형 history-index 배치: 파생 색인·History* 그래프·중복 제거 임베딩 |
 | Windows Ollama | Qwen3 Embedding 4B v1 임베딩 서빙, 로컬 생성 선택 시 Qwen3.5-9B |
 
-`tax_llama_chat`·`tax_llama_embedding`은 선택형 overlay를 실행할 때만 생성되며 현재는 없다.
+`tax_llama_chat`·`tax_llama_embedding`은 선택형 overlay를 실행할 때만 생성된다. 현행 실행 방법은 이 overlay를 사용하지 않는다.
 
 생성 provider는 `LLMProvider` 규약을 구현하며 Ollama도 `ChatOllama` 없이 직접 HTTP로 연결한다.
 현재 OpenRouter 생성은 유료 `openai/gpt-6-luna`를 선택하며 키와 결제 가능 상태가 필요하다.
@@ -213,7 +228,8 @@ app/services/ai_pipeline.py
 
 app/services/tools/
   provider 중립 JSON 도구 선택, 허용 목록·인자 검증·시간 제한·서버 사용자 ID 주입
-  법령 원문 조회·사용자 문서 검색·계산기 6종을 한 질문당 하나 실행
+  법령 원문 조회·사용자 문서 검색·계산기 6종의 실행 계약
+  단순 요청은 단일 도구, 복합 요청은 reliable_workflow가 쟁점별 도구를 제한된 예산으로 조정
   SSE tool 이벤트와 일반 응답 tools 배열로 UI 상태 전달, 최종 결과는 chat_logs.message JSON 저장
 
 frontend/src/components/Chat/ToolCallCard.jsx
@@ -238,7 +254,22 @@ app/services/law/clause_splitter.py
   긴 조문의 항 단위 보조 임베딩용 분할
 
 app/services/search/hybrid_search_service.py
-  법령·PDF 검색, 조문 직접 조회, 법령 위계 재정렬
+  쟁점별 BM25·벡터 통합, 직접 조회, 검증된 Graph 확장, MMR
+
+app/services/search/bm25_search_service.py / query_constraints.py / fuzzy_terms.py / diversity.py
+  현행 공식 원문 BM25·Regex·사전 오타 확장·MMR
+
+app/services/law/index_repair.py / index_metadata.py
+  동일 시행본 원문·부모/항 벡터 보정, 입력 해시·모델 이력, 백업·rollback
+
+app/services/question_planning.py / issue_coverage.py / reliable_workflow.py
+  주체·세목·요청별 계획, 근거 충족 검사, 부족 쟁점 재검색과 도구 실행
+
+app/services/claim_verification.py / evidence.py
+  서버 출처·원문 구간 연결, 주장별 검사·Judge, 공개된 주장만 구조화 표시
+
+app/services/formula_workflow.py / calculator/formula_engine.py
+  공식 근거 기반 JSON 산식의 수치·입력 검사, Decimal 연산, 산식 의미 검증
 
 scripts/
   수집·동기화·백필·평가 CLI 진입점. 핵심 로직은 services에 둔다.
@@ -263,11 +294,11 @@ evaluation/
 
 ## 6. 검색 및 생성 원칙
 
-- 질문에 법령명과 조문번호가 있으면 벡터 검색보다 직접 조회 fast path를 우선한다.
+- 명시적 원문 요청은 Regex/참조 파서로 정확 조회한다. 분석·비교 질문의 조문 언급은 직접 조회를 보충 근거로 쓰며 검색을 단일 원문 조회로 축소하지 않는다.
 - GraphRAG 코드 기본값은 false, 2026-09-25 로컬 배포는 사용자 요청으로 true. 기본 RAG 뒤 검증된 CITES 1-hop으로 고정 개수 제한 없이 추가 본문 합계 4,000자 이내에서 보충한다. 역방향은 동일 계열만, 3초/장애 시 기본 결과 유지. 원문/약칭 정의 버전은 PG와 대조하고 시점 질문·PDF·해석례 seed는 제외한다. 원문 단독 조회 도구는 확장하지 않는다. 과거 법령은 별도 그래프·근거 입력 예산을 사용한다.
-- 사용자 PDF는 `user_id`로 격리한다.
+- 사용자 문서는 `user_id`로 격리하며 category나 본문 표식으로 공식 근거가 되지 않는다.
 - 유사도만으로 법적 권위를 결정하지 않고 법령 위계를 재정렬에 반영한다.
-- LLM이 세액을 직접 계산하게 하지 않고 DB 세율표 기반 계산기를 사용한다.
+- 세액의 연산은 전용 계산기 또는 제한된 Decimal 산식 엔진이 수행한다. LLM이 제안한 산식·법정 수치·입력 출처는 공개 전에 검증한다.
 - 내부 검색 결과가 충분할 때는 웹 검색을 실행하지 않는다.
 - 정상 인용이 있는 답변에는 불필요한 structured-output 보정 호출을 추가하지 않는다.
 
@@ -301,3 +332,4 @@ evaluation/
 - 현재 진행 상태: `docs/ai/CURRENT_STATUS.md`
 - 설계 결정: `docs/ai/DECISIONS.md`
 - 세션 인수인계: `docs/ai/HANDOFF.md`
+- 추가 RAG 개선 제안과 Reranker 도입 범위: `docs/ai/RAG_IMPROVEMENT_PLAN.md`

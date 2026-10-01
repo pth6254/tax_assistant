@@ -1,5 +1,11 @@
 # 운영·데이터 작업 CLI
 
+현행 기준: 2026-10-01. 생성/계획/Judge는 OpenRouter GPT-6 Luna, 임베딩은 Ollama Qwen3 v1이다.
+서비스 기동은 WSL의 `bash dev/docker-up-wsl.sh backend frontend`, 전체 실행 규칙은 [AGENTS.md](../AGENTS.md)를 따른다.
+DB CLI는 최신 백엔드 컨테이너의 `/app`에서 실행하는 것을 권장한다. 아래 `python ...` 명령을
+호스트에서 실행할 때는 해당 가상환경·DB 주소·모델 설정을 별도로 확인한다.
+완료 수치·백업 위치는 [최신 인수인계](../docs/ai/HANDOFF.md)에 기록하며, 이 안내만으로 데이터 작업을 자동 실행하지 않는다.
+
 이 디렉터리는 FastAPI 요청 처리 코드가 아니라 개발자·운영자가 프로젝트 루트에서 직접
 실행하는 배치 작업의 진입점만 포함합니다. 핵심 로직은 `app/services/`에 두고, 스크립트는
 인자 처리·진행 상황 출력·리소스 정리·종료 코드만 담당합니다.
@@ -27,6 +33,15 @@
 | `python scripts/embed_clauses.py` | 항 단위 임베딩 대상 확인 | 기본 dry-run, `--run`일 때만 반영 |
 | `python scripts/compare_embedding_providers.py` | Ollama v1과 llama.cpp v2 벡터 cosine 호환성 비교 | DB 변경 없음 |
 | `python scripts/backfill_embeddings_v2.py` | 법령·항·PDF `embedding_v2` 백필 | 기본 dry-run, `--run`일 때만 반영 |
+| `python scripts/repair_law_indexes.py preview --plan /tmp/law-repair-NEW/plan.json --scope all --include-clauses --graph-backup` | 동일 시행본 보정 후보/고정 계획·현행 그래프 사본 | DB 쓰기 없음, 새 출력 경로 사용 |
+| `python scripts/repair_law_indexes.py apply --plan /tmp/law-repair-NEW/plan.json` | 고정 plan의 원문/부모·항 벡터 보정 | 기본 20행; 임베딩 준비·영속 백업·행 잠금/대조·transaction |
+| `python scripts/repair_law_indexes.py rollback --plan /tmp/law-repair-NEW/plan.json` | 해당 실행의 원본·벡터·항 복원 | plan/backup/state 필요, 후속 수정 덮어쓰기 거부 |
+
+`apply --limit 0`은 고정 plan 전체의 명시적 적용이다. 보정은 같은 MST·법령명·시행/공포일·XML 해시가 확인된
+원문만 사용하며 다른 버전으로 자동 교체하지 않는다. 완료된 2026-10-01 보정을 반복하지 않고 새 대상·계획을 확인한다.
+보정/rollback 후에는 `python scripts/sync_law_graph.py --all --apply`와 `python scripts/audit_law_graph.py`로
+현행 그래프를 맞춘다. 전체 동기화의 범위를 확인하고 별도 역사 그래프는 보존한다.
+컨테이너 재생성 전에 plan/모든 backup/state를 호스트에 보존한다.
 
 백필을 실행하기 전에 반드시 `alembic upgrade head`가 완료돼 있어야 합니다. 백필 스크립트는
 스키마를 만들지 않으며 Alembic revision을 대신하지 않습니다.
@@ -39,6 +54,23 @@
 - `python scripts/audit_law_graph.py`: 저장 관계·항/호·원문 및 약칭 정의 버전의 일관성 검사.
 - `python scripts/evaluate.py run --dataset evaluation/datasets/retrieval.json --mode live --include-draft --limit 10`: 동일 시작 결과의 기본/Graph 비교. draft는 공식 통과 점수에서 제외하며 기본 필터는 ALL(정답 세목 주입 없음)입니다.
 - Graph 확장의 추가 정답 발견을 동일 개수의 검색 정확도 향상으로 해석하지 않습니다. top-5 유지 여부와 추가 근거의 적합성은 구분합니다.
+
+### 현재 쟁점 검색·답변 진단
+
+다음은 백엔드 컨테이너 안에서 실행하는 읽기/공개 예제 진단이며 사용자 대화 DB에 결과를 저장하지 않는다.
+실제 검색/생성 예제는 모델 호출·원격 비용이 발생할 수 있다. 결과 파일은 실행마다 새 경로를 지정한다.
+
+```bash
+python evaluation/issue_retrieval_probe.py /tmp/issue-baseline-NEW.json --all --no-algorithms
+python evaluation/issue_retrieval_probe.py /tmp/issue-algorithms-NEW.json --all
+python evaluation/search_algorithms_probe.py /tmp/typos-exact-NEW.json
+python evaluation/index_repair_audit.py
+python dev/probe_reliable_answer.py /tmp/answer-NEW.json general --warm-bm25
+```
+
+`compound`도 공개 복합 예제에 사용할 수 있다. 표시 재현은 결과의 `presentation_input`과
+`frontend/tests/answerPresentation.browser.cjs`를 사용한다. 최종 JSON/PC·mobile PNG 위치는 HANDOFF를 따른다.
+기존 39문항은 draft/dev다. 전용 Reranker는 아직 없으며 도입 설계는 [RAG_IMPROVEMENT_PLAN.md](../docs/ai/RAG_IMPROVEMENT_PLAN.md)에만 기록한다.
 
 ```bash
 python scripts/evaluate.py validate --dataset evaluation/datasets/contracts.json

@@ -1,5 +1,35 @@
 # 세무 AI 어시스턴트
 
+## 현재 상태와 문서 안내 — 2026-10-01
+
+대한민국 세무 질문을 주체·세목·요청별로 나누고, 확보한 원문과 계산 결과에 연결된 주장을 검사해 답변하는 플랫폼입니다.
+
+| 영역 | 현재 구현 |
+|---|---|
+| 생성·계획·Judge | OpenRouter `openai/gpt-6-luna`, 작업별 설정 8개 |
+| 임베딩 | Windows Ollama `qwen3-embedding:4b`, v1, 2,560차원 |
+| 공식 현행 검색 | 한국어 BM25 + 조문/항 벡터 + 검증된 GraphRAG, Fuzzy·Regex·MMR |
+| 답변 검증·표시 | 쟁점 계획/근거 충족/주장·인용 검사 → SSE 진행 → 질문별 구조화 답변·근거 패널 |
+| 계산 | 전용 계산기 6종 + 공식 근거 기반 제한 JSON 산식/Decimal 참고 계산 |
+| 운영자 평가 | LangSmith. 독립 전문가 세무 정답 검수는 후속 작업 |
+| 전용 Reranker | **미구현**. 모델·별도 서비스·후보 풀 변경은 후속 제안 |
+
+- **실행**: WSL 가상환경에서 `bash dev/docker-up-wsl.sh backend frontend`. 웹 `http://localhost:3001`, 백엔드 `http://127.0.0.1:8001`. llama.cpp는 선택형 실험입니다.
+- **직전 제품 검증(2026-10-01)**: backend **969 passed, 2 skipped, 5 subtests passed**; frontend **19 passed**/build. 실모델 부가가치세·증여 예제와 Edge PC/모바일 표시를 확인했습니다. 이는 전체 세무 정답률이 아닙니다.
+- **문서 작업의 읽기 확인(2026-10-01 14:18 KST)**: readiness/dependencies `ready`, Graph `ok`, 웹 200, Alembic `20260930_0010`. 이때 전체 테스트·DB 감사를 다시 실행한 것은 아닙니다.
+- **남은 범위**: 동일 시행본 복원이 미확인인 원문 후보 27행, 연결 보류 인용 4,952개, 독립 holdout/Judge 교정과 추가 검색 범위.
+
+| 문서 | 용도 |
+|---|---|
+| [AGENTS.md](AGENTS.md) · [CLAUDE.md](CLAUDE.md) | AI 작업 시작·실행·검증 규칙 |
+| [프로젝트 컨텍스트](docs/ai/PROJECT_CONTEXT.md) | 목적·코드 책임·도메인 불변 규칙 |
+| [현재 상태](docs/ai/CURRENT_STATUS.md) · [설계 결정](docs/ai/DECISIONS.md) | 완료 결과·검증 범위·설계 이유 |
+| [인수인계](docs/ai/HANDOFF.md) | 다음 작업·최종 결과/백업 위치·재현 방법 |
+| [검증 흐름](docs/ai/RELIABILITY_WORKFLOW.md) | 질문·도구·근거·주장·SSE의 실제 연결 |
+| [추가 RAG 개선 제안](docs/ai/RAG_IMPROVEMENT_PLAN.md) | Reranker와 시점·근거 구성·실무 자료 확대의 미구현 설계 |
+
+아래 날짜별 수치·실험은 기록된 시점과 범위에 한정합니다. 현재 동작은 위 요약과 실제 코드, 미완료 작업은 최신 인수인계를 기준으로 확인합니다.
+
 ### 공식 법령 Hybrid RAG (2026-09-30)
 
 일반 분석·복합 질문과 참고 계산의 쟁점 검색에 **Ollama Qwen3 벡터 + 한국어 BM25 + GraphRAG**, **Fuzzy·Regex·MMR**을 적용한다. 생성·Judge는 기존 OpenRouter GPT-6 Luna를 유지한다.
@@ -59,7 +89,7 @@ python scripts/audit_law_graph.py
 
 같은 보정 코퍼스의 39개 draft 질문에서 세 알고리즘 적용 전후 필수 근거 38/38·MRR 0.746053을 유지하고 hard negative 후보 5→4, P50 0.380→0.362초/P95 0.429→0.374초를 측정했다. 별도 오타/복수 참조 등 16입력에서는 필수 근거 13/15→15/15, 원문 조회의 요청 외 후보 23→0이었다. 단일 개발 진단이며 독립 holdout/세무 정답률은 아니다.
 
-최종 이미지 전체 백엔드 테스트는 **956 passed, 2 skipped, 5 subtests passed**. 실제 증여 공제·신고·서류 질문 6/6 주장 공개·limited, 부가가치세 요건/불공제 질문 4/4 공개·checked, 두 Judge 오류 0이었다. 실제 서비스 설정에서 세 알고리즘이 활성화돼 있으며 새 질문/다시 답변에 적용된다. 이 확인이 세무 정답/완결성 인증을 뜻하지 않는다.
+검색 변경 당시 최종 이미지 전체 백엔드 테스트는 **956 passed, 2 skipped, 5 subtests passed**였다. 실제 증여 공제·신고·서류 질문 6/6 주장 공개·limited, 부가가치세 요건/불공제 질문 4/4 공개·checked, 두 Judge 오류 0이었다. 이 검색 스모크와 이후 답변 표시 변경의 969개 테스트 기록을 구분한다. 새 질문/다시 답변에 적용되며 세무 정답/완결성 인증을 뜻하지 않는다.
 
 ### 다양한 문서 형식의 사용자 RAG (2026-09-26)
 
@@ -211,20 +241,21 @@ Agentic RAG 파이프라인 (검색 → 계산 → 합성 → 인용 검증)
 
 ### 하이브리드 검색
 
-- `law_articles`(공식 법령 조문 + 유권해석)와 `documents`(업로드 PDF)를 동시 검색
-- 법령 위계 기반 우선순위 정렬: 법률 → 시행령 → 시행규칙 → 유권해석 → PDF 문서
-- 세목 필터링으로 관련 법령만 검색하여 정확도 향상
-- 키워드로 세목이 명확히 확정되면 분류 LLM 호출 자체를 생략 (지연시간 단축)
+- 공식 현행 분석: 쟁점별 BM25·조문/항 벡터 → 가중 RRF → 직접 조회·검증 Graph 보충 → MMR → 근거 충족 검사
+- 명시적 원문 요청: 법령명·조·항·호·목을 정확 조회하며 무관한 유사 조문으로 넓히지 않음
+- 사용자 문서: `user_id`로 격리한 벡터 검색과 확인 가능한 문서 위치 보존
+- 과거 법령: 수집된 버전과 검수된 관계를 사용하는 별도 경로. 사건일의 법적 적용 확정과 구분
+- 공유 BM25는 사용자 문서·유권해석·과거 원문을 포함하지 않으며 전용 Reranker는 미구현
 
 ### Agentic RAG 채팅
 
-- **RAG 파이프라인**: 세목 분류 + 멀티쿼리 생성 → 하이브리드 벡터 검색(RRF 병합) → 조건부 웹검색 → 세금 계산기(조건부) → 최종 합성 → 인용 검증
-- **비교 질문 처리**: "리스 vs 장기렌트"처럼 A vs B를 묻는 질문에 대해 각 항목별 법령 조문을 근거로 비교표 + 명확한 결론 제시
+- **RAG 파이프라인**: 질문 계획 → 쟁점별 검색·도구 입력 검사 → 근거 충족/재검색 → 주장 생성 → 출처·인용·조건·의미 검사 → 공개된 주장 조립
+- **복합·비교 질문**: 요청한 주체와 세목·판단 항목을 나누고 각 쟁점의 근거와 제한을 함께 설명. 확인된 범위만 공개하며 부족한 항목을 별도로 표시
 - **세금 계산기 tool calling**: 질문에서 계산 의도를 감지하면 LLM이 계산기 종류·입력값을 추출해 DB 세율표 기반 계산기를 실행, 계산 과정과 근거 조문을 답변에 반영
-- **인용·금액 검증**: 답변 생성 후 조문명·조문번호·하위 단위를 공식 검색 근거와 대조하고 계산기 최종 금액을 확인합니다. 검증에 실패하면 생성된 설명 대신 확인 불가 메시지를 반환합니다. 근거가 빠진 답변에 출처만 자동으로 덧붙이는 경로는 사용하지 않습니다.
+- **인용·금액 검증**: 공식 원본 ID·시행일·해시·원문 구간과 계산 결과를 대조합니다. 실패한 주장·의존 결론은 제외하고 검증된 독립 항목은 보존합니다.
 - **SSE 응답**: 도구 실행 상태를 전달하고, 생성한 답변은 검증이 끝난 뒤 한 번에 전달·저장합니다.
 - **대화 메모리**: 최근 3턴 컨텍스트 유지, 대화별 독립 세션(conversations 테이블)
-- **Tavily 웹검색**: 국세청·법제처·기획재정부 도메인 중심 최신 자료 보완 (DB 상위 3개 평균 유사도 0.55 미만인 경우에만 실행)
+- **Tavily 웹검색**: 공공기관 중심의 보충 경로. 쟁점 분석은 먼저 부족한 공식 근거를 재검색하며 웹 스니펫을 그대로 공식 인용으로 채택하지 않습니다.
 
 ### 세금 계산기
 
@@ -282,18 +313,22 @@ graph TD
     C --> E[core/security]
     D --> F[(PostgreSQL<br/>+ pgvector)]
 
-    D -->|OpenAI 호환 API| G[llama.cpp<br/>Qwen3.5-9B GGUF]
+    D -->|생성·계획·Judge| G[OpenRouter<br/>openai/gpt-6-luna]
     D -->|임베딩 API| H[Ollama<br/>qwen3-embedding:4b]
-    D -->|임베딩 API| I[llama.cpp<br/>Qwen3 Embedding 4B GGUF]
-    D -->|Tavily API| H[Tavily Search]
-    D -->|국가법령정보 API| I[법령정보 Open API<br/>law + expc]
+    D -->|검증된 그래프 보충| K[(Neo4j<br/>현행 CITES·별도 과거 KG)]
+    D -->|추적·평가·검수| T[LangSmith]
+    D -->|선택형 보충| W[Tavily Search]
+    D -->|국가법령정보 API| L[법령정보 Open API<br/>law + expc]
+    D -.->|명시적 로컬 실험| P[Ollama 생성 / llama.cpp overlay]
 
-    F --> F1[documents<br/>PDF 청크 벡터]
+    F --> F1[documents<br/>사용자별 다중 형식 문서 벡터]
     F --> F2[law_articles<br/>법령 조문 + 유권해석 벡터]
     F --> F3[chat_logs<br/>대화 메모리]
     F --> F4[users<br/>인증 + 사업자 유형]
     F --> F5[tax_brackets / tax_deductions<br/>세율표·공제 시드]
     F --> F6[conversations<br/>대화 세션]
+    F --> F7[law_article_clauses<br/>항 벡터·입력 이력]
+    F --> F8[law_history<br/>버전·원본 XML·부칙]
 ```
 
 ### 계층 구조
@@ -353,15 +388,16 @@ cron·Windows 작업 스케줄러에 등록해 주기 실행하는 것을 전제
 
 ```
 질문 입력
-  → 계산 의도 키워드 게이트 (금액 표현 + "얼마"/"계산"/"세액" 등, LLM 호출 없음)
-  → [계산 의도 있음] LLM 1회 호출로 {tool, params} 추출
-     tool: income_tax | capital_gains | inheritance | gift
-  → pydantic 스키마 검증
-  → 계산기 실행 (DB 세율표 조회 → 단계별 계산 → 근거 조문)
-  → 계산 결과를 RAG 컨텍스트에 병합해 최종 답변에 반영
-  → (프론트) 답변에 "계산기에서 조건 바꿔보기" 버튼 노출 → 계산기 화면 프리필
+  → 명시한 계산 요청인지 확인 (금액·세액 단어만으로 계산 의도 확정하지 않음)
+  → 지원 범위: 도구/입력 선택 → Pydantic·필수 조건·사용자 입력 출처 검사
+     → 전용 6종 계산기 실행 → 검증된 결과/단계/범위 표시
+  → 전용 범위 밖 참고 계산: 공식 원문 → 제한 JSON 산식 → 수치/입력 검사
+     → Decimal 연산 → 필수 산식 의미 Judge → 승인된 참고 결과만 표시
+  → 실패/입력 부족은 실제 상태로 안내, 미검증 세액을 생성 모델에 넘기지 않음
+  → 채팅 근거 패널에서 계산 입력 출처와 산식 확인
 ```
-RAG 검색과 병렬로 실행되어 지연시간을 추가하지 않으며, 실패 시 조용히 RAG-only로 진행합니다.
+전용 계산기에는 조건 변경 화면을 연결합니다. 범용 산식에는 전용 금융소득 계산기 링크를 만들지 않습니다.
+계산 실패와 정상 0원/환급을 구분하고, 복합 질문의 다른 검증 가능한 쟁점은 보존합니다.
 
 ### 사용자 문서 업로드 흐름
 
@@ -369,7 +405,7 @@ RAG 검색과 병렬로 실행되어 지연시간을 추가하지 않으며, 실
 PDF·DOCX·HWPX·PPTX·HTML 업로드
   → 형식별 본문 추출 (스캔 PDF는 텍스트 없는 페이지에만 OCR)
   → 파일명 패턴 분석 → (법률) / (대통령령) / (부령) 감지
-  → AI 분류 (파일명으로 못 잡은 경우만 Ollama 호출)
+  → AI 분류 (파일명으로 못 잡은 경우 `document_classification` 작업 호출)
      law_name: 소득세법, 부가가치세법 등
      category: 법령, 시행령, 시행규칙, 집행기준
   → 페이지·슬라이드·구역·제목·문단·표 행·명시적 조/항/호 단위 청킹
@@ -382,39 +418,22 @@ PDF·DOCX·HWPX·PPTX·HTML 업로드
 
 ```
 질문 입력
-  │
-  ├─ [병렬] 세목 분류 + 멀티쿼리 생성
-  │    키워드로 세목이 하나로 확정 → LLM 호출 없이 원본 쿼리로 바로 검색
-  │    키워드 미확정(0개 또는 다중 매칭) → LLM 1회 호출로 세목 분류 + 멀티쿼리 3개 생성
-  │    (비교 질문이면 각 옵션별 쿼리 별도 생성)
-  ├─ [병렬] 대화 메모리 조회 (최근 3턴, conversation_id 기준)
-  └─ [병렬] 세금 계산기 실행 (계산 의도 감지 시에만 — 아래 "세금 계산기 tool calling" 참고)
-  │
-  → [fast path] 질문에 "법령명 제N조" 직접 언급 시 해당 조문 DB 직접 조회 → 최상위 배치
-  → 멀티쿼리 임베딩 (qwen3-embedding:4b)
-  → 하이브리드 벡터 검색 (law_articles 조문·항 벡터 + documents 동시 검색)
-  → RRF(Reciprocal Rank Fusion) 병합 (복수 쿼리 결과 통합)
-  → 법령 위계 정렬
-     0순위: 법률    (law_articles, law_type=법률)
-     1순위: 시행령  (law_articles, law_type=대통령령)
-     2순위: 시행규칙 (law_articles, law_type=총리령/부령)
-     3순위: 유권해석 (law_articles, law_type=법령해석례) / 법령 PDF
-     4~7순위: 시행령·시행규칙 PDF, 집행기준, 기타 PDF (category 기준)
-  │
-  ├─ [조건부] 웹검색 (DB 상위 3개 평균 유사도 < 0.55인 경우만)
-  │    Tavily 검색 (nts.go.kr, law.go.kr, moef.go.kr)
-  │
-  ├─ 최종 답변 합성 (SSE 스트리밍)
-  │    내부 DB 법령 + 웹검색 결과 + 계산기 결과 통합
-  │    → 토큰 단위 스트리밍 출력
-  │
-  ├─ 인용 검증(citation guard)
-  │    답변 속 [법률]/[시행령]/[시행규칙] 인용이 검색 근거에 실존하는지 대조
-  │    계산기 실행 시 답변 속 금액이 계산 결과와 일치하는지 대조
-  │    불일치 시 답변 하단에 경고 각주 추가
-  │
-  └─ 대화 메모리 저장 (백그라운드 비동기 처리)
+  → 대화 소유권·입력 확인, 선택된 대화 문맥
+  → 단순 원문/문서/계산 또는 별도 과거 법령 경로 판정
+  → 일반 분석/복합 질문: QuestionPlan (요청·주체·세목·원문 조건 보존)
+  → 쟁점별 검색/도구 실행
+     Regex/Fuzzy → Ollama 벡터 + Kiwi BM25 병렬 → 가중 RRF
+     → 직접 조문·검증된 Graph 보충 → MMR
+  → EvidenceRecord (출처 ID·원문/본문 해시·시행일·원문 스냅샷)
+  → 쟁점별 근거 충족 검사 → 부족한 분석 쟁점만 재검색
+  → 근거 단위 입력 예산 → 쟁점별 AnswerClaim 생성
+  → 코드·인용·범위·의존성 검사 + LLM 의미 Judge
+  → 공개된 주장만 질문에 맞게 구조화, 조건/부분 미완결 표시
+  → SSE 진행/최종 검사·본문 전달 → 대화/답변 버전 저장 → [DONE]
 ```
+
+일반 분석의 생성 초안은 전송하지 않습니다. 화면은 planning/retrieving/generating/checking 진행을 보여주며,
+검사 후 공개된 본문과 당시 근거 스냅샷을 제공합니다. 토큰 스트리밍을 지원하는 provider와 공개 정책을 구분합니다.
 
 ### 법령 위계 원칙
 
@@ -428,7 +447,7 @@ PDF·DOCX·HWPX·PPTX·HTML 업로드
 
 세법 일반 원칙도 프롬프트에 반영합니다.
 - **특별법 우선**: 조세특례제한법이 일반 세법보다 우선 적용
-- **신법 우선**: 같은 위계의 법령은 최신 개정령이 우선
+- **시점 구분**: 사건일·귀속기간과 부칙을 대조하며, 현행 규정을 과거 사건의 적용 법령으로 자동 확정하지 않음
 - **엄격 해석**: 비과세·감면 요건은 명확한 조문 근거 필수
 
 ---
@@ -441,14 +460,16 @@ PDF·DOCX·HWPX·PPTX·HTML 업로드
 | 프론트엔드 | React 18, Vite |
 | 데이터베이스 | PostgreSQL 17 + pgvector |
 | 인증 | JWT, httpOnly 쿠키, bcrypt |
-| LLM | llama.cpp OpenAI 호환 서버 + Qwen3.5-9B GGUF (로컬), Ollama fallback |
+| LLM·계획·Judge | OpenRouter `openai/gpt-6-luna`, 8개 작업별 설정 |
 | 임베딩 | Ollama qwen3-embedding:4b (2560차원, 로컬) |
-| 임베딩 서빙 | llama.cpp + Qwen3-Embedding-4B GGUF (CPU), 기존 Ollama v1 |
+| 검색 | Kiwi BM25, pgvector, Neo4j GraphRAG, Fuzzy·Regex·MMR |
+| 선택형 로컬 서빙 | Ollama 생성·llama.cpp overlay; 별도 임베딩 v2 실험 |
+| 운영 평가 | LangSmith 추적·실험·검수, 독립 평가 CLI |
 | 웹검색 | Tavily Search API |
 | 법령 API | 국가법령정보 Open API |
 | 컨테이너 | Docker Compose (pgvector/pgvector:pg17) |
 
-> **로컬 모델 선택 이유**: 외부 생성 API 대신 llama.cpp·Ollama를 로컬에서 운영하여 세무 데이터를 외부에 전송하지 않고 API 비용 없이 처리합니다.
+> 임베딩·원본 DB는 로컬에 유지합니다. 현재 생성·계획·Judge는 질문·대화 문맥·검색 발췌를 OpenRouter로 전송하며, 활성화한 LangSmith 추적에도 정해진 자료가 전송됩니다. 이 구성을 전부 로컬 처리로 설명하지 않습니다.
 
 ---
 
@@ -461,8 +482,8 @@ tax-assistant/
 ├── config.py                    # 환경변수 중앙 관리 (dotenv)
 │
 ├── dev/
-│   └── docker-up-wsl.sh          # Windows Ollama 주소 자동 탐지·검증 후 Compose 실행
-│   └── docker-up-llamacpp-wsl.sh # GPU·임베딩 검사 후 llama.cpp overlay로 Compose 실행
+│   ├── docker-up-wsl.sh          # 현행 실행: Windows Ollama·필수 모델·Graph 준비 후 Compose
+│   └── docker-up-llamacpp-wsl.sh # 선택형 llama.cpp GPU overlay 실험
 │
 ├── AGENTS.md                     # Codex 및 공통 AI 작업 진입 지침
 ├── CLAUDE.md                     # Claude Code 작업 진입 지침
@@ -475,6 +496,8 @@ tax-assistant/
 │   ├── sync_laws.py              # 법령 개정 자동 동기화 CLI (cron 등록 대상)
 │   ├── backfill_law_type.py      # law_type 일괄 보정 (일회성 데이터 보정)
 │   ├── embed_clauses.py          # 긴 조문 항(項) 단위 보조 임베딩 백필
+│   ├── repair_law_indexes.py     # 동일 시행본 원문/부모·항 벡터 보정·백업·rollback
+│   ├── sync_law_graph.py / audit_law_graph.py # 현행 그래프 동기화·원문 정합 감사
 │   └── evaluate.py               # 단계별 평가·검수·회귀 비교 통합 CLI
 │
 ├── db/
@@ -487,8 +510,12 @@ tax-assistant/
 ├── tests/
 │   ├── test_*.py                 # 단위·API 테스트 (pytest)
 │   └── eval/
-│       ├── golden_qa.json        # RAG 품질 평가용 골든 질문셋
+│       ├── golden_qa.json        # 과거 질문 기록 (독립 세무 정답 검수와 구분)
 │       └── results/              # eval_rag.py 실행 결과 이력 (회귀 비교용)
+│
+├── evaluation/                  # 서비스와 독립적인 평가·검수 CLI
+│   ├── datasets/                # 계약·검색·답변·요소별 규약, draft/approved 분리
+│   └── runs/                    # 로컬 결과·보정 백업 (Git/Docker 빌드 제외)
 │
 ├── frontend/                    # React 프론트엔드 (Vite)
 │   └── src/
@@ -518,18 +545,25 @@ tax-assistant/
     │   ├── chat_service.py       # Agentic RAG 파이프라인, 스트리밍, 세목 키워드 매칭
     │   ├── citation_guard.py     # 답변 인용·계산 수치 검증 후처리
     │   ├── embedding_service.py  # Ollama 임베딩 API와 HTTP 클라이언트 생명주기
-    │   ├── llm_client.py         # llama.cpp OpenAI 호환 API·Ollama fallback 어댑터
+    │   ├── llm_client.py         # OpenRouter·Ollama·llama.cpp provider 중립 어댑터
+    │   ├── question_planning.py / reliable_workflow.py # 쟁점 계획·검색·도구 조정
+    │   ├── issue_coverage.py     # 쟁점별 근거 충족 검사·부족 요건
+    │   ├── evidence.py / claim_verification.py # 출처·주장 검사·구조화 표시
+    │   ├── formula_workflow.py   # 공식 근거 기반 참고 산식·실행·검증
     │   ├── tax_schedule_service.py  # 사업자 유형별 신고 기한 규칙 기반 계산
     │   ├── upload_service.py     # PDF 파싱 → 분류 → 청크 → 임베딩 → 저장
     │   ├── document/
-    │   │   └── pdf_processor.py  # PDF 텍스트 추출, 법령 경계·토큰 기반 청크 분할
+    │   │   ├── extractors.py     # PDF·DOCX·HWPX·PPTX·HTML 추출·PDF OCR
+    │   │   └── structured_chunker.py # 구조·토큰 청킹과 원문 위치 보존
     │   ├── calculator/
     │   │   ├── income_tax.py / capital_gains.py / inheritance.py / gift_tax.py / vat.py / penalty_tax.py  # 세목별 계산 로직
     │   │   ├── engine.py         # 챗봇 tool calling — 계산 의도 감지·파라미터 추출·실행
     │   │   ├── repository.py    # tax_brackets/tax_deductions 조회
     │   │   └── brackets.py      # 계산기 공통 세율 구간 적용 (DB 세율표 기반)
     │   ├── search/
-    │   │   ├── hybrid_search_service.py  # law_articles + documents 하이브리드 검색, 조문 원문 조회
+    │   │   ├── hybrid_search_service.py  # 쟁점별 BM25·벡터·Graph 결합과 별도 문서 검색
+    │   │   ├── bm25_search_service.py / korean_analyzer.py # 공식 현행 BM25·Kiwi
+    │   │   ├── query_constraints.py / fuzzy_terms.py / diversity.py # Regex·Fuzzy·MMR
     │   │   └── web_search.py     # Tavily 웹검색 클라이언트
     │   └── law/
     │       ├── api_service.py         # 국가법령정보 API 클라이언트 (법령 + 법령해석례)
@@ -537,6 +571,7 @@ tax-assistant/
     │       ├── reference_parser.py    # 법률·시행령·시행규칙 조·항·호·목 참조 구조화
     │       ├── clause_splitter.py     # 긴 조문의 항(項) 단위 분할 (보조 임베딩용)
     │       ├── ingestion_service.py   # 법령 수집·저장·임베딩·개정 감지 파이프라인
+    │       ├── index_repair.py / index_metadata.py # 같은 버전 보정·입력 이력
     │       └── interpretation_service.py  # 법령해석례(유권해석) 수집·저장 파이프라인
     │
     ├── core/
@@ -595,7 +630,7 @@ LAW_API_KEY=your-law-api-key-here
 > JWT_SECRET 생성: `python -c "import secrets; print(secrets.token_hex(32))"`
 
 운영 LLM 호출은 `ANSWER`, `HISTORY_ANSWER`, `CITATION_EXTRACTION`, `QUERY_CLASSIFICATION`,
-`TOOL_SELECTION`, `DOCUMENT_CLASSIFICATION`의 6개 작업으로 구분합니다. 기본은 모두
+`TOOL_SELECTION`, `DOCUMENT_CLASSIFICATION`, `QUESTION_PLANNING`, `ANSWER_JUDGE`의 8개 작업으로 구분합니다. 기본은 모두
 `LLM_PROVIDER`/`CHAT_MODEL`을 상속하므로 OpenRouter GPT-6 Luna 하나로 실행됩니다.
 각 작업에 `LLM_TASK_<작업명>_PROVIDER`, `_MODEL`, `_BASE_URL`, `_API_KEY`,
 `_REASONING_EFFORT`, `_THINK_ENABLED`, `_TIMEOUT_SEC`, `_TEMPERATURE`, `_MAX_TOKENS`를
@@ -608,7 +643,7 @@ LAW_API_KEY=your-law-api-key-here
 원격 호출에는 `LLM_REMOTE_MAX_TOKENS` 전역 상한이 계속 적용됩니다. 설정 변경 후 백엔드를
 재시작하고 `python dev/probe_chat_routing.py`로 비식별 점검을 수행하세요.
 `TEMPERATURE`는 해당 모델이 허용할 때만 전달되며 Luna처럼 추론 모델에서는 적용되지 않습니다.
-`/api/health/dependencies`의 `llm_tasks`는 6개 작업 상태를, 기존 `llm`/`routing_llm`은
+`/api/health/dependencies`의 `llm_tasks`는 8개 작업 상태를, 기존 `llm`/`routing_llm`은
 답변/도구 선택 상태를 표시합니다.
 
 OpenRouter 키를 발급받아 **실제 `.env`의 `OPENROUTER_API_KEY`에만** 입력한 후 WSL에서
@@ -651,8 +686,8 @@ LangSmith의 월간 추적 한도가 소진되면 앱은 동작해도 새 추적
 ollama pull qwen3-embedding:4b
 ```
 
-생성 모델은 llama.cpp가 최초 실행 시 Qwen3.5-9B GGUF를 내려받습니다. Ollama의
-`qwen3.5:9b`는 `LLM_PROVIDER=ollama`, `CHAT_MODEL=qwen3.5:9b`로 되돌릴 때만 설치합니다.
+현재 생성·계획·Judge는 OpenRouter를 사용하므로 로컬 생성 모델 설치가 필요하지 않습니다.
+Ollama의 `qwen3.5:9b`는 생성 또는 개별 작업을 Ollama로 전환할 때만 설치합니다.
 
 #### 실행 환경별 Ollama 연결 설정
 
@@ -670,8 +705,9 @@ ollama pull qwen3-embedding:4b
 이를 해결하기 위해 전용 실행 스크립트가 매번 현재 주소를 탐지합니다.
 
 ```bash
-# venv-wsl 활성화, Windows IP·임베딩 모델·Docker GPU 검사, llama.cpp Compose 실행
-bash dev/docker-up-llamacpp-wsl.sh
+# WSL: Windows IP·Ollama 필수 모델 확인, Graph 사용 시 Neo4j 준비, 현재 provider로 실행
+source venv-wsl/bin/activate
+bash dev/docker-up-wsl.sh backend frontend
 ```
 
 스크립트는 탐지한 IP를 `OLLAMA_WINDOWS_IP`로 Compose에 전달하고, 컨테이너에는 고정된
@@ -691,12 +727,23 @@ FastAPI → http://ollama.windows.host:11434
 
 ### 3단계: DB 실행 및 자동 마이그레이션
 
-소규모 서비스의 기본 생성 엔진은 llama.cpp입니다. WSL/NVIDIA에서는 다음 스크립트로
-Qwen3.5-9B GGUF Q4_K_M 생성 서버와 Qwen3 Embedding 4B GGUF Q4_K_M 비교 서버를 실행합니다.
+현재 서비스는 OpenRouter 생성과 Windows Ollama 임베딩을 사용합니다. `.env`에 앞 절의 모델 역할을
+명시하고 WSL에서 다음 명령으로 백엔드·프런트엔드를 재빌드합니다.
 
 ```bash
-bash dev/docker-up-llamacpp-wsl.sh
+cd '/mnt/c/Users/Laptop PC/Desktop/tax_assistant'
+source venv-wsl/bin/activate
+bash dev/docker-up-wsl.sh backend frontend
 ```
+
+스크립트는 GraphRAG가 켜진 경우 Neo4j를 먼저 기동·확인합니다. 모델 이름·provider를 자동으로
+llama.cpp로 바꾸지 않습니다. 새로운 환경은 코드 기본값이 Ollama이므로 OpenRouter 설정과 키를
+별도로 입력해야 합니다.
+
+#### 선택형 llama.cpp·임베딩 v2 실험
+
+로컬 생성/임베딩 비교를 명시적으로 수행할 때만 `bash dev/docker-up-llamacpp-wsl.sh`를 사용합니다.
+이 overlay는 Qwen3.5-9B GGUF 생성 서버와 Qwen3 Embedding 4B GGUF 비교 서버를 구성합니다.
 
 생성 서버는 GPU를 사용하고 임베딩 서버는 12GB VRAM 충돌을 막기 위해 CPU를 사용합니다.
 임베딩은 Qwen 권장값인 `--pooling last`를 강제합니다. 기존 pgvector 데이터는 즉시
@@ -710,12 +757,13 @@ docker exec tax_backend python scripts/compare_embedding_providers.py
 docker exec tax_backend python scripts/backfill_embeddings_v2.py --table all
 docker exec tax_backend python scripts/backfill_embeddings_v2.py --table all --run
 
-# v2 환경으로 골든셋 평가
-docker exec tax_backend python scripts/evaluate.py run --dataset evaluation/datasets/contracts.json --split all
+# v2 환경을 별도로 설정한 뒤 실제 검색 진단 (draft 결과는 품질 승인 아님)
+docker exec tax_backend python scripts/evaluate.py run --dataset evaluation/datasets/retrieval.json --mode live --include-draft
 ```
 
-`EMBEDDING_VERSION=v2`는 세 테이블의 `embedding_v2 IS NULL`이 0건이고 골든셋 성능이
-기존보다 하락하지 않았을 때만 적용합니다. `v1`로 되돌리면 기존 검색으로 롤백됩니다.
+`contracts.json` 합성 계약은 벡터 품질 평가가 아닙니다. 위 draft 실행도 독립적인 품질 승인 점수가 아닙니다.
+`EMBEDDING_VERSION=v2`는 대상 벡터 준비·입력 이력을 확인하고 별도 전문가 holdout에서 v1 대비 검색/답변 회귀와
+지연을 검수한 뒤 적용합니다. `v1`로 되돌리면 기존 검색으로 롤백됩니다.
 
 WSL Docker에서 `could not select device driver ... gpu` 오류가 발생하면 NVIDIA Container
 Toolkit을 WSL 안에 한 번 설치합니다.
@@ -735,9 +783,8 @@ docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu24.04 nvidia-smi
 bash dev/docker-up-llamacpp-wsl.sh
 ```
 
-최초 실행은 모델 다운로드와 양자화 적재로 시간이 걸립니다. 이후 모델은
-`llama_cache` named volume에서 재사용됩니다. Ollama 생성 환경으로 되돌릴 때는
-`bash dev/docker-up-wsl.sh`를 실행합니다.
+선택형 overlay의 최초 실행은 모델 다운로드와 적재로 시간이 걸리며 `llama_cache` volume을 재사용합니다.
+현행 OpenRouter/Ollama 조합을 다시 사용하려면 기본 Compose의 `dev/docker-up-wsl.sh backend frontend`를 실행합니다.
 
 `docker compose up -d --build`를 직접 실행하면 현재 Windows 주소를 알 수 없으므로 의도적으로
 설정 오류를 반환합니다. 자동 탐지 없이 직접 실행해야 한다면 먼저 `OLLAMA_WINDOWS_IP`를
@@ -745,8 +792,10 @@ bash dev/docker-up-llamacpp-wsl.sh
 
 ```bash
 export OLLAMA_WINDOWS_IP="$(ip -4 route show default | awk 'NR == 1 { print $3 }')"
-docker compose -f docker-compose.yml -f docker-compose.llamacpp.yml up -d --build
+docker compose -f docker-compose.yml up -d --build backend frontend
 ```
+
+이 직접 실행은 그래프 의존성 확인을 자동으로 하지 않으므로 일반 개발·재빌드는 WSL 스크립트를 사용합니다.
 
 Docker 실행 후 웹 서비스는 **http://localhost:3001**에서 접속합니다. 호스트 3001 포트를 프런트엔드 Nginx의 80 포트에 연결하며 `/api` 요청은 Docker 내부의 백엔드 `backend:8000`으로 전달합니다. 백엔드 직접 접근과 API 문서는 호스트의 **http://localhost:8001**(`127.0.0.1` 바인딩)을 사용합니다. Vite 개발 서버 포트는 기존 5173을 유지하고 API 프록시는 호스트 8001을 사용합니다. 선택형 llama.cpp 생성 서버의 호스트 포트는 충돌을 피하기 위해 8004로 옮겼으며 컨테이너 내부 포트 8080은 그대로입니다.
 
@@ -821,8 +870,12 @@ npm run dev
 ### 전체 테스트 실행
 
 ```bash
-pytest
+docker exec tax_backend pytest -q
 ```
+
+백엔드 구현 변경 후 현재 코드로 이미지를 재빌드하고 실행합니다. 프런트엔드 변경은 `frontend/`에서
+`npm test`와 `npm run build`를 수행합니다. WSL 가상환경의 로컬 단위 검사와 실제 생성/웹/세무 정답 검수를 구분합니다.
+마지막 완료 수치는 맨 위 요약을 참고하며 문서만 변경한 작업에서는 전체 테스트 수를 새 실행 결과로 보고하지 않습니다.
 
 ### 상세 출력
 
@@ -928,13 +981,13 @@ python scripts/evaluate.py suite --mode live --include-draft --output evaluation
 | `JWT_EXPIRE_MIN` | — | `1440` | JWT 만료 시간 (분, 기본 24시간) |
 | `COOKIE_SECURE` | — | `false` | `true` 설정 시 HTTPS 전용 쿠키 (운영 환경에서 활성화) |
 | `OLLAMA_BASE_URL` | — | `http://localhost:11434` | FastAPI 기준 Ollama 주소. WSL2 Docker 개발환경은 Windows 게이트웨이, 운영 Compose는 `http://ollama:11434` 권장 |
-| `CHAT_MODEL` | — | `qwen3.5:9b` | 6개 작업의 기본 생성 모델명 |
+| `CHAT_MODEL` | — | `qwen3.5:9b` | 코드 기본값. 현행 서비스는 `openai/gpt-6-luna` 명시; 8개 작업이 상속 |
 | `LLM_TASK_<작업명>_PROVIDER` | — | `LLM_PROVIDER` 값 | 각 AI 작업의 provider 독립 선택 |
 | `LLM_TASK_<작업명>_MODEL` | — | `CHAT_MODEL` 값 | 각 AI 작업의 모델 독립 선택 |
 | `LLM_TASK_<작업명>_REASONING_EFFORT` | — | Luna 작업별 `none`/`low` | 원격 추론 수준; 모델 지원값 사용 |
 | `LLM_TASK_<작업명>_THINK_ENABLED` | — | `THINK_ENABLED` 값 | 로컬 Ollama/llama.cpp thinking 여부 |
 | `LLM_TASK_<작업명>_BASE_URL`·`API_KEY`·`TIMEOUT_SEC`·`TEMPERATURE`·`MAX_TOKENS` | — | 공통 설정 또는 호출값 | 작업별 연결·출력 설정 |
-| `LLM_PROVIDER` | — | `ollama` | `ollama`, `llamacpp`, `openrouter` 등 생성 provider |
+| `LLM_PROVIDER` | — | `ollama` | 코드 기본값. 현행 서비스는 `openrouter` 명시; 선택형 `llamacpp` 등 지원 |
 | `LLM_BASE_URL` | — | provider별 기본값 | OpenRouter 사용 시 `https://openrouter.ai/api/v1` |
 | `OPENROUTER_API_KEY` | OpenRouter 사용 시 | — | OpenRouter 인증 키. 실제 `.env`에만 입력 |
 | `EMBED_MODEL` | — | `qwen3-embedding:4b` | 임베딩 모델명 |
@@ -942,7 +995,13 @@ python scripts/evaluate.py suite --mode live --include-draft --output evaluation
 | `EMBEDDING_BASE_URL` | — | Ollama 주소 | 활성 임베딩 provider 주소 |
 | `EMBEDDING_VERSION` | — | `v1` | 검색 컬럼 선택. 검증 완료 후에만 `v2`로 전환 |
 | `EMBEDDING_DUAL_WRITE` | — | `false` | 신규 데이터의 v1·v2 임베딩 동시 저장 여부 |
-| `RERANK_CANDIDATE_K` | — | `4` | CPU Cross-Encoder 한 배치에 전달할 상위 후보 수 |
+| `SEARCH_LEXICAL_BACKEND` | — | `bm25` | 공식 현행 쟁점 키워드 검색; `trigram`은 기존 경로 |
+| `SEARCH_BM25_TITLE_WEIGHT` | — | `2` | 제목/본문 BM25의 제목 가중치 |
+| `SEARCH_RRF_K` · `SEARCH_LEXICAL_WEIGHT` | — | `10` · `0.5` | BM25 경로 RRF 상수·키워드 가중치 |
+| `SEARCH_FUZZY_ENABLED` · `SEARCH_REGEX_ENABLED` · `SEARCH_MMR_ENABLED` | — | `true` | 쟁점 검색의 개별 알고리즘 활성화 |
+| `SEARCH_MMR_LAMBDA` | — | `0.85` | 순위 관련성과 중복도 비중 |
+| `GRAPH_RAG_ENABLED` | — | `false` | 코드 기본 비활성, 사용 환경에서 현행 Graph 보충 활성화 |
+| `ANSWER_JUDGE_MODE` | — | `shadow` | 의미 평가 모드. 법적 주장 등은 shadow에서도 의미 검사를 공개 조건으로 사용 |
 | `THINK_ENABLED` | — | `false` | Qwen3 계열 모델의 Think 모드 활성화 |
 | `OLLAMA_NUM_CTX` | — | `4096` | 모든 chat 호출의 컨텍스트 길이 — 12GB GPU에서 생성·임베딩 동시 적재를 위한 기본값 |
 | `OLLAMA_KEEP_ALIVE_SEC` | — | `-1` | Ollama 채팅 LLM의 유휴 언로드 대기시간(초). 임베딩 요청에는 적용하지 않음 |
@@ -1104,20 +1163,21 @@ WSL 기본 게이트웨이로 Windows Ollama에 접근하고, 운영 환경에�
 
 ### 하이브리드 검색 (법령 조문 + PDF)
 
-`law_articles`와 `documents` 두 테이블을 동시에 벡터 검색한 뒤 법령 위계 기반 우선순위로 병합합니다.
-법률 조문이 집행기준 PDF보다 항상 상위에 배치됩니다.
+공식 현행 쟁점 검색은 조문/항 벡터와 한국어 BM25를 병렬 실행하고 원본 식별자로 가중 RRF를 적용합니다.
+직접 조회·검증된 Graph 보충·MMR을 거쳐 근거 충족 검사가 쟁점별 관련성을 확인합니다.
+사용자 문서 검색은 소유권 필터가 있는 별도 경로이며 공유 BM25나 공식 법령의 권위로 승격되지 않습니다.
 
 ### 세목 자동 분류로 검색 범위 축소
 
-질문에서 세목 키워드를 먼저 감지하고 해당 세목 문서만 검색합니다.
+분류 경로는 세목 키워드와 구조화 분류를 사용하고, 일반 분석/복합 질문은 질문 계획의 주체·세목별로 검색합니다.
 소득세법(연말정산·퇴직소득 등), 부가가치세법(세금계산서·영세율 등), 법인세법(손금·결손금·업무용승용차 등), 조세특례제한법(투자세액공제·고용증대 등), 국세기본법(심판청구·기한후신고 등) 등 22개 세목에 걸쳐 실무 용어까지 포괄합니다.
 같은 위치에서 여러 세목 키워드가 겹치면(예: "체납" vs "지방세 체납") 더 긴(구체적인) 키워드만 채택해 불필요한 다중 매칭을 줄입니다.
-키워드로 세목이 하나로 확정되면 분류 LLM 호출 자체를 생략하고, 매칭 실패(0개 또는 다중 매칭) 시에만 LLM을 호출(세목 분류 + 멀티쿼리 생성 1회 통합 호출)합니다.
+키워드 분류 fast path와 별도 `QuestionPlan`을 구분합니다. 단일 키워드의 세목 추정만으로 복합 요청의 다른 세목을 제외하지 않습니다.
 
 ### 비교 질문(A vs B) 처리
 
 "리스와 장기렌트 중 어느 쪽이 유리한가"처럼 두 옵션을 비교하는 질문에서 각 옵션별 검색 쿼리를 별도 생성합니다.
-단일 비교 조문이 없어도 각 항목에 적용되는 법령 조문을 각각 근거로 삼아 비교표와 명확한 결론을 제시합니다.
+각 항목의 근거와 조건을 확인하고 공개된 주장만 비교합니다. 일부 항목의 근거가 부족하면 그 범위를 별도로 표시합니다.
 
 ### 파일명 패턴 기반 빠른 문서 분류
 
@@ -1126,20 +1186,20 @@ AI 호출은 파일명으로 분류가 불가능한 경우에만 실행됩니다
 
 ### 유사도 기반 조건부 웹검색
 
-하이브리드 검색 결과의 상위 3개 평균 유사도가 임계값(`_WEB_SEARCH_THRESHOLD`, 기본 0.55) 미만인 경우에만 Tavily 웹검색을 실행합니다.
-DB 검색만으로 충분한 질문에서는 불필요한 외부 요청과 지연을 방지합니다.
+기존 일반 검색의 상위 평균 유사도 기반 Tavily 경로와 현재 쟁점별 근거 충족 경로를 구분합니다.
+일반 분석은 부족한 공식 조문을 먼저 재검색하고, 웹 스니펫은 검증 가능한 원문을 발견하는 용도로 제한합니다.
 
 ### 비동기 병렬 처리
 
-세목 분류/멀티쿼리 생성, 대화 메모리 조회, 세금 계산기 실행은 `asyncio.gather`/`asyncio.create_task`로 병렬 실행합니다.
-하이브리드 검색에서 `law_articles`와 `documents` 두 테이블도 동시에 쿼리합니다.
-Tavily 다중 쿼리도 병렬로 처리하여 대기 시간을 줄입니다.
+쟁점별 검색은 동시 실행 예산을 두고 벡터 두 질의와 BM25를 병렬 처리합니다.
+같은 임베딩 호출은 공유하고 그래프 조문 조회는 중복 제거·동시 최대 4개로 제한합니다.
+주장 생성/검사는 독립 쟁점별로 병렬 실행하며 선행 근거·의존 주장·최종 저장 순서를 지킵니다.
 
 ### SSE 스트리밍
 
-최종 답변은 provider 중립 `stream_llm()`을 통해 현재 설정된 생성 엔진의 토큰을 실시간 전송합니다.
-`<think>` 태그는 스트리밍 중 버퍼 최소화 방식으로 실시간 필터링합니다(TTFT 개선).
-스트리밍 이벤트는 `{"type": "chunk", "text": ...}` / `{"type": "calc", "tool": ..., "params": ...}` 형태로 구분되어, 텍스트와 계산기 메타데이터(프론트 프리필용)를 함께 전달합니다.
+provider facade는 일반·구조화·토큰 스트리밍을 지원합니다. 현재 일반 분석/복합 요청은 생성 초안을 전송하지 않고,
+planning/retrieving/generating/checking 진행 상태와 공개 검사 후 본문·verification을 SSE로 전달합니다.
+`chunk`/`calc`/`tool` 등 기존 계약은 해당 실행 경로의 확인된 결과에만 사용합니다.
 추가 `tool` 이벤트는 `id`, `tool`, `status`를 전달하며 완료 이벤트에는 검증된 `params`와 제한된 `context`가 포함됩니다.
 선택 중(`selecting`) → 실행 중(`running`) → 완료(`ok`)/자료 없음(`not_found`)/실패 상태를 실제 실행 순서대로 전달합니다.
 대화와 최종 도구 메타데이터를 기존 `chat_logs.message` JSON에 저장한 뒤 `[DONE]`을 전송합니다. 새 DB 컬럼은 필요하지 않습니다.
@@ -1169,7 +1229,7 @@ LLM은 법조문 번호나 계산 수치를 프롬프트 지시만으로 완벽�
 
 ### LLM provider 추상화 (HTTP 어댑터)
 
-`chat_service.py`는 특정 추론 서버의 요청 스키마를 직접 알지 못합니다. `app/services/llm_client.py`가 llama.cpp OpenAI 호환 API와 Ollama fallback을 감싸 `call_llm()`/`stream_llm()`/`call_llm_structured()`라는 provider 중립 인터페이스를 노출합니다.
+`chat_service.py`는 특정 추론 서버의 요청 스키마를 직접 알지 못합니다. `app/services/llm_client.py`가 OpenRouter·Ollama·llama.cpp 어댑터를 감싸 `call_llm()`/`stream_llm()`/`call_llm_structured()`라는 provider 중립 인터페이스를 노출합니다. 현재 생성·계획·Judge는 OpenRouter를 사용합니다.
 `inference/llm/base.py`의 `LLMProvider` 규약을 Ollama HTTP 어댑터와 OpenAI 호환 어댑터가 구현합니다. Ollama도 `ChatOllama` 없이 `httpx`로 `/api/chat`을 호출합니다. `num_ctx`/`num_predict`는 `options` 안에, `think`/`keep_alive`는 요청 최상위에 배치하며 테스트로 검증합니다.
 일반 답변·JSON Schema 요청·NDJSON 스트리밍을 지원하고, thinking 필드는 사용자 답변에서 제외합니다. `LLM_TIMEOUT_SEC`를 적용하고 종료 시 HTTP 연결을 닫습니다. 새 provider는 어댑터와 factory에 추가하며 RAG·계산기·citation_guard 호출부는 유지합니다.
 
@@ -1196,7 +1256,7 @@ LLM은 법조문 번호나 계산 수치를 프롬프트 지시만으로 완벽�
 일반 RAG의 빈 검색 결과와 구법 버전 적합성 검증은 이 도구 실패 차단과 별도 과제입니다.
 조회 결과는 길이를 제한하고 생략 여부를 표시합니다. 문서 본문의 지시는 실행 명령으로 취급하지 않습니다.
 
-현재 한 질문에서 여러 도구를 연쇄 실행하지 않습니다. 계산기의 기존 기본값·세율표 정확성 검증 및 문서 페이지 추적은 별도 과제입니다. 테스트와 실행 스모크는 답변의 법적 정확도 평가를 대체하지 않습니다.
+단순 요청의 단일 도구 계약을 유지하며, 복합 요청은 `reliable_workflow`가 쟁점별 도구를 최대 4개와 시간 예산 안에서 조정합니다. 문서 위치 추적과 입력 검사는 구현돼 있지만 OCR 값·세율의 시점 적용·법적 해석은 별도 검수 대상입니다. 테스트와 실행 스모크는 답변의 법적 정확도 평가를 대체하지 않습니다.
 
 ### 쟁점별 근거·주장 검증 (2026-09-28)
 
@@ -1225,11 +1285,11 @@ OpenRouter 요청은 `OPENROUTER_REQUESTS_PER_MINUTE=18` 기본값으로 간격�
 - **Runnable**: 프롬프트 → provider 메시지 변환 → 생성 → 구조 검증을 이름 있는 단계로 실행합니다. 스트리밍은 `RunnableGenerator`로 토큰을 즉시 전달하고 기존 인용 guard와 대화 저장 동작을 유지합니다.
 - **PydanticOutputParser**: `app/schemas/ai_output.py`의 분류·인용·계산기 선택 스키마를 검증합니다. 파서에 전달하기 전 완전한 JSON인지 검사하여 잘린 JSON의 자동 복구를 막습니다. 계산기별 필수 입력·타입·알 수 없는 필드도 실행 전에 검사합니다.
 
-검증 실패 시 분류는 원본 질문 검색으로, 인용 추출은 보정 생략으로, 계산기 추출은 미실행으로 돌아갑니다. 자동 LLM 재시도는 추가하지 않습니다. 스키마 검증은 법적 결론이나 금액의 사실 정확성을 보장하지 않습니다.
+검증 실패 시 해당 호출 목적에 맞는 fallback/제한된 재시도 정책을 사용합니다. 분류 실패를 세목 확정으로 표시하거나 계산기 추출 실패를 임의 입력으로 실행하지 않습니다. 스키마 검증은 법적 결론이나 금액의 사실 정확성을 보장하지 않습니다.
 
-`tax_answer`, `query_classification`, `calculator_extraction`, `citation_extraction` 실행 이름과 `prompt_version` 메타데이터를 사용합니다. 로컬 callback으로 단계 관찰이 가능하며 LangSmith는 후속 연결 대상입니다. SDK는 `langchain-core`의 간접 의존성으로 설치되지만 현재 프로젝트에 원격 추적·평가 업로드 설정을 추가하지 않습니다. 추후 연결 전 골든셋·평가 기준과 전송할 데이터 범위를 정해야 합니다.
+이름 있는 Runnable과 `prompt_version` 메타데이터로 실행을 추적합니다. 실사용 채팅은 `CHAT_TRACING_ENABLED`와 LangSmith 키/할당량을 따르며 검색·계획·근거 충족·주장 Judge·공개 검사 단계도 연결합니다. 평가 결과 게시는 별도 `scripts/evaluate.py langsmith prepare/publish` 절차입니다.
 
-적용 검증: 최신 Docker 전체 테스트 **317개 통과**. 실제 Ollama 생성·스트리밍, 인용 JSON과 계산기 입력 추출의 Pydantic 검증, dependency `ready`를 확인했습니다. 답변 정확도 평가 점수와는 별개의 실행·회귀 검증입니다.
+LangChain 도입 당시 Docker **317개 통과**는 과거 회귀 기록입니다. 최신 제품 검증 수치는 맨 위 요약을 참고하며 세무 정답 평가와 구분합니다.
 
 ### 법령 개정 자동 동기화
 
@@ -1240,19 +1300,21 @@ OpenRouter 요청은 `OPENROUTER_REQUESTS_PER_MINUTE=18` 기본값으로 간격�
 ### 법령해석례(유권해석) 수집
 
 국가법령정보 Open API의 `target=expc`(법령해석례 검색/본문조회) 엔드포인트로 기획재정부·국세청 등의 유권해석을 수집합니다.
-안건명에 포함된 「법령명」에서 관련 법령을 추출해 세목을 추론하고, `law_articles`에 `law_type='법령해석례'`로 저장해 기존 하이브리드 검색·우선순위 로직을 그대로 재사용합니다.
+안건명에 포함된 「법령명」에서 관련 법령을 추출해 세목을 추론하고 `law_articles`에 `law_type='법령해석례'`로 저장합니다. 수집·기존 벡터 경로와 공유 현행 BM25/공식 주장 공개의 채택 규칙을 구분하며, 공식 실무 자료를 쟁점별로 확대하는 작업은 후속 제안입니다.
 
 ### 복합 질문의 쟁점별 근거 검색 (2026-09-28)
 
-분석 질문은 요청 종류와 주체×세목으로 분해합니다. 쟁점마다 원 질문과 요건 중심 질의로 Ollama 임베딩 검색을 수행하고, 현행 공식 법령의 한국어 키워드 검색 후보를 원본 조문 ID 기준으로 결합합니다. 직접 조문 조회와 검증된 GraphRAG 확장도 함께 사용합니다. 키워드 검색용 `pg_trgm` 인덱스는 Alembic `20260928_0009`에서 생성합니다.
+분석 질문은 요청 종류와 주체×세목으로 분해합니다. 쟁점마다 원 질문과 요건 중심 질의로 Ollama 임베딩 검색을 수행하고 한국어 BM25 후보를 원본 조문 ID 기준으로 결합합니다. 직접 조문 조회·검증된 GraphRAG·MMR을 함께 사용합니다. `pg_trgm`(Alembic `20260928_0009`)은 BM25 미준비/실패 시의 기존 키워드 fallback입니다.
 
 공식 근거가 검색됐다는 사실만으로 쟁점이 충족됐다고 보지 않습니다. 구조화된 근거 충족 검사가 부족한 요건을 찾으면 해당 쟁점만 한 번 재검색합니다. 답변 입력 예산은 완전한 조문 단위로 쟁점에 배분하며, 예산 때문에 관련 근거가 빠지면 충족 상태를 취소합니다. 법적 주장은 설정이 `shadow`여도 개별 LLM Judge의 지원·적용 판정을 통과해야 공개됩니다. 전체 쟁점이 미완결이면 검증된 주장만 부분 답변하고 나머지는 보류합니다. 이 자동 검사는 세무 정확성의 독립 입증이 아닙니다.
 
 ### RAG 성능 최적화
 
-Ollama는 `num_ctx`가 요청마다 다르면 모델을 리로드하고(호출당 수 초), 유휴 상태가 지속되면 모델을 언로드합니다(콜드 스타트 시 수십 초).
-모든 chat 호출에서 `num_ctx`를 동일한 값으로 고정하고 `keep_alive=-1`을 요청 최상위 필드로 전달해 모델이 항상 상주하도록 합니다.
-키워드로 세목이 하나로 확정되는 질문은 분류 LLM 호출 자체를 생략하고 원본 쿼리로 바로 검색합니다.
+현재 적용: BM25/벡터 병렬, 동일 질의 임베딩 캐시·동시 호출 공유, 검증 XML 파싱 캐시, 그래프 중복 제거·동시 제한입니다.
+질문 계획·근거 충족·생성·Judge 호출은 전체 응답 시간과 계정 호출량에 영향을 주므로 검색 시간과 분리 측정합니다.
+Ollama의 `num_ctx`/`keep_alive` 최적화는 선택형 로컬 생성에만 해당하며 OpenRouter 생성 지연에 적용되지 않습니다.
+전용 Reranker·토큰별 근거 예산·시점/실무 자료 확대의 후속 설계는 [추가 RAG 개선 제안](docs/ai/RAG_IMPROVEMENT_PLAN.md)을 참고하세요.
+기존 분류 fast path의 호출 절감과 현재 일반 분석의 질문 계획·근거 검사 시간을 분리해서 측정합니다.
 
 ---
 
@@ -1569,16 +1631,14 @@ citation_accuracy가 81.6% → 73.7%로 오히려 하락 — 개선인지 퇴보
 "한 번 돌려서 수치가 오르면 개선, 내리면 퇴보"라는 그동안의 판단 방식 자체가 이 정도
 샘플링 편차 앞에서는 신뢰할 수 없다는 게 이번에 드러난 문제였다.
 
-**과거 해결 기록**: 당시 `scripts/eval_rag.py`에 `--repeat N` 옵션을 추가했다. 현재는 해당 CLI를 폐기했으며 [새 평가 실행기](evaluation/README.md)의 `--repeat N`을 사용한다. 아래는 당시 명령이다. `--eval --with-answer`를
-N회 반복 실행하여 (1) citation_accuracy의 평균/최솟값/최댓값을 함께 보고하고,
-(2) 문항별로 실행마다 인용 히트 여부가 바뀐 "비결정적 항목"을 별도로 식별해 출력한다.
+**과거 해결 기록**: 당시 `scripts/eval_rag.py`에 반복 실행을 추가했다. 현재는 그 CLI를 폐기했으며
+[새 평가 실행기](evaluation/README.md)의 `--repeat N`을 사용한다. 현재 검색 진단의 실행 예시는 다음과 같다.
 ```bash
-python scripts/eval_rag.py --eval --with-answer --repeat 3
+python scripts/evaluate.py run --dataset evaluation/datasets/retrieval.json --mode live --include-draft --repeat 3
 ```
-이제부터 생성 품질에 영향을 주는 변경(프롬프트 수정, `temperature`/`num_predict` 조정 등)은
-1회 실행 수치가 아니라 이 반복 평가의 평균과 항목별 안정성으로 판단한다. 반대로 검색
-단계 변경(청킹, 임베딩, hybrid_search 로직 등)은 결정론적이라 지금처럼 1회 실행 비교로도
-충분하다 — 변동성은 "LLM 생성" 단계에서만 발생한다.
+생성 비교는 해당 답변 데이터셋·검수 범위와 `--allow-generation`을 별도로 지정한다.
+개발/draft 라벨은 진단이고 독립 세무 정답 점수가 아니다. 생성은 반복 결과의 평균·편차·항목별 안정성을 보고,
+검색 변경도 고정 코퍼스의 회수/순위와 cold/warm·반복 지연을 함께 비교한다.
 
 ### LLM provider(Ollama) 종속 — 답변 구조화·모델 교체 유연성
 ```
@@ -1611,14 +1671,18 @@ LLM 생성과 무관) 회귀 없음. 답변 품질 자체의 변화를 노린 �
 
 ### 복합 질문의 답변이 중간에 끝나는 경우
 
-Ollama가 `done=true`와 함께 `done_reason=length`를 반환하면 정상 완료가 아니다. 현재 채팅은 이를 미완료로 표시하고 스트리밍 `[DONE]`을 보내지 않으며, 일부 출력은 검증·저장하지 않는다. 백엔드 로그의 `Ollama completion`에는 종료 사유와 입력·출력 토큰 수만 남고 질문·답변 원문은 남기지 않는다. 실제 원인이 컨텍스트 한계인지, 추론 서버 오류인지 재현 질문의 로그로 먼저 구분한다. 현재 4,096토큰 컨텍스트는 12GB GPU의 생성·임베딩 공존을 위해 유지하며 무조건 증설하지 않는다.
+현재 OpenRouter 답변의 출력 길이 중단은 제한된 이어쓰기 정책을 따릅니다. 일반 분석은 쟁점별 생성·검사 예산 안에서 공개 가능한 부분을 보존하며, 미완료·검사 실패를 정상 완료로 표시하지 않습니다. 출력 길이·계정 429·응답 시간 제한·근거 부족은 원인을 구분해 확인합니다. 로컬 Ollama의 4,096토큰 `num_ctx` 설정은 선택형 Ollama 생성에만 해당합니다.
 
 
 | 한계 | 개선 방향 |
 |------|-----------|
 | 스캔 PDF의 OCR 오인식·20쪽 제한 | 원본 대조 평가, OCR 품질 향상 및 비동기 대용량 처리 |
 | 이미지형 DOCX/HWPX/PPTX와 바이너리 HWP 미지원 | 형식별 이미지 OCR·HWP 변환 경로를 별도 검증 후 추가 |
-| 일반(비법령) 문서는 여전히 토큰 기준 청크 분할 | 문장 경계 인식 분할로 보완 여지 (법령류 문서는 조문 경계 분할 적용됨) |
+| 구조화 청킹을 해도 OCR·표/제목 판별은 불완전 | 형식별 원문 위치·숫자·표 골든셋으로 검수 |
+| 전용 Reranker 미구현 | 후보 풀 유지·전용 모델·shadow 비교 후 적용 |
+| 공유 BM25는 공식 현행 법령에 한정 | 권한을 유지하는 사용자 문서·과거/해석 자료의 유형별 검색 확대 |
+| 일반 상담의 과거 법령 적용 미확정 | 사건일별 시행본·부칙 연결과 적용 조건 검수 |
+| 현재 평가 라벨은 개발용, Judge 독립 교정 미완료 | 전문가 holdout·오답 통과/정상 차단·쟁점 완결성 비교 |
 | 유권해석 안건명에서 관련 법령을 첫 번째 「」만 추출 | 본문 전체를 분석해 가장 관련도 높은 법령을 선택하도록 개선 여지 |
 | 업로드 문서의 금액·자격 자동 확정 미지원 | OCR 결과의 원본 대조와 정형 필드 검수 절차 추가 |
 

@@ -1,5 +1,26 @@
 # 요소별 평가·검수 파이프라인
 
+## 현재 평가 범위 — 2026-10-01
+
+- 서비스 생성/계획/Judge는 OpenRouter `openai/gpt-6-luna`, 임베딩은 Ollama `qwen3-embedding:4b`/v1이다. 과거 로컬 Ollama 탐색 실험과 현행 설정을 구분한다.
+- 운영자 실험·조회·검수는 [LangSmith](LANGSMITH.md)다. 사용자 채팅의 verification/근거 패널과 독립 정답 검수는 다른 결과다.
+- 공식 현행 검색은 BM25·벡터·검증된 Graph·Fuzzy/Regex/MMR까지 구현됐다. 전용 Reranker는 [후속 설계](../docs/ai/RAG_IMPROVEMENT_PLAN.md) 단계다.
+- 개발 39문항의 필수 라벨 38/38·MRR 0.746053과 작은 실제 답변/화면 스모크는 개발 회귀 기록이다. 독립 holdout이나 전체 세무 정답률로 승인하지 않는다.
+- 현재 코드의 실행 결과/잔여 검수는 [CURRENT_STATUS.md](../docs/ai/CURRENT_STATUS.md), 최종 파일·재현 명령은 [HANDOFF.md](../docs/ai/HANDOFF.md)를 따른다. `evaluation/runs/`는 Git/Docker 제외인 로컬 산출물이다.
+
+### 평가 결과를 구분하는 기준
+
+| 결과 | 입증 범위 |
+|---|---|
+| 코드 회귀·합성 계약 | 파싱/산술/권한/오류 경계의 해당 테스트 |
+| draft 검색 probe | 그 질문·코퍼스·설정에서 근거 회수/순위/지연 관측 |
+| 런타임 LLM Judge/verification | 입력한 근거에 대한 자동 지원·적용 진단 |
+| 전문가 승인 holdout | 고정 원문·시점·기대 주장/계산과 독립 검수에 한정한 품질 |
+| 실제 웹 표시 검사 | 저장된/실제 출력의 PC·모바일·근거 패널 표시 |
+
+Reranker·후보 풀·검색 설정을 비교할 때에는 쟁점별 필수 근거/잘못된 연도·세목·주체, 답변 누락/예외,
+Judge 오답 통과/정상 차단, 전체 P50/P95를 분리 측정한다. 기존 개발 질문과 분리된 전문가 holdout을 마련한다.
+
 ## 판례 수집 파일럿
 
 `python -m evaluation.precedents --output evaluation/sources/precedents/NEW_BATCH`
@@ -12,9 +33,12 @@
 evaluation/sources는 Git/Docker 제외. 운영 DB·학습·외부 평가 업로드에 자동 연결하지 않는다.
 원문 개인정보·출처 이용 조건·관련 심급·적용 법령·평가 정답 누출 검수 후 공유/승인할 것.
 
-## 로컬 LLM Judge (보조 판정)
+## 오프라인 LLM Judge (보조 판정)
 
 ### 판례 5건 탐색 실험
+
+아래 판례 파일럿의 예산·로컬 실행 조건은 2026-09-20 당시 기록이다. 현행 provider를 임의로
+Ollama로 바꾸거나 독립 전문가 정답셋으로 승격하지 않는다.
 
 `python -m evaluation.precedent_pilot --batch BATCH --output NEW_OUTPUT`
 
@@ -45,7 +69,8 @@ draft/원문 없음/입력 예산 초과는 unknown, 호출·JSON·발췌 검증
 이 규칙은 근거 형식 검증이며 Judge가 실제 의미를 올바르게 판단했다는 보증은 아니다.
 서비스의 기본 설정은 변경하지 않지만 동일 서버 자원을 쓰므로 사용량이 적을 때 실행한다.
 생성 모델과 동일 모델일 수 있어 자기평가 편향이 있다. 모델 가중치 digest는 아직 기록하지 않는다.
-현재 LangSmith Judge feedback 업로드와 전체 채팅 A/B 수집은 미연결이다.
+이 단독 평가 CLI의 Judge feedback 업로드·전체 채팅 A/B 수집은 별도 미연결 범위다.
+실사용 채팅의 LangSmith trace/verification v2 진단과 평가 결과 prepare/publish 경로는 이미 구현돼 있다.
 
 평가 항목·Judge 판정 설계는 [품질 기준서](QUALITY_CRITERIA.md), 대표 질문 5개는
 [초안 카드](datasets/answer_pilot.json)를 참고한다. 모두 dev/draft이며 아직 Judge 평가 대상 승인이 아니다.

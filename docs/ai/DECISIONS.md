@@ -1,5 +1,13 @@
 # 주요 설계 결정
 
+## 현행 결정의 적용 기준 — 2026-10-01
+
+- 생성·계획·Judge는 OpenRouter GPT-6 Luna(ADR-040/043 및 `config.py`의 8개 작업), 임베딩은 Ollama Qwen3 v1을 사용한다. 표준 실행은 `dev/docker-up-wsl.sh backend frontend`다.
+- 검색/보정은 ADR-068~070, 주장 공개·답변 표시는 ADR-059/061/066/071, 운영자 평가는 ADR-058을 따른다.
+- 과거 vLLM·Infinity·TEI·Reranker 서빙 실험은 당시 이력이다. 현재 코드/Compose에 전용 Reranker는 없으며, ADR-017 이후 제거된 구성을 재도입한 것으로 간주하지 않는다.
+- [RAG_IMPROVEMENT_PLAN.md](RAG_IMPROVEMENT_PLAN.md)의 Reranker·후보 풀 확대·시점/실무 자료 개선은 후속 제안이다. 모델 선택·active 적용의 확정 결정은 구현/독립 비교 후 별도 기록한다.
+- 날짜별 결정은 뒤의 변경으로 대체될 수 있다. 실제 실행·검증은 [CURRENT_STATUS.md](CURRENT_STATUS.md), 현재 미완료는 [HANDOFF.md](HANDOFF.md)를 우선한다.
+
 ## ADR-071 — 검증된 판단과 설명의 역할로 세무 답변을 구성한다
 
 - 전문적인 답변 구조 요청에 따라 최초 생성 JSON에 표시 역할을 추가한다. conclusion은 조건을 포함한 직접 판단, explanation은 중복하지 않는 이유/요건/예외, procedure와 checklist는 업무 순서와 확인 자료다. 검증 완료 이후 자유로운 모델 재작성은 근거 연결을 훼손할 수 있어 추가하지 않는다.

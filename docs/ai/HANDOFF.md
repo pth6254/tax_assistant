@@ -1,5 +1,44 @@
 # 세션 인수인계
 
+## 최신 인계 — 2026-10-01 문서 동기화
+
+### 현재 기준과 이번 작업
+
+- 이번 요청은 지금까지의 결과와 실행·인수인계 문서 최신화다. 제품 기능 변경이나 Reranker 구현은 수행하지 않았다.
+- 시작 시 작업 트리는 깨끗했다. 생성/계획/Judge OpenRouter `openai/gpt-6-luna`, Ollama `qwen3-embedding:4b`/v1/2,560차원을 유지한다. LLM 작업 8개는 `config.py` 기준이다.
+- 실행은 WSL에서 `source venv-wsl/bin/activate` 후 `bash dev/docker-up-wsl.sh backend frontend`. llama.cpp는 선택형 실험으로만 안내한다.
+- 읽기 확인 **2026-10-01 14:18 KST**: 웹 200, readiness/dependencies ready, Graph ok, schema `20260930_0010`, OpenRouter Luna/Ollama Qwen3 v1. 생성 호출이나 전체 DB 감사 결과가 아니다.
+- 직전 구현 최종 기록은 backend 969 passed/2 skipped/5 subtests passed, frontend 19 passed/build. 이번 문서 변경의 검증은 Markdown 12개·로컬 링크 59건·Python CLI 파일 참조 59건·LLM 작업명 8개·Reranker 미구현 대조와 `git diff --check` 통과다. 위 제품 테스트를 새 실행 결과로 보고하지 않는다.
+
+### 완료된 결과와 보관 위치
+
+| 영역 | 완료 범위 | 근거/결과 위치 |
+|---|---|---|
+| 검색 | 공식 현행 BM25·벡터·검증된 GraphRAG·Regex/Fuzzy/MMR·쟁점별 충족/재검색 | `app/services/search/`, `evaluation/runs/search-quality-20260930/` |
+| 원문·색인 | 동일 시행본 1,503조문 복원 + 1,471조문 누락 항 생성, 2,974조문/13,203항 이력 감사 0 | 같은 디렉터리의 `repair/`, `repair-rest/`, `repair-letter/`, `index-audit.json`, `graph-audit.json` |
+| 최종 검색 비교 | 개발 39문항 필수 라벨 38/38, MRR 0.746053, hard negative 5→4 | `repaired-baseline.json`, `algorithms-final.json`, `typos-exact.json` |
+| 답변 구조·웹 | 공개된 핵심 판단·검토·절차·자료·추가 확인, 개별 조건 보존, 근거 패널 | `evaluation/runs/professional-answer-20261001/{vat-final,gift-final}.json`, PC/mobile PNG |
+| 참고 계산 | 전용 범위 밖 공식 근거/JSON 산식/Decimal/Judge/근거 패널 | `app/services/formula_workflow.py`, `evaluation/runs/generic-calculation-20260928/` |
+
+`evaluation/runs/`는 Git/Docker 빌드 제외인 로컬 결과다. 다른 PC/작업자에게 인계할 때 필요한
+최종 결과와 plan/backup/state를 별도로 전달한다. 컨테이너 `/tmp`만을 백업으로 사용하지 않는다.
+작은 예시 성공과 개발 라벨을 전체 세무 정답률·질문 완결성으로 해석하지 않는다.
+
+### 남은 작업
+
+1. **독립 품질 검수**: 여러 세목·주체·연도·복합/오타/부정 질문의 전문가 holdout, 필수/무관 근거, 기대 주장·예외·보류 기준을 LangSmith에서 검수한다. Judge 오답 통과/정상 차단과 검색 순위를 분리 측정한다.
+2. **잔여 원문**: `evaluation/runs/search-quality-20260930/remaining-original-review.json`의 27행은 누락 의심 후보다. 동일 시행본 공식 XML·목록 탐지 오탐을 점검하고 새 plan/백업으로 보정한다. 다른 MST/시행본으로 자동 교체하지 않는다.
+3. **그래프/입력 이력**: 대상 원문이 부족해 연결하지 않은 4,952개 인용과 기존 빈 벡터 metadata를 구분해 검수한다. 추측 관계 생성이나 사후 일괄 검증 표시는 하지 않는다.
+4. **Reranker 후속 설계**: [RAG_IMPROVEMENT_PLAN.md](RAG_IMPROVEMENT_PLAN.md). Qwen3-Reranker-0.6B·별도 Docker·후보 풀 유지·off/shadow/active는 제안이다. 전용 모델/API/새 설정은 아직 없다. 이전 vLLM/Infinity 실험의 Reranker가 현재 존재한다고 간주하지 않는다.
+5. **추가 RAG 범위**: 토큰/쟁점별 근거 예산·요건/예외 묶음, 일반 상담의 사건일/부칙 연결, 공식 실무 자료와 권한을 유지하는 문서 BM25, 단계별 응답 지연을 각각 비교 후 적용한다.
+
+기존 보정은 완료됐다. 위 목록을 수행하기 위해 이미 보정된 전체 데이터를 다시 수집하거나
+모델을 교체하지 않는다. 백업/rollback과 날짜별 상세 실패 기록은 아래에 보존한다.
+
+## 날짜별 인계 이력
+
+아래는 당시의 작업 상태다. 현재 우선순위·모델·테스트·기능 여부는 위 최신 인계를 사용한다.
+
 ## 2026-10-01 세무 답변의 역할과 전문적인 표시
 
 - 코드: `schemas/reliability.py` 표시 역할, `claim_verification.py` 생성 지시/서버 출처 범위 기록/역할별 표시, `MessageBubble.jsx`/`answerSections.js`/`answerPresentation.css`, `VerificationPanel.jsx` 근거 수/쟁점/검사 범위/원본 표시. 표시 버전은 `tax-answer-20261001-v1`이다.
@@ -730,7 +769,7 @@
 이 파일은 미완료 작업 또는 다음 세션에 반드시 전달해야 하는 내용이 있을 때 갱신한다.
 완료된 작업의 장기 상태는 `CURRENT_STATUS.md`, 영구 설계 이유는 `DECISIONS.md`에 반영한다.
 
-## 현재 인수인계
+## 과거 서빙 실험 당시 인계 — 현행 기준은 맨 위 참조
 
 - 활성 작업: vLLM 생성 서버와 한국어 리랭커 구현 및 실제 기동 완료. 새 작업 전 `git status --short`로 기존 변경을 확인할 것.
 - 최근 영역: 생성 LLM vLLM 전환, Ollama 임베딩 유지, Docker GPU 실행 스크립트.
