@@ -51,6 +51,7 @@ CASES = {
 async def main(output, case='consulting'):
     import config
     from app.services.calculator import formula_workflow
+    from app.services import claim_verification
     from app.services.answer_verification import unavailable_verification
     from app.services.llm_client import _get_provider
     async def response_status(response):
@@ -99,6 +100,17 @@ async def main(output, case='consulting'):
         Path(output + '.formula.json').write_text(json.dumps(formula_calls, ensure_ascii=False, indent=2), encoding='utf-8')
         return value
     formula_workflow.call_llm_structured = record_formula
+    # Public released claims + immutable source snapshots allow deterministic
+    # display replay without a fresh model/Judge call or conversation writes.
+    presentation_input = None
+    original_renderer = claim_verification.render_structured_answer
+    def record_presentation(claims, context, query=''):
+        nonlocal presentation_input
+        presentation_input = {'claims': [c.model_dump() for c in claims],
+                              'records': [r.model_dump() for r in context.records],
+                              'plan': context.plan.model_dump(), 'coverage': context.coverage}
+        return original_renderer(claims, context, query)
+    claim_verification.render_structured_answer = record_presentation
     events = []
     def progress(event):
         events.append(event)
@@ -117,6 +129,7 @@ async def main(output, case='consulting'):
                                       'plan_status': context.plan.status if context.plan else 'tool_result'}), flush=True)
                     answer, verification = await chat._answer_evidence_context(question, context, calc, str(uuid4()), progress)
         result = {'question': question, 'answer': answer, 'verification': verification,
+                  'presentation_input': presentation_input,
                   'runtime': {'openrouter': config.LLM_PROVIDER == 'openrouter',
                               'luna': config.CHAT_MODEL == 'openai/gpt-6-luna',
                               'ollama_embedding': config.EMBEDDING_V1_PROVIDER == 'ollama'}}
@@ -126,6 +139,7 @@ async def main(output, case='consulting'):
                           'runtime': result['runtime'], 'judge_error': verification.get('judge_error')}), flush=True)
     finally:
         formula_workflow.call_llm_structured = original_formula_llm
+        claim_verification.render_structured_answer = original_renderer
         from app.services.search.bm25_search_service import close_bm25_index
         await close_bm25_index()
         await close_live_clients()

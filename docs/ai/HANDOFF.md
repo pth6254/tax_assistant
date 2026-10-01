@@ -1,5 +1,17 @@
 # 세션 인수인계
 
+## 2026-10-01 세무 답변의 역할과 전문적인 표시
+
+- 코드: `schemas/reliability.py` 표시 역할, `claim_verification.py` 생성 지시/서버 출처 범위 기록/역할별 표시, `MessageBubble.jsx`/`answerSections.js`/`answerPresentation.css`, `VerificationPanel.jsx` 근거 수/쟁점/검사 범위/원본 표시. 표시 버전은 `tax-answer-20261001-v1`이다.
+- 핵심 판단은 공개 승인된 독립 주장만 이동하며 한 번 표시한다. fact/guidance와 의존 결론은 승격하지 않는다. 역할 기본 explanation으로 이전 계약을 읽을 수 있고 공개 검사를 바꾸지 않는다. 직접 원문/결정적 계산/과거 법령의 별도 생성 경로는 기존 형식을 사용한다. 일반 분석 텍스트는 새 질문/다시 답변부터 바뀌며 스타일은 새로고침한 기존 대화에도 적용된다.
+- 구체 조건을 `원문/시점` 단어 때문에 숨기지 않는다. 서버가 source_summary의 출처/과거 적용 미확정을 코드 검사·Judge 전에 기록하며, 생성 지시는 공통 안내를 다시 쓰지 않고 개별 조건만 작성하도록 했다. 실제 모델에서 공통 조건의 여러 문구 변형과 절차 제목 중복, 대통령령 원문 링크 누락을 발견해 수정했다. 모호한 의미 유사성으로 기존 주장을 임의 삭제하지 않는다.
+- 검증 자료는 Git 제외 `evaluation/runs/professional-answer-20261001/`. 초반 `vat-live.json`, `gift-live.json`, `vat-v2.json`, `gift-v2.json`은 공통 문구 반복 보완 전 진단이다. 완료 기록에 명시한 최종 JSON/화면을 우선한다. 테스트 질문/답변을 대화 DB에 저장하지 않는다.
+- 재현: 최신 backend에서 `python dev/probe_reliable_answer.py /tmp/<새파일>.json general|compound --warm-bm25`. 공개된 예제에만 사용한다. 최종 공개 주장·원본 스냅샷·plan/coverage를 `presentation_input`에 기록하여 추가 생성/Judge 없이 표시를 비교할 수 있다. 컨테이너 재생성 전에 결과를 호스트로 복사한다.
+- 웹 확인: `PLAYWRIGHT_MODULE`에 설치한 Playwright 경로를 지정하고 `frontend/tests/answerPresentation.browser.cjs` 실행. `UI_ANSWER_JSON`을 최종 실제 JSON으로 지정하면 API 대역으로 생산 UI에 표시한다. `UI_SCREENSHOT`/`UI_MOBILE_SCREENSHOT`으로 화면을 보관한다. 이 파일은 실제 계정/대화 API에 쓰지 않는다.
+- 남은 품질 검수: LangSmith에서 여러 세목·과거 시점·긴 복합 질문의 내용 충족도와 문체/중복/조건 근접/실무 조치의 읽기 품질을 독립적으로 검수한다. 작은 표시 스모크와 draft 결과를 세무 정답률/전체 질문의 성공 보장으로 표현하지 않는다. 기존 원문 27개 검수와 전문가 정확성 검증 작업은 아래 기록대로 별도다.
+- 최종 완료 결과: backend **969 passed, 2 skipped, 5 subtests passed**; frontend **19 passed**/build; diff 검사 통과. 실모델 `vat-final.json`은 **5/5 공개·checked**, `gift-final.json`은 **4/4 공개·limited**, Judge 오류 **0**, 두 출력의 공통 적용 안내 **1회**다. 증여의 개별 조건은 4개 모두 문단 옆에 표시됐다. 최신 코드/설정으로 생성한 JSON과 Edge PC/모바일 실제 표시 검사 두 건을 보관했다. 웹 200/readiness ready/Graph ok, 생성 OpenRouter `openai/gpt-6-luna`, 임베딩 Ollama `qwen3-embedding:4b`.
+- 화면 파일: `vat-desktop.png`, `vat-mobile.png`, `gift-desktop.png`, `gift-mobile.png`. API 대역은 실제 응답의 표시 확인용이고 사용자 대화 생성이 아니다. 코드/검증 상태와 사실을 연결한 운영자 평가는 기존 LangSmith에서 별도 진행한다.
+
 ## 2026-09-30 원문·색인 보정 및 세 검색 알고리즘
 
 - 코드: `law/index_metadata.py`, `index_repair.py`, `scripts/repair_law_indexes.py`, `evaluation/index_repair_audit.py`; Alembic `20260930_0010`. 검색: `query_constraints.py`(Regex), `fuzzy_terms.py`(거리 1 사전 확장), `diversity.py`(MMR), 공식 쟁점 Hybrid 연결. 읽기 A/B: `issue_retrieval_probe.py --no-algorithms`, `search_algorithms_probe.py`.

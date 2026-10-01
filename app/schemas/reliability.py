@@ -77,6 +77,8 @@ class AnswerClaim(Contract):
     conditions: list[str] = Field(default_factory=list)
     depends_on: list[str] = Field(default_factory=list)
     question_part: str = Field(default="", description="이 주장이 답하는 요청의 사용자 질문 연속 원문. 표시 순서에만 사용.")
+    presentation_role: Literal["conclusion", "explanation", "procedure", "checklist"] = Field(
+        default="explanation", description="공개 승인 이후의 배치 용도. 근거·판정·승인 여부에는 영향을 주지 않음.")
 
 
 class AnswerDraft(Contract):

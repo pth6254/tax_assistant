@@ -8,6 +8,14 @@ const CHECKS = {
 const PROGRESS = { planning: '질문의 요청과 쟁점을 확인하고 있습니다…', retrieving: '쟁점별 근거를 찾고 있습니다…',
   generating: '확보한 근거로 답변을 작성하고 있습니다…', checking: '답변의 근거와 조건을 대조하고 있습니다…' }
 
+const STATES = { checked: '근거 대조', limited: '일부 확인 필요', withheld: '답변 보류',
+  not_assessed: '검토 범위 미확인' }
+
+function issueLabel(issue) {
+  const subject = /^[A-Z]$/.test(issue.subject || '') ? `${issue.subject}회사` : issue.subject
+  return [subject, issue.law === 'ALL' ? '확인 사항' : issue.law].filter(Boolean).join(' · ')
+}
+
 function FormulaDetails({ calculation }) {
   if (!calculation?.execution) return null
   const { plan, execution } = calculation
@@ -32,21 +40,30 @@ export default function VerificationPanel({ verification, loading, progress, onC
   if (!verification) return null
   const { status, checks = {}, citations = [], note } = verification
   const title = status === 'withheld' ? '답변 보류 사유' : '근거 및 확인 사항'
+  const checkRows = [
+    ['인용 근거', CHECKS.citation[checks.citation] || '인용 검사 결과가 없습니다.'],
+    ...(checks.calculation && checks.calculation !== 'not_applicable' ?
+      [['계산 확인', CHECKS.calculation[checks.calculation] || '계산 검사 결과가 없습니다.']] : []),
+    ['법령 적용 범위', checks.legal_application === 'checked' ?
+      '모델이 근거와 적용 조건을 대조했습니다. 법적 정확성 보증은 아닙니다.' :
+      '사건의 적용 시점과 법적 해석은 확정하지 않았습니다.'],
+  ]
   return <details className={'verification-panel ' + (status === 'withheld' ? 'withheld' : '')}>
-    <summary>{title}</summary>
+    <summary><span>{title}</span>
+      {citations.length > 0 && <span className="verification-meta">근거 {citations.length}건</span>}
+      <span className="verification-state">{STATES[status] || '검토 정보'}</span>
+    </summary>
     <div className="verification-content">
-      <p>{note}</p>
-      <ul>
-        <li>{CHECKS.citation[checks.citation] || '인용 검사 결과가 없습니다.'}</li>
-        <li>{CHECKS.calculation[checks.calculation] || '계산 검사 결과가 없습니다.'}</li>
-        <li>{checks.legal_application === 'checked' ? '모델이 근거와 적용 조건을 대조했습니다. 법적 정확성 보증은 아닙니다.' : '사건의 적용 시점과 법적 해석은 확정하지 않았습니다.'}</li>
-      </ul>
-      {verification.plan?.issues?.length > 0 && <ul aria-label="쟁점별 확인 상태">
+      {note && <p>{note}</p>}
+      <dl className="verification-checks">{checkRows.map(([label, text]) =>
+        <div key={label} className="verification-check"><dt>{label}</dt><dd>{text}</dd></div>)}
+      </dl>
+      {verification.plan?.issues?.length > 0 && <ul className="verification-issues" aria-label="쟁점별 확인 상태">
         {verification.plan.issues.map(issue => <li key={issue.id}>
-          {issue.subject} {issue.law === 'ALL' ? '확인 사항' : issue.law}: {' '}
+          <span>{issueLabel(issue)}</span><span>
           {verification.judge?.missing_issue_ids?.includes(issue.id) ? '설명 보완 필요' :
             verification.claims?.some(c => c.issue_id === issue.id && c.released) ? '근거가 연결된 설명 제공' :
-              verification.coverage?.[issue.id]?.calculation ? '계산 결과 제공' : '추가 확인 필요'}
+              verification.coverage?.[issue.id]?.calculation ? '계산 결과 제공' : '추가 확인 필요'}</span>
         </li>)}
       </ul>}
       {verification.plan?.missing_inputs?.length > 0 && <p>추가 확인: {verification.plan.missing_inputs.join(', ')}</p>}
@@ -58,7 +75,7 @@ export default function VerificationPanel({ verification, loading, progress, onC
         {citations.map((source, index) => source.text ? <details key={source.evidence_id || index}>
           <summary>{source.origin === 'user_document' ? '[사용자 문서]' : `[${source.label}]`} {source.law_name || source.source} {source.reference} — 사용한 원문</summary>
           <p>{source.effective_from ? `자료 시행일: ${source.effective_from}` : '자료 시행일 미확인'} {source.location}</p>
-          <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{source.text}</pre>
+          <pre tabIndex={0} aria-label="답변에 사용한 원문" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{source.text}</pre>
         </details> : <button key={`${source.law_name}-${source.reference}-${index}`}
           type="button" onClick={() => onCitationClick?.(source.law_name, source.reference)}>
           [{source.label}] {source.law_name} {source.reference} 원문 열기

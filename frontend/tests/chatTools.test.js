@@ -174,3 +174,23 @@ test('verification panel displays the used snapshot and escapes uploaded markup'
     assert.match(progress, /쟁점별 근거/)
   } finally { await server.close() }
 })
+
+test('scope panel only shows applicable calculation checks and retains failure reasons', async () => {
+  const { createServer } = await import('vite')
+  const { createElement } = await import('react')
+  const { renderToStaticMarkup } = await import('react-dom/server')
+  const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom' })
+  try {
+    const { default: Panel } = await server.ssrLoadModule('/src/components/Chat/VerificationPanel.jsx')
+    const display = verification => renderToStaticMarkup(createElement(Panel, { verification }))
+    const reference = display({ status: 'limited', checks: { calculation: 'not_applicable' },
+      citations: [{ label: '법률', law_name: '시험법', reference: '제1조', text: '원문' }] })
+    assert.match(reference, /근거 1건/)
+    assert.match(reference, /일부 확인 필요/)
+    assert.doesNotMatch(reference, /계산기를 사용하지 않았습니다|계산 확인/)
+    const failure = display({ status: 'withheld', checks: { calculation: 'failed' }, note: '입력 금액 대조 실패' })
+    assert.match(failure, /답변 보류 사유/)
+    assert.match(failure, /입력 금액 대조 실패/)
+    assert.match(failure, /최종 금액이 계산기 결과와 다릅니다/)
+  } finally { await server.close() }
+})

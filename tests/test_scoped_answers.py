@@ -131,6 +131,28 @@ async def test_financial_income_explanation_still_goes_to_retrieval():
 
 
 @pytest.mark.asyncio
+async def test_server_records_shared_source_scope_before_checks_and_judge(monkeypatch):
+    ctx = two_issues()
+    ctx.plan.dates = ['2025년']
+    value = wire_claim('I1')
+    value['claims'][0].update(kind='source_summary', conditions=['해당 신고기한은 별도 확인이 필요합니다.'])
+    monkeypatch.setattr(claims, 'call_llm_structured', AsyncMock(return_value=value))
+    async def judge(query, draft, context):
+        assert '확보한 원문 기준의 설명입니다.' in draft.claims[0].conditions
+        assert '질문의 거래·사건 연도에 적용되는 법령 버전은 미확정입니다.' in draft.claims[0].conditions
+        return supported(draft), None
+    monkeypatch.setattr(claims, 'judge_claims', judge)
+    draft, checks, report, judge_error, generation_error = await claims.generate_issue(
+        '2025년 질문', ctx.plan.issues[0], ctx)
+    assert checks[draft.claims[0].id] == []
+    assert generation_error is judge_error is None
+    assert '해당 신고기한은 별도 확인이 필요합니다.' in draft.claims[0].conditions
+    answer = claims.render_structured_answer(draft.claims, ctx)
+    assert '해당 신고기한은 별도 확인이 필요합니다.' in answer
+    assert answer.count('**적용 시점:**') == 1
+
+
+@pytest.mark.asyncio
 async def test_one_judge_citation_error_does_not_discard_valid_claim(monkeypatch):
     from tests.test_reliability_workflow import context, draft
     ctx = context()

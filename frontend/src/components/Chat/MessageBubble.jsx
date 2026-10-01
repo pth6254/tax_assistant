@@ -6,6 +6,7 @@ import VerificationPanel from './VerificationPanel'
 import Notice from '../ui/Notice'
 import Icon from '../ui/Icon'
 import { isPendingTool } from './toolState'
+import { decorateAnswerSections } from './answerSections'
 import './answerPresentation.css'
 const CITATION_RE = /\[(법률|시행령|시행규칙)\]\s*([^\n\[]+?)\s*(제\s*\d+\s*조(?:\s*의\s*\d+)?(?:\s*제\s*\d+\s*항)?(?:\s*제\s*\d+\s*호(?:\s*의\s*\d+)?)?(?:\s*[가-힣]\s*목)?)/g
 export default function MessageBubble({ message, onCitationClick, onOpenCalculator, onRetry, onEdit, onRegenerate, onSelectVersion }) {
@@ -36,6 +37,7 @@ export default function MessageBubble({ message, onCitationClick, onOpenCalculat
       ALLOW_DATA_ATTR: false,
       FORBID_TAGS: ['img', 'video', 'audio', 'iframe', 'form', 'input', 'button', 'textarea', 'select', 'style'],
     })
+    decorateAnswerSections(body.current)
     // Keep the table semantic and keyboard-scrollable without widening the page.
     for (const table of body.current.querySelectorAll('table')) {
       const scroll = document.createElement('div')

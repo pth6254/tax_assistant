@@ -1,10 +1,11 @@
 .assistant-message .markdown-bubble {
-  line-height: 1.8;
+  line-height: 1.85;
   word-break: normal;
+  overflow-wrap: anywhere;
 }
 .assistant-message .markdown-bubble > :first-child { margin-top: 0; }
 .assistant-message .markdown-bubble p { margin: 0 0 1em; }
-.assistant-message .markdown-bubble h2 { font-size: 19px; margin: 1.8em 0 .7em; }
+.assistant-message .markdown-bubble h2 { font-size: 19px; margin: 2em 0 .8em; padding-top: .85em; border-top: 1px solid var(--border); }
 .assistant-message .markdown-bubble h3 { font-size: 17px; margin: 1.6em 0 .65em; }
 .assistant-message .markdown-bubble strong { font-weight: 650; }
 .assistant-message .markdown-bubble li { padding-left: .15em; margin-bottom: .5em; }
@@ -31,7 +32,47 @@
 .assistant-message .markdown-bubble th,
 .assistant-message .markdown-bubble td { vertical-align: top; padding: 12px; }
 .assistant-message .markdown-bubble th { font-weight: 600; }
+.assistant-message .markdown-bubble th { background: var(--surface2); text-align: left; }
+.assistant-message .markdown-bubble td:nth-child(2) { font-variant-numeric: tabular-nums; }
+.assistant-message .markdown-bubble .citation-link { font-size: inherit; text-underline-offset: 3px; }
+.assistant-message .markdown-bubble .answer-section { margin: 1.65em 0; }
+.assistant-message .markdown-bubble .answer-section-title { margin: 0 0 .85em; padding: 0; border: 0; }
+.assistant-message .markdown-bubble .answer-section > :last-child { margin-bottom: 0; }
+.assistant-message .markdown-bubble .answer-conclusion {
+  padding: 20px 22px;
+  border: 1px solid #d4def7;
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: #f6f8fe;
+}
+.assistant-message .markdown-bubble .answer-conclusion .answer-section-title { font-size: 14px; color: var(--accent2); letter-spacing: 0; }
+.assistant-message .markdown-bubble .answer-limits { padding: 16px 18px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+.assistant-message .markdown-bubble .answer-limits .answer-section-title { font-size: 16px; }
+.assistant-message .markdown-bubble .answer-sources { padding-top: 16px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-muted); }
+.assistant-message .markdown-bubble .answer-sources .answer-section-title { font-size: 13px; }
+.assistant-message .markdown-bubble .answer-sources li { margin-bottom: .35em; }
 .answer-tools { margin: 18px 0 10px; font-size: 13px; color: var(--text-muted); }
 .answer-tools > summary { cursor: pointer; padding: 7px 0; width: fit-content; }
 .answer-tools > summary:hover { color: var(--text); }
 .answer-tools .tool-card { margin-top: 8px; color: var(--text); }
+.verification-panel > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; list-style: none; }
+.verification-panel > summary::-webkit-details-marker { display: none; }
+.verification-panel > summary::before { content: '›'; font-size: 18px; line-height: 1; }
+.verification-panel[open] > summary::before { transform: rotate(90deg); }
+.verification-meta { font-size: 12px; font-weight: 400; color: var(--text-muted); }
+.verification-state { font-size: 11px; font-weight: 500; padding: 2px 7px; border-radius: 4px; background: var(--surface2); color: var(--text-muted); }
+.verification-panel.withheld .verification-state { color: var(--danger); background: #fff0ee; }
+.verification-panel .verification-checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr)); gap: 10px; margin: 14px 0; }
+.verification-check { padding: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+.verification-check dt { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 5px; }
+.verification-check dd { margin: 0; font-size: 12px; line-height: 1.75; color: var(--text-muted); }
+.verification-panel .verification-issues { list-style: none; padding: 0; margin: 14px 0; }
+.verification-issues li { display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.verification-issues li span:last-child { color: var(--text-muted); }
+.verification-panel .verification-sources > details { border: 1px solid var(--border); padding: 10px 12px; border-radius: 6px; background: var(--surface); margin: 8px 0; }
+.verification-sources pre { max-height: 360px; overflow-y: auto; font: inherit; font-size: 12px; padding: 10px; background: var(--bg); border-radius: 4px; }
+@media (max-width: 600px) {
+  .assistant-message .markdown-bubble { font-size: 15px; }
+  .assistant-message .markdown-bubble h2 { font-size: 18px; }
+  .assistant-message .markdown-bubble .answer-conclusion { padding: 16px; }
+}

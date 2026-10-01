@@ -22,18 +22,18 @@ legal은 적용 법령이 확인된 법적 설명, source_summary는 확보한 �
 document는 사용자 문서의 설명, fact는 질문의 연속 원문 인용, guidance는 확인할 자료 및 확인 목적입니다.
 legal/source_summary/guidance는 공식 근거를 연결하세요.
 질문에 과거 연도만 있고 그 시점의 법령 버전이 확인되지 않았다면 legal로 당시 적용 결론을 쓰지 마세요.
-source_summary로 확보한 원문이 말하는 기준을 설명하세요. 각 주장의 conditions에 `확보한 원문 기준`이라는
-출처 범위와 해당 연도 적용 여부가 미확정임을 기록하세요. 공통 출처·연도 안내는 화면에서 한 번 표시하므로
-text마다 `확보한 원문 기준으로`나 같은 연도 유보 문장을 반복하지 마세요.
+source_summary로 확보한 원문이 말하는 기준을 설명하세요. 공통 출처 범위와 사건 연도 적용 미확정 안내는
+서버가 conditions에 기록하고 화면에서 한 번 표시합니다. 모델은 text와 conditions에 공통 안내를 다시 쓰지 마세요.
+`확보한 원문 기준으로`나 같은 연도 유보 문장을 반복하지 말고, 이 기준의 요건·예외와 설명 범위를 지키세요.
 citations에는 제공된 evidence_id와 그 본문의 정확한 연속 발췌 quote를 넣으세요. ID를 줄이거나 QUESTION 같은 ID를 만들지 마세요.
 fact의 text는 사용자 원문의 정확한 연속 발췌로 쓰고 citations는 빈 배열로 두세요.
 문서 자료는 주장/진술이며 거래 실재의 증명이 아닙니다. 업로드를 공식 근거로 취급하지 마세요.
 각 주장의 text에는 그 판단에 필요한 사실관계·요건·예외를 포함하세요.
-conditions에는 공통 출처·연도 범위와 text에 포함되지 않은 추가 제한만 기록하세요.
+conditions에는 text에 포함되지 않은 개별 판단의 추가 제한만 기록하세요.
 본문에 이미 설명한 사실관계·요건을 conditions에 말만 바꿔 다시 나열하지 마세요.
 공통 출처·연도 안내와 달리, 상여처분의 귀속 요건 등 개별 판단의 조건은 text에서 생략하지 마세요.
 guidance는 확인할 자료와 목적을 바로 설명하고 `확인할 자료:` 같은 공통 머리말을 반복하지 마세요.
-공통적인 사건 연도 법령 확인 안내만을 위한 guidance는 만들지 마세요. 그 내용은 conditions에 기록하세요.
+공통적인 사건 연도 법령 확인 안내만을 위한 guidance는 만들지 마세요. 그 안내는 서버가 기록합니다.
 특정 세목의 미확인 규정이나 원천징수 등 별도 검토 범위는 guidance에서 구체적으로 설명하세요.
 legal/source_summary의 text에는 근거가 지지하는 설명만 쓰세요. 다른 쟁점이나 재검색에서 근거를 확보할 수 있으므로
 현재 호출의 자료만 보고 답변 전체에 '근거가 없다', '한도를 확인할 수 없다'는 안내를 섞지 마세요.
@@ -41,6 +41,14 @@ legal/source_summary의 text에는 근거가 지지하는 설명만 쓰세요. �
 다른 주장과 같은 결론·조건을 말만 바꿔 반복하지 마세요. 같은 항목의 서로 다른 법적 기준은 보존하세요.
 답변은 사용자에게 설명하는 자연스러운 존댓말로 작성하세요. 첫 주장에서 질문의 핵심에 직접 답하고,
 같은 결론을 요약·상세·마무리에 되풀이하지 마세요. 사용자 질문을 길게 다시 소개하지 마세요.
+presentation_role은 표시 목적입니다. 쟁점당 최대 한 개의 conclusion에는 질문에 대한 직접적인 핵심 판단과
+그 판단을 제한하는 조건을 함께 쓰세요. 조건을 빼고 단정한 요약을 만들지 마세요. 나머지 explanation에는
+판단 이유·법적 요건·예외·별개의 세무 효과를 설명하고 conclusion을 다시 풀어 쓰지 마세요.
+업무 순서와 신고·처리 단계는 procedure, 준비 자료와 확인 목적은 checklist로 구분하세요.
+질문이 절차나 서류만 요청하면 해당 역할부터 답하고, 별도 conclusion을 만들 필요가 없습니다.
+확인된 판단이 없으면 conclusion을 만들지 마세요. fact와 guidance를 세무 결론처럼 표시하지 마세요.
+긴 검토의 explanation은 `손금 인정 기준: 설명`, `소득처분: 설명`처럼 그 문단의 실제 주제를 짧게
+표시할 수 있습니다. 세목·업무에 맞는 제목을 쓰고 `상세 설명:` 같은 내용 없는 머리말은 쓰지 마세요.
 한 문단에는 하나의 핵심을 담고 1~3문장으로 작성하세요. 판단과 이유, 예외 설명이 길면 빈 줄로 나누세요.
 핵심 판단을 강조할 때는 짧은 구절에만 Markdown 굵게 표시를 쓰고, 조건부 판단의 조건까지 함께 표시하세요.
 절차는 순서 목록, 준비 자료는 목적별 목록으로 작성할 수 있습니다. 단순 설명까지 목록으로 만들지는 마세요.
@@ -421,6 +429,34 @@ def render_structured_answer(claims, context, query=""):
                     return name, heading.group(2).strip()
         return None
 
+    unspecified_scope = "거래 시점이 제시되지 않아, 확보한 법령 자료 기준의 일반적·조건부 설명입니다. 실제 적용 시점은 확인이 필요합니다."
+    source_scope = any(c.kind == "source_summary" or unspecified_scope in c.conditions for c in claims)
+    historical_scope = bool(context.plan.dates and source_scope)
+
+    def common_scope_condition(condition):
+        # Only standalone, generic notices have an equivalent shared footer.
+        # A named tax, factual requirement, or rule containing '원문' stays local.
+        if not source_scope:
+            return False
+        if condition == unspecified_scope:
+            return True
+        year = r"(?:\d{4}년(?:도)?(?:\s*귀속)?|사건\s*연도(?:의)?|해당\s*연도(?:의)?|질문의\s*거래·사건\s*연도에)"
+        scope = r"(?:확보한|제공된|인용한)\s*(?:법령\s*)?원문\s*기준(?:의\s*설명)?(?:입니다)?"
+        temporal = (rf"(?:{year}|거래(?:·사건)?\s*(?:시점|연도)(?:에|의)?|실제\s*거래\s*시점의)\s*(?:당시\s*)?"
+                    r"(?:적용(?:되는)?\s*(?:법령\s*)?(?:버전|여부)?|이\s*(?:기준|규정)이\s*적용되는지)(?:은|는|가|이)?\s*"
+                    r"(?:미확정|미확인|별도\s*확인(?:해야\s*|이\s*)?(?:필요)?|확인(?:이)?\s*필요)"
+                    r"(?:입니다|합니다|하다)?")
+        undated = r"(?:거래·사건의\s*적용\s*시점이\s*제시되지\s*않아\s*)?"
+        return re.fullmatch(rf"\s*(?:{scope}(?:이며\s*,?\s*{undated}{temporal})?|{temporal})[.!]?\s*", condition) is not None
+
+    def local_conditions(claim):
+        return list(dict.fromkeys(value for value in claim.conditions
+                                  if value and value not in claim.text and not common_scope_condition(value)))
+
+    def display_text(claim):
+        conditions = local_conditions(claim)
+        return claim.text + ("\n\n**판단 조건:** " + "; ".join(conditions) if conditions else "")
+
     def prose(text, *, allow_heading=False):
         heading = re.match(r"^([^:：.!?*#\n]{2,40})[:：]\s*(.+)", text, re.S)
         if heading:
@@ -444,43 +480,89 @@ def render_structured_answer(claims, context, query=""):
             previous_title = title
         return blocks
 
-    sections, practical, unresolved = [], [], []
+    sections, practical, pending_checks, unresolved = [], [], [], []
+    rows_by_issue = {issue.id: order_claims_for_display(
+        [claim for claim in claims if claim.issue_id == issue.id], query) for issue in context.plan.issues}
+    # A conclusion is already a checked claim. Never synthesize a new summary,
+    # promote facts/guidance, or move a dependent conclusion before its premise.
+    lead = []
     for issue in context.plan.issues:
-        rows = order_claims_for_display([claim for claim in claims if claim.issue_id == issue.id], query)
+        candidate = next((claim for claim in rows_by_issue[issue.id]
+                          if claim.presentation_role == "conclusion"
+                          and claim.kind in {"legal", "source_summary", "document"}
+                          and not claim.depends_on), None)
+        if candidate:
+            lead.append((issue, candidate))
+    lead_ids = {claim.id for _, claim in lead}
+    substantive_count = sum(c.kind != "guidance" for c in claims)
+    professional_layout = bool(lead and (len(context.plan.issues) > 1 or substantive_count >= 3))
+    if lead:
+        lead_text = "\n\n".join(
+            (f"**{label(issue)}**\n\n" if len(lead) > 1 else "") + prose(display_text(claim))
+            for issue, claim in lead)
+        sections.append(("## 핵심 판단\n\n" if professional_layout else "") + lead_text)
+    for issue in context.plan.issues:
+        rows = rows_by_issue[issue.id]
         if not rows:
             unresolved.append(issue)
             continue
-        substantive = [claim for claim in rows if claim.kind != "guidance"]
+        substantive = [claim for claim in rows if claim.kind != "guidance" and claim.id not in lead_ids]
         advice = [claim for claim in rows if claim.kind == "guidance"]
         item_rows = [(claim, item_claim(claim)) for claim in substantive if item_claim(claim)]
         grouped = {}
-        for _, (name, explanation) in item_rows:
-            grouped.setdefault(name, []).append(explanation)
+        for claim, (name, explanation) in item_rows:
+            conditions = local_conditions(claim)
+            grouped.setdefault(name, []).append(explanation + (
+                " **판단 조건:** " + "; ".join(conditions) if conditions else ""))
         item_positions = [index for index, claim in enumerate(substantive) if item_claim(claim)]
         use_table = (2 <= len(grouped) <= 8
                      and all(len(" ".join(parts)) <= 300 and all("\n" not in part for part in parts)
                              for parts in grouped.values())
                      and item_positions == list(range(item_positions[0], item_positions[-1] + 1)))
         body = []
+
+        def render_prose(rows):
+            # A procedural role adds navigation, not a new instruction or fact.
+            groups = []
+            for claim in rows:
+                role = claim.presentation_role if claim.presentation_role in {"procedure", "checklist"} else "explanation"
+                if not groups or groups[-1][0] != role:
+                    groups.append((role, []))
+                groups[-1][1].append(display_text(claim))
+            blocks, previous_role = [], None
+            for role, texts in groups:
+                rendered = [prose(text, allow_heading=True) for text in grouped_prose(texts)]
+                # Prefer an already supported, specific topic over stacking two
+                # headings at the same level with no explanation between them.
+                if rendered and not re.match(r"#{2,3}\s", rendered[0]):
+                    if role in {"procedure", "checklist"}:
+                        blocks.append("### " + {"procedure": "신고·처리 절차", "checklist": "준비 자료"}[role])
+                    elif previous_role in {"procedure", "checklist"}:
+                        blocks.append("### 판단 기준과 예외")
+                blocks.extend(rendered)
+                previous_role = role
+            return blocks
+
         if use_table:
             before = substantive[:item_positions[0]]
             after = substantive[item_positions[-1] + 1:]
-            body.extend(prose(text, allow_heading=True) for text in grouped_prose(c.text for c in before))
+            body.extend(render_prose(before))
             body.append("| 항목 | 금액 | 판단 |\n| --- | ---: | --- |\n" + "\n".join(
                 "| " + name.replace("|", "\\|") + " | " + items[name] + " | " +
                 " ".join(dict.fromkeys(explanations)).replace("|", "\\|").replace("\n", " ") + " |"
                 for name, explanations in grouped.items()))
-            body.extend(prose(text, allow_heading=True) for text in grouped_prose(c.text for c in after))
+            body.extend(render_prose(after))
         else:
-            body.extend(prose(text, allow_heading=True) for text in grouped_prose(c.text for c in substantive))
+            body.extend(render_prose(substantive))
         if body:
             title = f"## {label(issue)}\n\n" if len(context.plan.issues) > 1 else (
-                "## 항목별 검토\n\n" if use_table and not before else "")
+                "## 항목별 검토\n\n" if use_table and not before else (
+                    "## 판단 근거\n\n" if professional_layout else ""))
             sections.append(title + "\n\n".join(body))
-        practical.extend(grouped_prose(claim.text for claim in advice))
+        practical.extend(grouped_prose(display_text(claim) for claim in advice))
         missing_items = [name for name in items if not any(name in claim.text for claim in rows)]
         if missing_items:
-            practical.append(f"{label(issue)}에서 별도 판단을 확인하지 못한 항목: " + ", ".join(missing_items))
+            pending_checks.append(f"{label(issue)}에서 별도 판단을 확인하지 못한 항목: " + ", ".join(missing_items))
 
     used = {citation.evidence_id for claim in claims for citation in claim.citations}
     sources = [record for record in context.records if record.id in used and is_official(record)]
@@ -489,30 +571,17 @@ def render_structured_answer(claims, context, query=""):
         refs = references.setdefault(record.law_name, [])
         if record.reference not in refs:
             refs.append(record.reference)
-    source_scope = any(c.kind == "source_summary" for c in claims)
-    historical_scope = bool(context.plan.dates and source_scope)
-    def common_historical_condition(condition):
-        # Only generic historical-scope notices are covered by the shared footer.
-        # Preserve named laws, taxes, deadlines, exceptions and factual conditions.
-        return source_scope and re.fullmatch(
-            r"\s*(?:\d{4}년(?:도)?(?:\s*귀속)?|사건\s*연도(?:의)?|해당\s*연도(?:의)?|"
-            r"질문의\s*거래·사건\s*연도에)\s*"
-            r"(?:당시\s*)?적용(?:되는)?\s*(?:법령\s*)?(?:버전|여부)?(?:은|는|가|이)?\s*"
-            r"(?:미확정|미확인|별도\s*확인(?:이)?\s*필요|확인(?:이)?\s*필요)"
-            r"(?:입니다|합니다|하다)?[.!]?\s*", condition
-        ) is not None
-    conditions = list(dict.fromkeys(condition for claim in claims for condition in claim.conditions
-                                    if condition and condition not in claim.text
-                                    and not common_historical_condition(condition)
-                                    and not re.search(r"(?:확보한|제공된|인용한|인용 법령|원문|시행본|거래 시점|적용 시점)", condition)))
-    practical.extend(conditions)
     if unresolved:
-        practical.append(", ".join(label(issue) for issue in unresolved) +
+        pending_checks.append(", ".join(label(issue) for issue in unresolved) +
                          "에 필요한 근거 또는 적용 조건을 확인하지 못해 해당 판단을 보류합니다.")
-    practical.extend(value for value in context.plan.missing_inputs
+    pending_checks.extend(value for value in context.plan.missing_inputs
                      if not (source_scope and value == "거래·사건의 적용 시점"))
+    if not professional_layout:
+        practical.extend(pending_checks)
+        pending_checks = []
     if practical:
-        heading = "## 추가로 확인할 사항" if len(context.plan.issues) > 1 or len(practical) > 2 else "**추가로 확인할 사항**"
+        heading = ("## 실무 확인 사항" if professional_layout else (
+            "## 추가로 확인할 사항" if len(context.plan.issues) > 1 or len(practical) > 2 else "**추가로 확인할 사항**"))
         blocks = []
         for value in dict.fromkeys(practical):
             # Keep an existing procedure/checklist intact instead of adding
@@ -522,13 +591,21 @@ def render_structured_answer(claims, context, query=""):
             else:
                 blocks.append("- " + prose(value).replace("\n", "\n  "))
         sections.append(heading + "\n\n" + "\n\n".join(blocks))
+    if pending_checks:
+        sections.append("## 추가 확인이 필요한 부분\n\n" + "\n\n".join(
+            "- " + prose(value).replace("\n", "\n  ") for value in dict.fromkeys(pending_checks)))
     if references:
+        def source_link(law, reference):
+            category = next(r.category for r in sources if r.law_name == law and r.reference == reference)
+            # Official DB types differ from the Markdown citation/viewer labels.
+            category = {"대통령령": "시행령", "총리령": "시행규칙", "부령": "시행규칙"}.get(category, category)
+            return f"[{category}] {law} {reference}"
         sections.append("**확인한 근거**\n\n" + "\n".join(
-            f"- {law}: {', '.join(refs)}" for law, refs in references.items()))
+            "- " + " · ".join(source_link(law, ref) for ref in refs) for law, refs in references.items()))
     if historical_scope:
         sections.append("> **적용 시점:** 질문의 사건 연도에 적용되는 법령 버전과 부칙은 아직 확인되지 않았습니다. "
                         "실제 거래일과 당시 시행본을 대조해야 합니다.")
-    elif any(claim.kind == "source_summary" for claim in claims):
+    elif source_scope:
         sections.append("> **법령 적용:** 위 설명은 확보한 법령 원문 기준입니다. 실제 거래 시점의 시행본과 적용 요건은 별도 확인해야 합니다.")
     return "\n\n".join(sections) if sections else render_claims(claims, context)
 
@@ -579,7 +656,7 @@ SCOPED_GENERATION_PROMPT = GENERATION_PROMPT + """
 원 질문은 사실관계 참고용이며 이 호출에서 모든 질문에 답할 필요는 없습니다.
 최대 5개 주장으로 핵심 법적 효과와 조건 또는 요청한 자료·확인 목적을 설명하세요. 질문 사실을 반복하는 fact는 생략하세요.
 독립적으로 읽을 수 있는 조건부 주장으로 작성하고 단순 설명 순서는 depends_on으로 연결하지 마세요.
-같은 적용연도 유보 문장을 모든 주장에 반복하지 말고 conditions에 간결하게 넣으세요.
+공통 출처·적용연도 유보는 서버가 기록합니다. conditions에는 개별 조건과 별도 미확인 범위만 넣으세요.
 citations.evidence_id에는 E1 같은 제공된 짧은 ID, quote에는 E1:P2 같은 span_id를 선택하세요.
 서버가 선택한 span_id의 정확한 원문을 연결합니다. quote에 원문을 복사하지 마세요.
 조문의 앞뒤 요건·예외까지 함께 읽고 핵심 근거가 부족한 결론은 생략하세요.
@@ -612,7 +689,12 @@ async def generate_issue(query, issue, context, on_progress=None, feedback=None)
         for claim in draft.claims:
             claim.id = f"{issue.id}:{claim.id}"
             claim.depends_on = [f"{issue.id}:{key}" for key in claim.depends_on]
-            if claim.kind in {"legal", "source_summary", "guidance"} and not context.plan.dates:
+            if claim.kind == "source_summary":
+                scope = ["확보한 원문 기준의 설명입니다."]
+                if context.plan.dates:
+                    scope.append("질문의 거래·사건 연도에 적용되는 법령 버전은 미확정입니다.")
+                claim.conditions = list(dict.fromkeys([*scope, *claim.conditions]))
+            elif claim.kind in {"legal", "guidance"} and not context.plan.dates:
                 scope = "거래 시점이 제시되지 않아, 확보한 법령 자료 기준의 일반적·조건부 설명입니다. 실제 적용 시점은 확인이 필요합니다."
                 claim.conditions = list(dict.fromkeys([scope, *claim.conditions]))
         checks = check_claims(draft, scoped, query)
@@ -742,7 +824,9 @@ async def generate_verified_answer(query, context, *, repair=None, on_progress=N
     complete = (len(answered) == len(context.plan.issues) and not rejected and not formula_reports
                 and not (judge and judge.missing_issue_ids) and not provisional)
     report.update(status="checked" if complete else "limited" if answered else "withheld",
+                  presentation_version="tax-answer-20261001-v1",
                   claims=[{"id": c.id, "issue_id": c.issue_id, "released": c in released,
+                           "presentation_role": c.presentation_role,
                            "errors": rejected.get(c.id, []), "evidence_ids": [e.evidence_id for e in c.citations]}
                           for c in draft.claims],
                   judge=judge.model_dump() if judge else None, judge_error=judge_error,
