@@ -167,3 +167,57 @@ async def test_one_judge_citation_error_does_not_discard_valid_claim(monkeypatch
     released, rejected = claims.release_claims(value, claims.check_claims(value, ctx, '질문'), report, ctx.plan, mode='enforce')
     assert [c.id for c in released] == ['C1']
     assert error == 'invalid_claim_judgment' and 'C2' in rejected
+
+
+@pytest.mark.asyncio
+async def test_retry_is_told_which_reference_failed_and_how_to_fix_it(monkeypatch):
+    ctx = two_issues()
+    seen = []
+
+    async def generate(messages, schema, **kwargs):
+        data = json.loads(messages[1]['content'])
+        key = data['plan']['issues'][0]['id']
+        if key == 'I2':
+            return wire_claim(key, '두 번째 요건을 충족하면 적용합니다.')
+        seen.append(data['previous_failures'])
+        if data['previous_failures'] is None:
+            return wire_claim(key, '제3조에 따라 조건을 충족하면 적용합니다.')
+        return wire_claim(key, '조건을 충족하면 적용합니다.')
+
+    async def judge(query, draft, context):
+        return supported(draft), None
+
+    monkeypatch.setattr(claims, 'call_llm_structured', generate)
+    monkeypatch.setattr(claims, 'judge_claims', judge)
+    answer, report = await claims.generate_verified_answer('질문', ctx, repair=AsyncMock(return_value=ctx))
+    assert len(seen) == 2
+    failed = seen[1]['failed_claims']
+    assert [row['text'] for row in failed] == ['제3조에 따라 조건을 충족하면 적용합니다.']
+    assert failed[0]['cited'] == ['법인세법 제1조']
+    problem = next(p for p in failed[0]['problems'] if p['code'] == 'prose_reference_mismatch')
+    assert problem['category'] == 'repairable' and problem['detail'] == ['제3조'] and problem['fix']
+    assert 'checks' not in seen[1]  # Bare codes keyed by IDs the model never saw are gone.
+    assert report['metrics']['issues_answered'] == 2
+    assert '조건을 충족하면 적용합니다.' in answer and '제3조' not in answer
+
+
+def test_integrity_failures_are_not_offered_as_rewording_fixes():
+    ctx = two_issues()
+    value = AnswerDraft.model_validate(wire_claim('I1', '납부 세액은 500만원입니다.'))
+    value.claims[0].citations[0].evidence_id = ctx.records[0].id
+    value.claims[0].citations[0].quote = '조건을 충족한 경우에만 적용한다.'
+    checked = claims.check_claims(value, ctx, '질문')
+    _, rejected = claims.release_claims(value, checked, supported(value), ctx.plan, mode='enforce')
+    problems = claims.failure_feedback(value, rejected, supported(value), ctx, '질문')[0]['problems']
+    assert {'code': 'generated_tax_amount_without_calculator', 'category': 'integrity'} in problems
+
+
+def test_every_withholding_code_has_one_retry_category():
+    import inspect, re
+    source_text = inspect.getsource(claims)
+    emitted = set(re.findall(r'errors\.append\("([a-z_]+)"\)', source_text))
+    emitted |= set(re.findall(r'(?:reasons\.append|rejected\[claim\.id\] =)\(?\[?"([a-z_]+)"', source_text))
+    emitted.add('prose_reference_mismatch')
+    groups = (claims.INTEGRITY_ERRORS, claims.REPAIRABLE_ERRORS, claims.EVIDENCE_ERRORS)
+    assert emitted and all(sum(code in group for group in groups) == 1 for code in emitted), emitted
+    assert set(claims.FIX_HINTS) <= set().union(*groups)

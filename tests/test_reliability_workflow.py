@@ -19,7 +19,7 @@ def source(**changes):
     row = HybridSearchResult(content=text, original_text=text, source='official fixture',
                             law_name='시험법', category='법률', source_type='law', similarity_score=1,
                             priority=0, article_no='제1조', origin_kind='official_law', source_id='17',
-                            effective_date='2020-01-01', content_hash=digest(text))
+                            effective_date='2026-01-01', content_hash=digest(text))
     return replace(row, **changes)
 
 
@@ -419,6 +419,21 @@ def test_prose_citation_cannot_bypass_checks_by_omitting_brackets():
     ctx = context()
     assert 'prose_reference_mismatch' in claims.check_claims(draft(ctx, '시험법 제99조에 따라 적용합니다.'), ctx, '질문')['C1']
     assert not claims.check_claims(draft(ctx, '시험법 제1조 제1항에 따라 조건 충족 시 적용합니다.'), ctx, '질문')['C1']
+
+
+def test_cross_reference_made_by_cited_provision_is_not_a_mismatch():
+    text = '제1조\n① 제2조에 따라 원천징수된 소득은 조건을 충족한 경우에만 적용한다.'
+    ctx = context_from_records([record_from_result(source(content=text, original_text=text,
+                                                         content_hash=digest(text)))],
+                               plan=QuestionPlan(issues=[Issue(id='I1', request_quote='질문', question='질문')]))
+    cited = AnswerDraft(claims=[AnswerClaim(
+        id='C1', issue_id='I1', kind='legal', text='제2조에 따라 원천징수된 경우 적용합니다.',
+        citations=[ClaimCitation(evidence_id=ctx.records[0].id, quote='조건을 충족한 경우에만 적용한다.')])])
+    assert not claims.check_claims(cited, ctx, '질문')['C1']
+    # A reference the evidence never makes, or one naming another law, stays blocked.
+    for text in ('제3조에 따라 적용합니다.', '다른법 제2조에 따라 적용합니다.'):
+        invented = cited.model_copy(update={'claims': [cited.claims[0].model_copy(update={'text': text})]})
+        assert 'prose_reference_mismatch' in claims.check_claims(invented, ctx, '질문')['C1']
 
 
 def test_reference_mention_is_not_alone_a_lookup_request():

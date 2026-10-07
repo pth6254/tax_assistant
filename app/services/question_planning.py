@@ -10,6 +10,7 @@ from app.services.issue_coverage import assess_issues
 from app.services.llm_client import call_llm_structured
 from app.services.inference.llm.errors import LLMRequestError
 from app.services.law.reference_parser import reference_spans, extract_law_references
+from app.services.temporal_scope import is_event_date
 
 SUPPORT_LAWS = {"국세기본법", "국세징수법", "조세범처벌법", "지방세기본법", "지방세징수법"}
 logger = logging.getLogger(__name__)
@@ -107,8 +108,9 @@ def validate_plan(plan, query, laws):
                    for r in extract_law_references(i.request_quote)}
         if not requested.issubset(planned):
             raise ValueError("missing_reference")
-    # Explicit dates survive even if the model omits them.
-    plan.dates = list(dict.fromkeys(plan.dates + date_mentions(query)))
+    # Explicit dates survive even if the model omits them. Durations such as a
+    # holding period ("3년 6개월") are facts, not the event date.
+    plan.dates = [value for value in dict.fromkeys(plan.dates + date_mentions(query)) if is_event_date(value)]
     if not plan.dates and "거래·사건의 적용 시점" not in plan.missing_inputs:
         plan.missing_inputs.append("거래·사건의 적용 시점")
     return plan

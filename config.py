@@ -126,6 +126,11 @@ LLM_TASK_SETTINGS: dict[str, LLMTaskSettings] = {name: _task_settings(name) for 
 ANSWER_JUDGE_MODE = os.getenv("ANSWER_JUDGE_MODE", "shadow").lower()
 if ANSWER_JUDGE_MODE not in {"shadow", "enforce"}:
     raise ValueError("ANSWER_JUDGE_MODE must be shadow or enforce")
+# Checks that guess meaning from words (claim_verification.SIGNAL_CHECKS) are
+# verified by the claim Judge ("judge") or withhold claims directly ("block").
+CLAIM_SIGNAL_GATE = os.getenv("CLAIM_SIGNAL_GATE", "judge").lower()
+if CLAIM_SIGNAL_GATE not in {"judge", "block"}:
+    raise ValueError("CLAIM_SIGNAL_GATE must be judge or block")
 
 
 @dataclass(frozen=True)

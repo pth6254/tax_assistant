@@ -32,6 +32,8 @@
 ## Judge 모드와 운영자 평가
 
 - `ANSWER_JUDGE_MODE=shadow`가 기본이다. 코드상 출처·인용 오류는 즉시 차단한다. 법적 주장과 근거 확인 지침은 shadow 설정에서도 의미 Judge의 지원·적용 판정을 공개 조건으로 사용한다. 다른 주장 종류에는 기존 shadow/enforce 설정을 적용한다. Judge 판정만으로 법적 정확성이 확인됐다고 표시하지 않는다.
+- 공개 검사 코드는 `claim_verification.CHECKS`에 한 번 등록한다. `block`은 인용·해시·출처 종류·인용 원문에 없는 조문/금액·시행본 밖 날짜·구조·Judge 실패처럼 사실로 확정되는 검사이고 단독으로 보류한다. `signal`은 세목 용어·주체 글자·범위 표현처럼 단어로 의미를 추정하는 검사이며 `CLAIM_SIGNAL_GATE=judge`(기본)에서 Judge 입력의 `server_flags`로 전달되고 Judge 판정으로만 보류한다. `block`으로 설정하면 이전처럼 직접 보류한다. 새 검사 코드는 등록 없이 추가할 수 없다(`tests/test_check_gates.py`).
+- 생성 모델은 조문을 `[[E1]]`처럼 인용한 근거 ID로 쓰고 서버가 법령명·조문으로 바꾼다. 인용하지 않은 ID는 남아 `unresolved_reference_placeholder`로 보류한다. 세액 표현의 금액은 질문이나 그 주장이 인용한 공식 원문 전체에 있어야 한다.
 - `ANSWER_JUDGE_MODE=enforce` 구현은 지원/적용 판정이 모두 supported인 주장만 공개한다. unknown, 오류, 시간 초과는 통과가 아니다. 코드 검사 실패도 항상 차단한다.
 - **이번 변경으로 전문가 정답률 교정이 완료된 것은 아니다.** enforce 운영 승격 전, 승인된 독립 골드에서 오답 통과·정상 답변 차단·미판정·쟁점 누락을 측정해야 한다. 모델 자신이 만든 정답을 독립 골드로 승인하지 않는다.
 - `question_planning`, `answer_judge`가 고정 LLM 호출 목적에 추가됐다. `LLM_TASK_QUESTION_PLANNING_*`, `LLM_TASK_ANSWER_JUDGE_*` 설정으로 기존 provider facade를 통해 분리할 수 있다. 제공자나 모델은 이번 작업에서 교체하지 않았다.

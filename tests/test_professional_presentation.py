@@ -140,3 +140,27 @@ def test_partial_answer_separates_actions_from_unresolved_tax_scope():
     assert answer.index(rows[1].text) < answer.index("## 추가 확인이 필요한 부분")
     assert "부가가치세에 필요한 근거" in answer
     assert answer.count(rows[0].text) == 1
+
+
+def _two_subject_answer(query):
+    from app.schemas.reliability import Issue, QuestionPlan
+    from app.services.evidence import context_from_records
+    base = context()
+    plan = QuestionPlan(issues=[
+        Issue(id="I1", request_quote="질문", subject="A", law="소득세법", question="질문"),
+        Issue(id="I2", request_quote="질문", subject="B", law="부가가치세법", question="질문")])
+    ctx = context_from_records(base.records, plan=plan)
+    rows = [AnswerClaim(id="C1", issue_id="I1", text="A의 판단입니다.", kind="fact", presentation_role="explanation"),
+            AnswerClaim(id="C2", issue_id="I2", text="B의 판단입니다.", kind="fact", presentation_role="explanation")]
+    return service.render_structured_answer(rows, ctx, query)
+
+
+def test_individual_subject_letter_is_not_labelled_as_a_company():
+    answer = _two_subject_answer("A는 거주자이고 B는 사업자입니다. 각각 설명해 주세요.")
+    assert "A회사" not in answer and "B회사" not in answer
+    assert "A · 소득세" in answer
+
+
+def test_company_suffix_is_kept_when_the_question_names_a_company():
+    answer = _two_subject_answer("A회사는 B사로부터 세금계산서를 받았습니다.")
+    assert "A회사 · 소득세" in answer and "B회사 · 부가가치세" in answer

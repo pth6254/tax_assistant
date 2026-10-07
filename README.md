@@ -1021,6 +1021,7 @@ python scripts/evaluate.py suite --mode live --include-draft --output evaluation
 | `SEARCH_MMR_LAMBDA` | — | `0.85` | 순위 관련성과 중복도 비중 |
 | `GRAPH_RAG_ENABLED` | — | `false` | 코드 기본 비활성, 사용 환경에서 현행 Graph 보충 활성화 |
 | `ANSWER_JUDGE_MODE` | — | `shadow` | 의미 평가 모드. 법적 주장 등은 shadow에서도 의미 검사를 공개 조건으로 사용 |
+| `CLAIM_SIGNAL_GATE` | — | `judge` | 단어 기반 추정 검사(세목·주체·범위 표현)를 Judge 확인 지점으로 전달(`judge`)하거나 직접 차단(`block`, 이전 동작) |
 | `THINK_ENABLED` | — | `false` | Qwen3 계열 모델의 Think 모드 활성화 |
 | `OLLAMA_NUM_CTX` | — | `4096` | 모든 chat 호출의 컨텍스트 길이 — 12GB GPU에서 생성·임베딩 동시 적재를 위한 기본값 |
 | `OLLAMA_KEEP_ALIVE_SEC` | — | `-1` | Ollama 채팅 LLM의 유휴 언로드 대기시간(초). 임베딩 요청에는 적용하지 않음 |
@@ -1292,7 +1293,9 @@ OpenRouter 요청은 `OPENROUTER_REQUESTS_PER_MINUTE=18` 기본값으로 간격�
 이 제한은 현재 단일 API 프로세스 안에서 적용되므로, 여러 worker나 외부 평가 프로세스를 동시에
 실행할 때에는 계정 전체 호출량을 별도로 관리해야 합니다.
 
-`ANSWER_JUDGE_MODE=shadow`가 기본입니다. 코드상 출처·인용 오류는 즉시 차단하며 법적 주장과 근거 확인
+`ANSWER_JUDGE_MODE=shadow`가 기본입니다. 공개 검사는 `claim_verification.CHECKS`에서 확정 검사(block)와
+추정 검사(signal)로 나뉩니다. 단어로 의미를 추정하는 검사는 `CLAIM_SIGNAL_GATE=judge`(기본)에서 Judge가 확인할
+지점으로 전달됩니다. 코드상 출처·인용 오류는 즉시 차단하며 법적 주장과 근거 확인
 안내는 shadow에서도 의미 검사를 공개 조건으로 사용합니다. 독립 전문가 정답셋 교정은 미완료입니다. 상세 구현과 데이터 제한은
 [검증 흐름 문서](docs/ai/RELIABILITY_WORKFLOW.md)를 참고하세요. 아래 파이프라인 설명 중 과거 테스트 수와 문자열 기반 검증은 이전 구현 기록입니다.
 
