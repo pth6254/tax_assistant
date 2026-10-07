@@ -14,6 +14,9 @@ from evaluation.schema import Run, Adjudication, Dataset
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
+    automatic = sub.add_parser('auto', help='Source-bound synthetic cards and automatic diagnostic evaluation')
+    from evaluation.auto_cli import configure
+    configure(automatic)
     validate = sub.add_parser('validate')
     validate.add_argument('--dataset', required=True)
     run = sub.add_parser('run')
@@ -61,6 +64,9 @@ def main(argv=None):
     judge.add_argument('--run-dir', required=True)
     judge.add_argument('--output', required=True)
     args = parser.parse_args(argv)
+    if args.command == 'auto':
+        from evaluation.auto_cli import main as auto_main
+        return auto_main(args)
     if args.command == 'judge':
         from evaluation.judge import evaluate
         result = asyncio.run(evaluate(args.run_dir, args.output))

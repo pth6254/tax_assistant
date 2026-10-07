@@ -1,6 +1,8 @@
 # 요소별 평가·검수 파이프라인
 
-## 현재 평가 범위 — 2026-10-01
+## 현재 평가 범위 — 2026-10-04
+
+- [자동 질문·평가 카드 파이프라인](AUTO_EVALUATION.md)을 추가했다. 공식 XML → 규칙/합성 질문 → 코드 검사/별도 감사 → 실제 채팅 → 항목별 Judge → 선택적 LangSmith 게시를 `scripts/evaluate.py auto pipeline`으로 실행한다. 기존 수동 승인 규약은 유지하며 자동 카드는 인간 승인 정답셋이 아니다.
 
 - 서비스 생성/계획/Judge는 OpenRouter `openai/gpt-6-luna`, 임베딩은 Ollama `qwen3-embedding:4b`/v1이다. 과거 로컬 Ollama 탐색 실험과 현행 설정을 구분한다.
 - 운영자 실험·조회·검수는 [LangSmith](LANGSMITH.md)다. 사용자 채팅의 verification/근거 패널과 독립 정답 검수는 다른 결과다.

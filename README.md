@@ -1,6 +1,6 @@
 # 세무 AI 어시스턴트
 
-## 현재 상태와 문서 안내 — 2026-10-01
+## 현재 상태와 문서 안내 — 2026-10-04
 
 대한민국 세무 질문을 주체·세목·요청별로 나누고, 확보한 원문과 계산 결과에 연결된 주장을 검사해 답변하는 플랫폼입니다.
 
@@ -11,11 +11,12 @@
 | 공식 현행 검색 | 한국어 BM25 + 조문/항 벡터 + 검증된 GraphRAG, Fuzzy·Regex·MMR |
 | 답변 검증·표시 | 쟁점 계획/근거 충족/주장·인용 검사 → SSE 진행 → 질문별 구조화 답변·근거 패널 |
 | 계산 | 전용 계산기 6종 + 공식 근거 기반 제한 JSON 산식/Decimal 참고 계산 |
-| 운영자 평가 | LangSmith. 독립 전문가 세무 정답 검수는 후속 작업 |
+| 운영자 평가 | 공식 XML 기반 합성 질문/기준 자동 생성·실제 채팅/Judge·LangSmith 게시. 독립 전문가 검수는 후속 작업 |
 | 전용 Reranker | **미구현**. 모델·별도 서비스·후보 풀 변경은 후속 제안 |
 
 - **실행**: WSL 가상환경에서 `bash dev/docker-up-wsl.sh backend frontend`. 웹 `http://localhost:3001`, 백엔드 `http://127.0.0.1:8001`. llama.cpp는 선택형 실험입니다.
 - **직전 제품 검증(2026-10-01)**: backend **969 passed, 2 skipped, 5 subtests passed**; frontend **19 passed**/build. 실모델 부가가치세·증여 예제와 Edge PC/모바일 표시를 확인했습니다. 이는 전체 세무 정답률이 아닙니다.
+- **자동 평가 구현 검증(2026-10-04)**: 최신 backend **1,005 passed, 2 skipped, 5 subtests passed**. 실제 생성 6개 중 3개 채택, 동일 채팅 답변 3개 최종 재판정 및 실제 추가 실행 1개의 평가기 오류 0; LangSmith 게시/원격 저장 확인. 발견한 답변 누락·과도한 유보·버전 문제는 후속 서비스 수정 대상입니다.
 - **문서 작업의 읽기 확인(2026-10-01 14:18 KST)**: readiness/dependencies `ready`, Graph `ok`, 웹 200, Alembic `20260930_0010`. 이때 전체 테스트·DB 감사를 다시 실행한 것은 아닙니다.
 - **남은 범위**: 동일 시행본 복원이 미확인인 원문 후보 27행, 연결 보류 인용 4,952개, 독립 holdout/Judge 교정과 추가 검색 범위.
 
@@ -27,8 +28,26 @@
 | [인수인계](docs/ai/HANDOFF.md) | 다음 작업·최종 결과/백업 위치·재현 방법 |
 | [검증 흐름](docs/ai/RELIABILITY_WORKFLOW.md) | 질문·도구·근거·주장·SSE의 실제 연결 |
 | [추가 RAG 개선 제안](docs/ai/RAG_IMPROVEMENT_PLAN.md) | Reranker와 시점·근거 구성·실무 자료 확대의 미구현 설계 |
+| [자동 질문·평가 카드](evaluation/AUTO_EVALUATION.md) | 원문/조건/기대 판단 고정·실제 답변 평가·LangSmith 자동 게시/재개 |
 
 아래 날짜별 수치·실험은 기록된 시점과 범위에 한정합니다. 현재 동작은 위 요약과 실제 코드, 미완료 작업은 최신 인수인계를 기준으로 확인합니다.
+
+### 자동 질문·평가 카드 (2026-10-04)
+
+`scripts/evaluate.py auto pipeline`은 보관된 공식 XML에서 규칙과 합성 세무 질문/평가 기준을 만들고,
+코드 검사·별도 원문 감사 후 채택한 카드의 **질문만** 실제 채팅에 전달합니다. 검색/생성 입력/답변을
+관측해 항목별 Judge를 실행하고 `--publish`로 LangSmith Dataset/Experiment/Feedback을 자동 게시합니다.
+기본 범위는 6세목 × 5유형의 30개 생성 시도이며 실패/판단 불가 카드는 제외 사유를 남깁니다.
+모델은 원문/답변 구간 ID를 선택하고 서버가 정확한 발췌를 복원합니다. `--resume`은 완료 단계의
+중복 실행을 막고 `run --from-run`은 같은 저장 답변만 새 Judge로 평가합니다.
+
+```bash
+docker exec tax_backend python scripts/evaluate.py auto pipeline \
+  --output /tmp/auto-evaluation-NEW --as-of 2026-10-04 --types general --publish
+docker cp tax_backend:/tmp/auto-evaluation-NEW evaluation/runs/auto-evaluation-NEW
+```
+
+자동 카드는 인간 승인 정답셋이 아니며 기존 승인 gate는 유지합니다. R2 미라벨 후보·G1 독립 감사·T1 숫자 기대값의 한계와 실제 검증 결과는 [사용법](evaluation/AUTO_EVALUATION.md), [현재 상태](docs/ai/CURRENT_STATUS.md)를 참고하세요.
 
 ### 공식 법령 Hybrid RAG (2026-09-30)
 

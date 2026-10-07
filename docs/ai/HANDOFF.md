@@ -1,6 +1,50 @@
 # 세션 인수인계
 
-## 최신 인계 — 2026-10-01 문서 동기화
+## 최신 인계 — 2026-10-06 대화·작업 문서 동기화
+
+- 요청 범위는 지금까지의 대화와 구현 결과를 다음 작업자에게 전달할 `AGENTS.md`·`CLAUDE.md` 최신화다. 기존 작업 트리의 코드·문서 변경과 새 자동 평가 파일을 보존했다.
+- [AGENTS.md](../../AGENTS.md)에 합의한 품질 목표, 질문/도구/검색/계산/표시/자동 평가의 구현 경계, 2026-10-04 실제 검증 범위, 결과 위치와 후속 우선순위를 추가했다.
+- [CLAUDE.md](../../CLAUDE.md)는 공통 규칙의 진입점을 유지하면서 대화 요약·작업별 코드 진입점·현재 답변 결함을 안내한다. 참고 계산의 실제 경로는 `app/services/calculator/formula_workflow.py`다.
+- 다음 구현은 아래 2026-10-04의 **서비스 답변 결함 수정**부터 진행한다. 자동 카드 기본 30개 전체 실행, 독립 전문가 승인·R2/G1/T1 보강, Reranker는 미완료다. 이번 문서 작업으로 상태를 변경하지 않았다.
+- 검증일 2026-10-06: 변경 Markdown의 로컬 링크·CLI/코드 참조·기존 결과 파일 대조 및 `git diff --check`. 기록은 `evaluation/runs/document-handoff-20261006/verification.json`(Git/Docker 제외)에 보존한다. 제품 코드/DB/모델 변경·Docker 재빌드·전체 테스트·실모델·브라우저·현재 운영 상태 재검증은 수행하지 않았다. 아래 실행 수치는 2026-10-04의 증거다.
+
+## 2026-10-04 자동 질문·평가 카드
+
+### 구현과 실행
+
+- 추가한 CLI는 `scripts/evaluate.py auto build|validate|run|publish|compare|pipeline`이다. [사용법](../../evaluation/AUTO_EVALUATION.md)에 전체 명령·재개·게시·판정 범위를 기록했다. 기존 수동 Dataset/인간 승인/LangSmith 확인 절차는 변경하지 않았다.
+- 코드: `evaluation/card_schema.py`, `card_sources.py`, `auto_cards.py`, `auto_pipeline.py`, `auto_langsmith.py`, `auto_cli.py`; 얇은 연결은 `evaluation/cli.py`다. 서비스 코드에서 평가 도구를 import하지 않는다.
+- 공식 보관 XML에서 원문/시점/해시를 검증하고 규칙 → 합성 질문/필수·금지 기대 판단 → 코드 검사/별도 감사 → 고정 카드를 만든다. 모델이 원문/답변을 다시 복사하는 오류는 구간 ID 선택과 서버 복원으로 보완했다. 관련 원문을 공유하는 사례는 split을 같이 둔다.
+- 실제 채팅에는 질문만 전달하고 이력/저장·개인 문서·웹·중복 tracing을 격리한다. BM25를 먼저 준비하며 준비 실패는 기록하고 fallback을 유지한다. `--from-run`은 원 관측/생성 버전을 보존하면서 새 Judge만 실행한다.
+- 모델/임베딩/8개 작업/DB schema/프런트엔드는 유지했다. 기본 생성 30개는 시도 범위다. 이번 검증은 일반 질문 6개와 실제 채팅 3개이며 모든 세목/복합/시점 질문의 성공률을 입증하지 않는다.
+
+### 결과와 주의할 파일
+
+- 로컬 결과 루트: `evaluation/runs/auto-evaluation-20261004/`(Git/Docker 제외). 컨테이너 재생성 전에 호스트로 복사했다.
+- `initial-cards/`: 긴 인용 복사/초기 감사 문제를 발견한 중단 기록. 완료 배치나 최종 결과로 사용하지 않는다.
+- `pipeline-v2/cards/`: 6개 생성 시도 중 3개 채택, 2개 fail, 1개 unknown. 규칙/원문 XML/제외 후보·이유/카드 해시를 보존한다.
+- `pipeline-v2/run/`: 실제 질문만 전달한 채팅 관측 3개와 첫 평가. 평가기 형식 오류가 포함된 이전 결과다. 답변 관측 자체는 이후 재판정에서도 변경하지 않는다.
+- `rejudge-v3/`: 구간 ID/ID enum 보완 후 재판정. 한 사례의 평가 pass에 필요한 발췌 누락이 남아 있어 최종 판정으로 사용하지 않는다.
+- 최종 판정·최신 이미지 테스트·원격 검증 파일은 아래 완료 기록을 우선한다. 자동 진단은 인간 세무 승인과 다르다.
+
+### 2026-10-04 실제 평가·게시 완료 기록
+
+- 최종 재판정: `rejudge-final/experiment.json`, `report.md`, `langsmith-plan.json`, `langsmith-receipt.json`. **3개 관측/33항목: fail 14, pass 4, unknown 6, N/A 9, error 0; 사례 3개 fail**. 실제 채팅을 다시 생성한 결과가 아니라 `pipeline-v2/run`의 동일 답변을 개선한 Judge로 평가한 결과다.
+- LangSmith Dataset `8b85c91e-f4ed-4c74-99eb-131384388d29`; 최종 Experiment **`tax-eval-system-ed423262b6103a000fb2a0a4`**, ID `9fa97800-93fd-4747-833b-6a1f57b69890`. 원격 API 재조회로 3 examples/3 runs/각 13 feedback(11항목+상태+지연)을 확인했다. URL/검증 범위는 `langsmith-readback-final.json`이다. 이전 Experiment `94e6e7...`, `eebc181...`은 평가기 형식 보완 전 결과다.
+- 최종 새 실모델 실행 1개: `live-final/experiment.json`, `report.md`, 게시 영수증. 양도소득 질문을 원래 서비스에 다시 넣었고 BM25 `ready`를 확인했다. 11항목: fail 5/pass 3/unknown 2/N/A 1/error 0; 사례 fail. 실제 Graph 입력은 독립 감사/유용성 확인 한계를 unknown으로 기록했다.
+- 새 실제 실행의 LangSmith Dataset `6f34b430-ca47-4b50-bc59-ad7a20f362e8`, Experiment **`tax-eval-system-4d053d98a595cf6f08f3fd20`**, ID `2a651434-2bca-4103-8fe3-97083f6ac82a`. 위 3개 고정 관측 재판정과 다른 배치다.
+- 실행의 exit 1은 발견한 답변 실패를 뜻한다. 게시 영수증은 complete이며 LangSmith API 오류가 아니다. 최종 평가 모델 호출/발췌 오류 0은 해당 작은 검증 범위에 한정한다.
+- 원문 파일 재검사 `auto validate`: 카드 3개, hash `148612441cffa2afee11f04554da23a25c60d6d661a9a0c9e5626ad2632c88fd`, 인간 승인 0. 최종 pytest 로그는 `backend-tests-final.log`, 이미지/상태는 `verification-final.json`, Markdown 12개/로컬 링크 65건 정상은 `documentation-check.json`에 보관한다.
+- 최종 최신 이미지 전체 백엔드 **1,005 passed, 2 skipped, 5 subtests passed**, 56.63초. 신규 계약 검사 36개를 포함하며 마지막 보완은 제공자 오류 메시지를 알려진 내부 오류 코드 외에는 출력하지 않도록 한 것이다. `git diff --check` 통과, readiness/dependencies ready/Graph ok/웹 200. 프런트엔드 변경·테스트/build는 이번 범위에 없다.
+
+### 다음 작업
+
+1. **실제 발견한 답변 문제**: 소득세 사례의 개인 A가 회사로 계획되는 문제와 불필요한 유보, 증여 사례의 날짜만으로 원문 조회/법령명 요구 경로에 진입하는 문제, 양도 사례의 확보 원문에 있는 장기보유 공제 조건/기준이 답변에서 누락되는 문제를 재현·수정한다. 이 배치의 고정 질문/실제 관측을 회귀 기준으로 사용하되 기대 카드는 자동 초안임을 유지한다.
+2. **자동 카드 범위 확대**: 기본 30개 실제 생성/평가, 예외·정보 부족·복합·시점의 세목별 채택/제외 사유를 검토한다. 유효한 fail/unknown이 pass가 될 때까지 같은 카드를 반복 생성하지 않는다. 보관 원문의 위임/별표/부칙 결손을 먼저 해결한다.
+3. **독립 승인/교정**: R2 혼동 근거, G1 원문 관계 감사, T1 숫자 기대값과 전문가 검수/오답 통과율을 확보한다. 동일 모델의 별도 호출을 독립적인 세무 정답으로 취급하지 않는다.
+4. **데이터/검색 잔여**: 원문 의심 27행·보류 인용 4,952개·기존 빈 벡터 metadata·Reranker/추가 RAG 범위는 아래 이전 인계대로 남아 있다. 이번 작업에서 원문/색인 데이터는 수정하지 않았다.
+
+## 2026-10-01 문서 동기화 인계
 
 ### 현재 기준과 이번 작업
 
@@ -18,7 +62,7 @@
 | 원문·색인 | 동일 시행본 1,503조문 복원 + 1,471조문 누락 항 생성, 2,974조문/13,203항 이력 감사 0 | 같은 디렉터리의 `repair/`, `repair-rest/`, `repair-letter/`, `index-audit.json`, `graph-audit.json` |
 | 최종 검색 비교 | 개발 39문항 필수 라벨 38/38, MRR 0.746053, hard negative 5→4 | `repaired-baseline.json`, `algorithms-final.json`, `typos-exact.json` |
 | 답변 구조·웹 | 공개된 핵심 판단·검토·절차·자료·추가 확인, 개별 조건 보존, 근거 패널 | `evaluation/runs/professional-answer-20261001/{vat-final,gift-final}.json`, PC/mobile PNG |
-| 참고 계산 | 전용 범위 밖 공식 근거/JSON 산식/Decimal/Judge/근거 패널 | `app/services/formula_workflow.py`, `evaluation/runs/generic-calculation-20260928/` |
+| 참고 계산 | 전용 범위 밖 공식 근거/JSON 산식/Decimal/Judge/근거 패널 | `app/services/calculator/formula_workflow.py`, `evaluation/runs/generic-calculation-20260928/` |
 
 `evaluation/runs/`는 Git/Docker 빌드 제외인 로컬 결과다. 다른 PC/작업자에게 인계할 때 필요한
 최종 결과와 plan/backup/state를 별도로 전달한다. 컨테이너 `/tmp`만을 백업으로 사용하지 않는다.

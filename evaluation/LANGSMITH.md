@@ -1,5 +1,9 @@
 # LangSmith 평가 결과·검수
 
+## 2026-10-04 자동 질문·평가 카드 연결
+
+[`auto pipeline`](AUTO_EVALUATION.md)은 공식 보관 원문으로 합성 질문·기준을 생성하고 실제 채팅/Judge를 실행한 뒤 `--publish`로 해당 배치를 자동 게시한다. 선택한 합성 사례의 원문/답변/항목별 이유와 `diagnostic.auto.*` feedback을 기록한다. 실행 환경의 `TAX_EVAL_LANGSMITH_API_KEY` 또는 `LANGSMITH_API_KEY`를 사용하고 인간 승인 gate는 유지한다. 아래 기존 `langsmith prepare/publish`의 수동 확인 절차와 `.env.example` 설정 규약은 그대로다.
+
 ## 2026-09-28 주장 단위 검증 연결
 
 - `answer_reliable_context` adapter는 `input.plan`과 명시적인 `input.evidence` 레코드로 실제 서비스의 주장 생성/검사 경로를 실행한다. 원문 출처를 문자열에서 다시 추론하지 않는다. `input.context`의 독립 정답과 서비스가 관측한 근거를 구분해 유지한다.
@@ -7,8 +11,7 @@
 - 서비스 `answer_release`/`claim_judge` trace와 답변 metadata의 run_id로 후보·근거·판정을 연결한다. 기본 `ANSWER_JUDGE_MODE=shadow`와 `enforce`의 차이 및 운영 승격 조건은 `docs/ai/RELIABILITY_WORKFLOW.md`를 따른다. 이번 구현에서 원격 평가 결과 게시를 실행하지 않았다.
 
 자체 evaluation_dashboard 대신 LangSmith를 사용합니다. 기존 평가셋·scoring·CLI·실행 결과는 유지합니다.
-이 문서의 평가 CLI는 **저장된 결과를 LangSmith 실험으로 가져오는 기능**입니다. 평가 CLI 자체는
-새로운 LLM 추론을 실행하지 않습니다. 실서비스 채팅 추적은 `CHAT_TRACING_ENABLED=true`로 별도 활성화합니다.
+이 문서의 기존 `langsmith prepare/publish` CLI는 **저장된 결과를 LangSmith 실험으로 가져오는 기능**이며 새로운 LLM 추론을 실행하지 않습니다. `auto build/run/pipeline`은 실제 생성·평가 호출을 실행합니다. 실서비스 채팅 추적은 `CHAT_TRACING_ENABLED=true`로 별도 활성화합니다.
 LangSmith 자체 이용·보관 비용과 검수 기능 제공 범위는 계정 플랜을 확인하세요.
 
 ## 1. 계정 설정

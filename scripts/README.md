@@ -48,6 +48,8 @@ DB CLI는 최신 백엔드 컨테이너의 `/app`에서 실행하는 것을 권�
 
 ## 품질 평가
 
+- `python scripts/evaluate.py auto pipeline --output NEW_DIR --types general --publish`: 공식 XML에서 6분야 합성 질문/기준을 만들고 검사·실제 채팅·Judge·LangSmith 게시를 자동 실행합니다. `--resume`으로 재개합니다. 공개/합성 배치만 게시하며 인간 승인 정답률로 승격하지 않습니다. [구현·명령·한계](../evaluation/AUTO_EVALUATION.md)
+
 - `python scripts/evaluate.py langsmith prepare ...` / `langsmith publish ...`: 자체 대시보드 대신 LangSmith에서 평가 조회·비교·검수. 기본 전송 계획은 본문 제외이며 확인한 해시에 한해서 업로드합니다. [사용법](../evaluation/LANGSMITH.md)
 
 - `python scripts/sync_law_graph.py --all`: Neo4j 인용 동기화 미리보기. `--apply`만 그래프에 저장하며 PG/임베딩은 변경하지 않습니다.
