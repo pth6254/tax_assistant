@@ -5,17 +5,17 @@
 
 ## 현재 인계 — 2026-10-07
 
-**현재 상태**: 코드 차단 원인 수정과 측정 도구는 `main`(`fae65eb`)에 반영되고 이미지로 재빌드돼 서비스에 적용돼 있다.
-그 뒤에 한 **법 선택·교차 법령 조회·명제 단위 주장·표시 수정은 작업 트리에만 있다**(미커밋, 서비스 이미지 재빌드 전,
-WSL venv 전체 테스트 통과). **수정이 실제 답변 품질을 올렸는지는 실모델로 확인하지 않았다.**
-문서 정리(HANDOFF·AGENTS·CLAUDE·README·CURRENT_STATUS)도 미커밋이다. 검증 수치는
+**현재 상태**: 코드 차단 원인 수정과 측정 도구는 `main`(`fae65eb`)에 반영돼 있다. 그 뒤의 **법 선택·교차 법령 조회·명제 단위
+주장·표시 수정과 문서 정리는 브랜치 `fix/law-selection-cross-law`(`fa0f1f7`, `2b8f823`)에 커밋돼 있고 `main`에는 아직 병합하지
+않았다.** 서비스 이미지는 이 브랜치의 코드로 재빌드돼 돌고 있으며 이미지 전체 테스트가 통과했다. **수정이 실제 답변 품질을
+올렸는지는 실모델로 확인하지 않았다.** 검증 수치는
 [CURRENT_STATUS.md](CURRENT_STATUS.md), 결정 이유는 [DECISIONS.md](DECISIONS.md) 2026-10-07 세 항목에 있다.
 
 ### 다음 작업
 
 | # | 작업 | 실모델 비용 |
 |---|---|---|
-| 1 | 변경을 커밋하고 `dev/docker-up-wsl.sh backend frontend`로 재빌드한 뒤, **무기장가산세·신고불성실가산세 중복 질문을 웹에서 다시 질문**해 확인한다. 소득세법·국세기본법 쟁점으로 나뉘는지, 소득세법 제81조의5 원문이 근거에 들어오는지, 규칙 설명이 공개되는지 본다. 이 질문이 키워드 때문인지 일반 현상인지 보려면 소득세 용어 없이 소득세법 사항을 묻는 질문 몇 개로 계획 단계만 비교한다 | 있음(질문 1개 분량) |
+| 1 | **무기장가산세·신고불성실가산세 중복 질문을 웹에서 다시 질문**해 확인한다(이미지는 재빌드돼 있다). 확인 뒤 브랜치를 `main`에 병합한다. 소득세법·국세기본법 쟁점으로 나뉘는지, 소득세법 제81조의5 원문이 근거에 들어오는지, 규칙 설명이 공개되는지 본다. 이 질문이 키워드 때문인지 일반 현상인지 보려면 소득세 용어 없이 소득세법 사항을 묻는 질문 몇 개로 계획 단계만 비교한다 | 있음(질문 1개 분량) |
 | 2 | 같은 고정 카드 3개를 **새 출력 폴더**에서 `auto run` → `auto compare`·`auto blocks`·`auto filters`로 수정 전후 비교. 확인점: 증여(2026-06-01) legal 주장 공개, 양도 사례의 "적용 시점 미확인" 안내 소멸, 재생성 통과율, `detached_from` 빈도. 웹에서 새 질문/다시 답변으로 먼저 눈으로 확인해도 된다 | 있음(질문 3개 분량) |
 | 3 | 날짜+법령명이 함께 있는 분석 질문이 질문 계획보다 먼저 과거 법령 경로(`history_context.route`, `chat_service.py`)로 분기하는 문제. 순서 변경 설계. 고치면 `tests/test_routing_variants.py`의 strict xfail 6건이 XPASS로 실패하므로 표시를 제거한다 | 없음 |
 | 4 | (선택) Judge가 `server_flags`를 신호별로 명시 답변하게 하고 답하지 않으면 차단(`flag_checks`). 현재는 Judge가 신호를 언급 없이 넘길 수 있다 | 없음(구현), 효과 확인은 있음 |
@@ -41,7 +41,7 @@ WSL venv 전체 테스트 통과). **수정이 실제 답변 품질을 올렸는
 ## 2026-10-07 키워드에 갇힌 세법 선택과 교차 법령 조회
 
 실제 질문 "복식부기의무자가 장부를 작성하지 않았을 때 무기장가산세와 신고불성실가산세는 중복 적용되나요?"가 전체 보류됐다.
-저장된 검증 기록(`chat_logs` 740, 읽기 전용)과 코드로 원인 사슬을 확인했다. 이 변경은 아직 서비스 이미지에 반영되지 않았다.
+저장된 검증 기록(`chat_logs` 740, 읽기 전용)과 코드로 원인 사슬을 확인했다. 이 변경은 브랜치 `fix/law-selection-cross-law`의 이미지로 서비스에 반영돼 있다.
 
 **원인(확인한 것)**
 
@@ -57,7 +57,7 @@ WSL venv 전체 테스트 통과). **수정이 실제 답변 품질을 올렸는
 - 명제 단위 주장: 쟁점별 생성 프롬프트가 한 주장에 법적 명제 하나와 그 인용만 담게 하고, 보류 후 재생성 안내(`semantic_check_not_passed`)가 명제를 나누게 한다. 생성 프롬프트 해시가 바뀐다.
 - 표시: `law_label`(…세법만 "법" 제거), `requested_inputs`(공개된 주장이 없으면 날짜 확인 요청을 생략하고 보고서의 `plan.missing_inputs`도 같이 정리).
 
-**검증**: WSL `venv-wsl` 전체 백엔드 **1,095 passed, 2 skipped, 6 xfailed, 5 subtests passed**, `git diff --check` 통과. 신규 `test_law_selection`(7), `test_cross_law_lookup`(4), `test_check_gates`·`test_professional_presentation` 추가분. 실모델 호출·이미지 재빌드는 하지 않았다. 같은 질문의 수정 후 실제 답변은 미확인이다.
+**검증**: WSL `venv-wsl` 전체 백엔드 **1,095 passed, 2 skipped, 6 xfailed, 5 subtests passed**, `git diff --check` 통과. 신규 `test_law_selection`(7), `test_cross_law_lookup`(4), `test_check_gates`·`test_professional_presentation` 추가분. 이후 `dev/docker-up-wsl.sh backend frontend`로 재빌드해 **이미지 전체 백엔드 1,095 passed, 2 skipped, 6 xfailed**, 웹 200, readiness ready를 확인했다. 실모델 호출은 하지 않았다. 같은 질문의 수정 후 실제 답변은 미확인이다.
 
 ## 2026-10-07 공개 검사 개선과 측정 도구
 
