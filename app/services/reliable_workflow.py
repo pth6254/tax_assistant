@@ -1,5 +1,7 @@
 """Bounded orchestration; tool failure affects its issue and dependencies."""
 from app.services.evidence import EvidenceContext, context_from_records
+from app.services.law.reference_parser import reference_spans
+from app.services.tax_laws import KNOWN_LAWS
 from app.services.question_planning import plan_question, retrieve_issues
 from app.services.tools.planner import run_tools_for_query
 from app.services.claim_verification import generate_verified_answer
@@ -18,6 +20,27 @@ class RefinedQuery(Contract):
 
 class Refinement(Contract):
     queries: list[RefinedQuery] = Field(max_length=12)
+
+
+MAX_GAP_REFERENCES = 4
+
+
+def gap_references(issue, context, judge):
+    """Articles the judges say are missing, kept only when they name a known statute.
+
+    Free text is not evidence. These strings only become search queries, and the
+    original text still has to come from the official database and pass every check.
+    """
+    texts = list(context.coverage.get(issue.id, {}).get("missing_requirements") or [])
+    if judge:
+        texts += [row.reason for row in judge.claims if row.claim_id.split(":", 1)[0] == issue.id]
+    found = []
+    for text in texts:
+        for _, reference in reference_spans(text):
+            if (reference.law_name and reference.article_no
+                    and any(reference.law_name.startswith(law) for law in KNOWN_LAWS)):
+                found.append(f"{reference.law_name} {reference.article_no}")
+    return list(dict.fromkeys(found))[:MAX_GAP_REFERENCES]
 
 
 async def prepare_context(query, laws, user_id, history, search, on_event=None):
@@ -92,7 +115,9 @@ async def answer_context(query, context, user_id, search, on_event=None):
                      "세무 결론을 확정하지 말고 필요한 법적 요건·예외를 검색어로 만드세요. "
                      "제공한 issue_id당 최대 한 질의, 다른 회사·세목으로 바꾸지 마세요."},
                     {"role": "user", "content": json.dumps({"question": query, "issues": [i.model_dump() for i in issues],
-                     "gaps": judge.model_dump() if judge else None}, ensure_ascii=False)}],
+                     "gaps": judge.model_dump() if judge else None,
+                     "coverage_gaps": {i.id: context.coverage.get(i.id, {}).get("missing_requirements") or []
+                                       for i in issues}}, ensure_ascii=False)}],
                     strict_schema(Refinement), temperature=0, max_tokens=1800, purpose="query_classification")
             refined = Refinement.model_validate(raw)
             queries = {row.issue_id: row.query for row in refined.queries}
@@ -101,6 +126,10 @@ async def answer_context(query, context, user_id, search, on_event=None):
             issues = [i.model_copy(update={"question": queries.get(i.id, i.question)}) for i in issues]
         except Exception:
             pass
+        # An article the judges name together with its statute is looked up exactly,
+        # whichever law the issue itself is filed under.
+        issues = [i.model_copy(update={"question": " ".join([i.question, *refs])}) if (
+                      refs := gap_references(i, context, judge)) else i for i in issues]
         retry_plan = QuestionPlan(issues=issues, dates=context.plan.dates,
                                   assumptions=context.plan.assumptions,
                                   missing_inputs=context.plan.missing_inputs)

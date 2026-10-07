@@ -427,6 +427,24 @@ def _retrieval_outputs(output):
            process_inputs=lambda inputs: {'law_filter': inputs.get('law_filter'),
                                           'query_count': len(inputs.get('queries', []))},
            process_outputs=_retrieval_outputs)
+def _names_law(text: str) -> bool:
+    """True when the text itself names the statute of its first article reference."""
+    references = extract_constraints(text).references if config.SEARCH_REGEX_ENABLED else ()
+    reference = references[0] if references and references[0].law_name else extract_law_reference(text)
+    return bool(reference and reference.article_no and reference.law_name)
+
+
+def _direct_in_scope(row, law_filter: str, text: str) -> bool:
+    """An article the text names with its statute stays even when the issue's own law differs.
+
+    The issue filter only limits unnamed matches. A rule often depends on another act
+    (a penalty in the income tax act applied through the framework act), and an
+    official original named by statute and article is exactly what was asked for.
+    """
+    return (law_filter == "ALL" or row.law_name == law_filter
+            or row.law_name.startswith(law_filter + " 시행") or _names_law(text))
+
+
 async def _search_issue_candidates(queries: list[str], law_filter: str,
                                    original_query: str,
                                    diagnostics: dict | None = None) -> list[HybridSearchResult]:
@@ -539,12 +557,10 @@ async def _search_issue_candidates(queries: list[str], law_filter: str,
     if config.SEARCH_REGEX_ENABLED:
         lookup_queries += [ref.canonical for text in [*queries, original_query] if text
                            for ref in extract_constraints(text).references[:6]]
-    directs = await asyncio.gather(*[
-        _lookup_referenced_article(text, law_filter)
-        for text in dict.fromkeys(lookup_queries) if text
-    ])
-    direct_rows = [row for row in directs if row and (law_filter == "ALL" or
-                   row.law_name == law_filter or row.law_name.startswith(law_filter + " 시행"))]
+    lookup_texts = [text for text in dict.fromkeys(lookup_queries) if text]
+    directs = await asyncio.gather(*[_lookup_referenced_article(text, law_filter) for text in lookup_texts])
+    direct_rows = [row for text, row in zip(lookup_texts, directs)
+                   if row and _direct_in_scope(row, law_filter, text)]
     if direct_rows:
         limit = result_k + (2 if ISSUE_TITLE_RESCUE else 0) + (2 if bm25 else 0)
         results = list({(row.law_name, row.article_no): row for row in [*direct_rows, *results]}.values())[:limit]

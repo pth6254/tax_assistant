@@ -320,7 +320,7 @@ CHECKS = {
     "historical_version_required": Check("block", "evidence", False,
         "사건 연도의 법령 버전이 확인되지 않아 legal 주장을 확정할 수 없습니다. 확보한 원문 기준의 source_summary로 쓰세요."),
     "semantic_check_not_passed": Check("block", "evidence", False,
-        "인용한 원문이 이 결론이나 적용을 뒷받침하지 않는다고 판정됐습니다. 원문이 직접 말하는 범위로 줄이거나 조건을 명시하세요."),
+        "인용한 원문이 이 결론이나 적용을 뒷받침하지 않는다고 판정됐습니다. 여러 명제를 한 주장에 묶었다면 근거가 직접 뒷받침하는 명제만 남기고 나머지는 지우거나 별도 주장으로 나누며, 원문이 직접 말하는 범위로 줄이거나 조건을 명시하세요."),
 }
 INTEGRITY_ERRORS = frozenset(code for code, check in CHECKS.items() if check.category == "integrity")
 REPAIRABLE_ERRORS = frozenset(code for code, check in CHECKS.items() if check.category == "repairable")
@@ -510,6 +510,21 @@ def successful_tools(claims, context):
     return success
 
 
+DATE_INPUT = "거래·사건의 적용 시점"
+
+
+def law_label(law):
+    """Tax names drop the trailing 법 (소득세법 → 소득세); procedural laws keep it (국세기본법)."""
+    if law == "ALL":
+        return "사실관계"
+    return law.removesuffix("법") if law.endswith("세법") else law
+
+
+def requested_inputs(context, claims):
+    """The date prompt is only useful next to an answer; with nothing released the cause is evidence."""
+    return [value for value in context.plan.missing_inputs if not (value == DATE_INPUT and not claims)]
+
+
 def subject_label(subject, text):
     """A bare letter is a company only when the user wrote it so (A회사/A사)."""
     if re.fullmatch(r"[A-Z]", subject) and re.search(r"(?<![A-Za-z])" + subject + r"(?:[가-힣]{0,8}회사|사)", text):
@@ -546,7 +561,7 @@ def render_claims(claims, context):
         rows.sort(key=lambda c: 0 if c.kind in {"legal", "source_summary"} else 1)
         title = ""
         if len(context.plan.issues) > 1:
-            law = issue.law.removesuffix('법') if issue.law != 'ALL' else '사실관계'
+            law = law_label(issue.law)
             if issue.law == '소득세법' and '양도' in issue.question:
                 law = '양도소득세'
             elif issue.law == '소득세법' and '금융' in issue.question:
@@ -565,7 +580,7 @@ def render_claims(claims, context):
         sections.append(title + body)
     if unresolved:
         labels = list(dict.fromkeys((subject_label(i.subject, asked) + ' ' if re.fullmatch(r'[A-Z]', i.subject) else '')
-                                    + (i.law.removesuffix('법') if i.law != 'ALL' else '사실관계')
+                                    + law_label(i.law)
                                     for i in unresolved))
         details = list(dict.fromkeys(context.coverage.get(i.id, {}).get('message', '')
                                      for i in unresolved if context.coverage.get(i.id, {}).get('message')))
@@ -577,8 +592,8 @@ def render_claims(claims, context):
                         "실제 거래일과 당시 시행본을 대조해야 합니다.")
     elif note := current_version_note(claims, context):
         sections.append(note)
-    if context.plan.missing_inputs:
-        sections.append("추가 확인 사항: " + "; ".join(context.plan.missing_inputs))
+    if inputs := requested_inputs(context, claims):
+        sections.append("추가 확인 사항: " + "; ".join(inputs))
     return "\n\n".join(sections)
 
 
@@ -609,7 +624,7 @@ def render_structured_answer(claims, context, query=""):
         return render_claims(claims, context)
 
     def label(issue):
-        law = issue.law.removesuffix("법") if issue.law != "ALL" else "사실관계"
+        law = law_label(issue.law)
         if issue.law == "소득세법" and "양도" in issue.question:
             law = "양도소득세"
         elif issue.law == "소득세법" and "금융" in issue.question:
@@ -787,8 +802,8 @@ def render_structured_answer(claims, context, query=""):
     if unresolved:
         pending_checks.append(", ".join(label(issue) for issue in unresolved) +
                          "에 필요한 근거 또는 적용 조건을 확인하지 못해 해당 판단을 보류합니다.")
-    pending_checks.extend(value for value in context.plan.missing_inputs
-                     if not (source_scope and value == "거래·사건의 적용 시점"))
+    pending_checks.extend(value for value in requested_inputs(context, claims)
+                     if not (source_scope and value == DATE_INPUT))
     if not professional_layout:
         practical.extend(pending_checks)
         pending_checks = []
@@ -875,6 +890,10 @@ SCOPED_GENERATION_PROMPT = GENERATION_PROMPT + """
 원 질문은 사실관계 참고용이며 이 호출에서 모든 질문에 답할 필요는 없습니다.
 최대 5개 주장으로 핵심 법적 효과와 조건 또는 요청한 자료·확인 목적을 설명하세요. 질문 사실을 반복하는 fact는 생략하세요.
 독립적으로 읽을 수 있는 조건부 주장으로 작성하고 단순 설명 순서는 depends_on으로 연결하지 마세요.
+한 주장에는 법적 명제 하나와 그것을 직접 뒷받침하는 인용만 담으세요. 일반 규칙, 그 규칙의 요건, 사례에의 적용,
+다른 조문이나 다른 법에 의존하는 명제는 서로 다른 주장으로 나누세요. 근거 검사는 주장 단위로 통과 여부를 정하므로
+여러 명제를 한 주장에 묶으면 근거가 없는 한 부분 때문에 근거가 있는 부분까지 함께 보류됩니다.
+인용한 원문에 없는 조문·요건은 그 주장에 쓰지 말고, 원문이 직접 말하는 명제만 주장으로 만드세요.
 공통 출처·적용연도 유보는 서버가 기록합니다. conditions에는 개별 조건과 별도 미확인 범위만 넣으세요.
 citations.evidence_id에는 E1 같은 제공된 짧은 ID, quote에는 E1:P2 같은 span_id를 선택하세요.
 text와 conditions에서 근거 법령·조문을 가리킬 때는 조문 번호를 직접 쓰지 말고 [[E1]]처럼 그 주장이 인용한 근거 ID를 쓰세요.
@@ -1080,6 +1099,8 @@ async def generate_verified_answer(query, context, *, repair=None, on_progress=N
                          "judge_error": int(judge_error is not None)}
     if formula_reports:
         report['formula_calculations'] = formula_reports
+    # The stored plan feeds the evidence panel; it asks for the same inputs as the answer.
+    report["plan"]["missing_inputs"] = requested_inputs(context, released)
     report["citations"] = [dict(evidence_id=r.id, law_name=r.law_name, reference=r.reference,
                                  label=r.category, origin=r.origin, version_id=r.version_id,
                                  effective_from=r.effective_from, source=r.source,

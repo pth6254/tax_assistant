@@ -11,8 +11,11 @@ from app.services.llm_client import call_llm_structured
 from app.services.inference.llm.errors import LLMRequestError
 from app.services.law.reference_parser import reference_spans, extract_law_references
 from app.services.temporal_scope import is_event_date
+from app.services.tax_laws import KNOWN_LAWS
 
 SUPPORT_LAWS = {"국세기본법", "국세징수법", "조세범처벌법", "지방세기본법", "지방세징수법"}
+# Laws the planner may add beyond the keyword candidates for one question.
+MAX_ADDED_LAWS = 3
 logger = logging.getLogger(__name__)
 
 
@@ -86,7 +89,8 @@ def validate_plan(plan, query, laws):
                 or issue.kind == "document_search" and not DOCUMENT_INTENT.search(query)
                 or issue.kind == "exact_lookup" and not has_lookup_intent(query)):
             raise ValueError("tool_kind_not_requested")
-        if issue.law not in {*laws, "ALL"}:
+        # Keyword hits are hints, not the only laws a question can concern.
+        if issue.law not in {*laws, *KNOWN_LAWS, "ALL"}:
             raise ValueError("unapproved_law_filter")
         if not issue.request_quote or issue.request_quote not in query:
             raise ValueError("ungrounded_request")
@@ -98,6 +102,8 @@ def validate_plan(plan, query, laws):
         raise ValueError("invented_condition")
     if not {law for law in laws if law not in SUPPORT_LAWS}.issubset({i.law for i in plan.issues}):
         raise ValueError("missing_tax")
+    if len({i.law for i in plan.issues} - {*laws, "ALL"}) > MAX_ADDED_LAWS:
+        raise ValueError("too_many_added_laws")
     expected = fallback_plan(query, laws)
     for issue in expected.issues:
         if issue.subject and not any(i.subject.startswith(issue.subject) and i.law == issue.law for i in plan.issues):
@@ -125,7 +131,10 @@ async def plan_question(query, laws, history=None):
         "exact_lookup은 사용자가 특정 조문 원문을 요청한 경우, document_search는 내 업로드 자료 조회만입니다. "
         "일반적으로 어떤 서류를 확인할지 묻는 것은 analysis입니다. "
         "사실·가정을 확정하지 말고 assumptions에는 사용자의 실제 가정 문구만 넣으세요. "
-        "law는 제공된 후보를 모두 보존하며 없으면 ALL. 보조 법령 필요성은 question에 적으세요. "
+        "law_candidates는 키워드로 찾은 후보이므로 모두 보존하세요. 후보에 없어도 쟁점이 다른 법의 규정이면 "
+        "allowed_laws에서 그 법을 고르세요. 사용자는 법 이름 없이 제도나 가산세 이름으로 묻는 경우가 많습니다. "
+        "개별 세법의 가산세·특례·의무와 공통 절차 규정(국세기본법 등)은 법별 쟁점으로 나누고, 근거가 되는 법만 쓰세요. "
+        "어느 법인지 알 수 없으면 ALL. 보조 법령 필요성은 question에 적으세요. "
         "같은 주체와 세목의 요건·증빙·예외는 하나의 분석 쟁점에 합치세요. 검색어에 질문의 모든 요구를 담으세요. "
         "등장인물 모두를 별도 납세 쟁점으로 만들지 마세요. 한 사람의 세금에 관한 질문이면 거래 상대방이나 가족은 "
         "그 쟁점의 사실관계로 포함하고, 실제 질문에서 세무 처리를 묻는 주체를 subject로 쓰세요. "
@@ -142,14 +151,14 @@ async def plan_question(query, laws, history=None):
                             re.split(r'[\r\n\t]+|(?<=[.!?])\s+', query) if part.strip()))
         schema['$defs']['Issue']['properties']['request_quote']['enum'] = request_spans
         schema['properties']['assumptions']['items']['enum'] = request_spans
-        schema['$defs']['Issue']['properties']['law']['enum'] = list(dict.fromkeys([*laws, 'ALL']))
+        schema['$defs']['Issue']['properties']['law']['enum'] = list(dict.fromkeys([*laws, *KNOWN_LAWS, 'ALL']))
         named = list(dict.fromkeys(re.findall(r'\b([A-Z])(?:[가-힣]{0,8}회사|사)', query)))
         if named:
             schema['$defs']['Issue']['properties']['subject']['enum'] = ['', *named]
         async with asyncio.timeout(35):
             raw = await call_llm_structured(
                 [{"role": "system", "content": prompt}, {"role": "user", "content": json.dumps(
-                    {"question": query, "law_candidates": laws,
+                    {"question": query, "law_candidates": laws, "allowed_laws": list(KNOWN_LAWS),
                      "previous_user_statements": [m["content"] for m in (history or [])[-4:] if m.get("role") == "user"]}, ensure_ascii=False)}],
                 schema, temperature=0, max_tokens=3000, purpose="question_planning")
         return validate_plan(QuestionPlan.model_validate(raw), query, laws)

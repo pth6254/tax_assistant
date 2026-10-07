@@ -103,3 +103,37 @@ def test_amount_may_come_from_the_cited_text_but_not_from_nowhere():
     invented = grounded.model_copy(deep=True)
     invented.claims[0].text = '납부세액은 300만원입니다.'
     assert 'generated_tax_amount_without_calculator' in claims.check_claims(invented, ctx, '질문')['C1']
+
+
+def bundled_and_split(ctx):
+    cite = draft(ctx).claims[0].citations
+    one = AnswerDraft(claims=[draft(ctx).claims[0].model_copy(update={
+        'id': 'C1', 'text': '두 가산세가 동시에 적용되면 큰 금액만 적용하고, 무기장가산세는 장부를 쓰지 않으면 부과됩니다.'})])
+    two = AnswerDraft(claims=[
+        draft(ctx).claims[0].model_copy(update={'id': 'C1', 'text': '두 가산세가 동시에 적용되면 큰 금액만 적용합니다.'}),
+        draft(ctx).claims[0].model_copy(update={'id': 'C2', 'citations': cite,
+                                                'text': '무기장가산세는 장부를 쓰지 않으면 부과됩니다.'})])
+    return one, two
+
+
+def judged(value, supported):
+    return JudgeReport(claims=[ClaimJudgment(claim_id=c.id, support='supported' if c.id in supported else 'insufficient',
+                                             applicability='supported', evidence_ids=[e.evidence_id for e in c.citations],
+                                             reason='대조') for c in value.claims])
+
+
+def test_split_claims_keep_the_supported_proposition_while_a_bundle_loses_both():
+    ctx = context()
+    one, two = bundled_and_split(ctx)
+    plan = ctx.plan
+    # The Judge supports only the rule half; a bundle cannot be partly released.
+    released, _ = claims.release_claims(one, {'C1': []}, judged(one, set()), plan, mode='enforce')
+    assert released == []
+    released, rejected = claims.release_claims(two, {'C1': [], 'C2': []}, judged(two, {'C1'}), plan, mode='enforce')
+    assert [c.id for c in released] == ['C1'] and rejected == {'C2': ['semantic_check_not_passed']}
+
+
+def test_generation_asks_for_single_proposition_claims_and_retries_say_how_to_split():
+    # The per-issue prompt is the one generate_issue sends.
+    assert '법적 명제 하나' in claims.SCOPED_GENERATION_PROMPT and '서로 다른 주장으로 나누세요' in claims.SCOPED_GENERATION_PROMPT
+    assert '별도 주장으로 나누며' in claims.FIX_HINTS['semantic_check_not_passed']

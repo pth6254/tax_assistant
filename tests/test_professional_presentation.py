@@ -164,3 +164,25 @@ def test_individual_subject_letter_is_not_labelled_as_a_company():
 def test_company_suffix_is_kept_when_the_question_names_a_company():
     answer = _two_subject_answer("A회사는 B사로부터 세금계산서를 받았습니다.")
     assert "A회사 · 소득세" in answer and "B회사 · 부가가치세" in answer
+
+
+def test_law_label_keeps_procedural_law_names_whole():
+    assert [service.law_label(law) for law in
+            ('소득세법', '법인세법', '부가가치세법', '상속세 및 증여세법', '국세기본법', '국세징수법',
+             '조세범처벌법', '조세특례제한법', 'ALL')] == [
+        '소득세', '법인세', '부가가치세', '상속세 및 증여세', '국세기본법', '국세징수법',
+        '조세범처벌법', '조세특례제한법', '사실관계']
+
+
+def test_withheld_answer_does_not_ask_for_a_date_it_never_needed():
+    from app.schemas.reliability import Issue, QuestionPlan
+    from app.services.evidence import context_from_records
+    plan = QuestionPlan(issues=[Issue(id='I1', request_quote='질문', law='국세기본법', question='질문')],
+                        missing_inputs=[service.DATE_INPUT, '과거 증여 내역'])
+    ctx = context_from_records([], plan=plan)
+    withheld = service.render_claims([], ctx)
+    assert service.DATE_INPUT not in withheld and '과거 증여 내역' in withheld
+    assert '국세기본법에 필요한 근거' in withheld and '국세기본에' not in withheld
+    assert service.requested_inputs(ctx, []) == ['과거 증여 내역']
+    answered = service.requested_inputs(ctx, [claim('C1', '설명입니다.')])
+    assert answered == [service.DATE_INPUT, '과거 증여 내역']  # kept beside an actual answer
