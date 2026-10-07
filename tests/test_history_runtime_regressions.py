@@ -28,6 +28,14 @@ def test_year_is_not_a_legal_intent(query):
     assert route(query, HISTORY) is None
 
 
+@pytest.mark.parametrize('query', [
+    'A는 한국 세법상 거주자입니다. 2026년 6월 1일 어머니가 현금 3천만원을 증여했습니다. 증여재산 공제를 설명해 주세요.',
+    '세법상 2026년 이자소득을 합산하는지 판단해 주세요.'])
+def test_generic_tax_law_word_with_event_date_is_not_a_historical_lookup(query):
+    assert not temporal_request(query)
+    assert route(query, []) is None
+
+
 @pytest.mark.parametrize('query', ['2025년 소득세법 제55조', '2025-01-01 소득세법 시행령', '구법 기준'])
 def test_law_time_intent_still_goes_to_archive(query):
     assert temporal_request(query)

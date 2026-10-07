@@ -6,10 +6,16 @@ from app.services.law.reference_parser import extract_law_reference, format_arti
 VERSION = re.compile(r'법령\s*버전\s*\d+')
 DATE = re.compile(r'\d{4}(?:\s*년|[-./]\d{1,2}[-./]\d{1,2})')
 LAW = re.compile(r'[가-힣]+법(?:률)?(?:\s*시행(?:령|규칙))?|법령|조문|제\s*\d+\s*조')
+# Generic words ("한국 세법상 거주자") name no particular statute.
+GENERIC_LAW = {'세법', '법', '법률', '국세법', '지방세법', '조세법', '관련법'}
 PAST = re.compile(r'과거\s*법|구법|종전|개정\s*전|당시')
 CURRENT = re.compile(r'현행|현재|오늘|지금\s*기준')
 OTHER_TASK = re.compile(r'계산|얼마|계약서|문서|서류|업로드|첨부|PDF|pdf')
 FOLLOWUP = re.compile(r'그럼|그러면|해당|같은|그\s*(?:법|조|항)|제\s*\d+\s*[조항호]|[가-하]\s*목')
+
+
+def names_law(query):
+    return any(m[0] not in GENERIC_LAW and ''.join(m[0].split()) not in GENERIC_LAW for m in LAW.finditer(query))
 
 
 def temporal_request(query):
@@ -17,7 +23,7 @@ def temporal_request(query):
         return True
     if OTHER_TASK.search(query):
         return False
-    return bool(PAST.search(query) or (DATE.search(query) and LAW.search(query)))
+    return bool(PAST.search(query) or (DATE.search(query) and names_law(query)))
 
 
 def needs_history(query):
