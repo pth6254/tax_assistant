@@ -1,6 +1,82 @@
 # 세션 인수인계
 
-## 최신 인계 — 2026-10-06 대화·작업 문서 동기화
+## 최신 인계 — 2026-10-07 확정/추정 검사 분리·생성 단계 조문 표기·필터 가치 측정
+
+결정 내용은 [DECISIONS.md](DECISIONS.md)의 같은 날짜 두 번째 항목이다.
+
+- **검사 등록표** `claim_verification.CHECKS`: 코드마다 `block`/`signal`, 재생성 분류, 전제 분리 가능 여부, 수정 안내를
+  한 곳에 둔다. 기존 `INTEGRITY_ERRORS`·`FIX_HINTS` 등은 이 표에서 계산한다. signal은 `tax_scope_mismatch`,
+  `subject_scope_mismatch`, `source_scope_unstated`, `historical_scope_unstated` 4개다.
+- **신호의 Judge 확인**: `judge_claims`가 같은 결정적 검사를 다시 돌려 signal을 `server_flags`로 Judge에 전달한다
+  (시그니처 불변). `release_claims`는 `blocking_codes()`만으로 보류한다. 설정 `CLAIM_SIGNAL_GATE=judge|block`(기본 judge).
+  보고서 주장 항목에 `signals`를 기록한다. 재생성 피드백에는 보류 사유와 함께 signal도 전달한다.
+- **생성 단계 조문 표기**: 모델은 `[[E1]]`로 인용 근거를 가리키고 `expand_citations`가 법령명·조문으로 바꾼다.
+  인용하지 않은 ID는 `unresolved_reference_placeholder`(block). 세액 금액은 인용한 공식 원문 전체까지 허용.
+  생성·Judge 프롬프트 해시가 바뀐다.
+- **필터 가치 측정** `evaluation/filter_value.py`, `scripts/evaluate.py auto filters <run...> [--cards] [--judge]`.
+  10-04 `rejudge-final`+`live-final`, 모델 호출 없이: 정상 씨앗 11개, 변형 60개. 없는 조문·지어낸 세액·인용 변조는
+  각 11/11을 코드가 잡았다. 다른 세목 문장은 11/11 signal(Judge 확인 대상). 결론 뒤집기 2개·다른 근거 연결 10/11·
+  조문 번호 이동 2/3은 코드가 잡지 못했다. 이동 2건은 인용한 조문 자체의 실존 항·호를 가리키게 된 경우로,
+  결정적 검사로는 판별할 수 없어 Judge 몫이다. **`--judge` 측정은 실행하지 않았다(실모델 비용).**
+- 검증: WSL venv 전체 pytest **1,076 passed/2 skipped/6 xfailed/4 failed**. 실패 4건은 WSL venv에
+  `kiwipiepy`가 없어서 생기는 BM25 테스트이며 코드 문제가 아니다(`requirements.txt`에는 `kiwipiepy==0.24.0`이 있고
+10-04 이미지 테스트에서는 실패가 없었다. 이번에는 이미지 테스트를 실행하지 않았다). `git diff --check` 통과.
+  신규 `tests/test_check_gates.py`(7), `tests/test_filter_value.py`(1).
+- **다음 작업**: (1) `auto filters --judge`로 코드만/Judge만 잡는 오류를 측정. (2) 새 출력 폴더에서 같은 카드로
+  `auto run` → `auto compare`·`auto blocks`·`auto filters`. (3) 결과에 따라 signal 승격·강등 결정.
+
+## 이전 인계 — 2026-10-07 코드 차단 원인 3종 수정 (날짜 판정·전제 연쇄·피드백)
+
+결정 내용은 [DECISIONS.md](DECISIONS.md)의 2026-10-07 항목이다.
+
+- **날짜 판정** `app/services/temporal_scope.py`: 사건 날짜 구간이 인용 근거의 시행일~오늘 안에 있으면 legal 주장을
+  허용한다. 그 외는 기존처럼 `historical_version_required`. `question_planning.validate_plan`은 기간("3년 6개월")을
+  `dates`에서 제외한다(양도 사례 계획의 오염 원인). `claim_verification`의 미확정 조건·적용 시점 안내·`provisional`은
+  주장별 인용 근거 기준(`version_undetermined`)으로 바꿨고, 현행 시행본으로 판단한 경우 부칙 확인 안내
+  1회(`current_version_note`)를 표시한다. 생성·Judge 입력에 근거별 `governs_event_dates`를 추가했다(프롬프트 해시 변경).
+  공용 테스트 근거의 시행일은 2020-01-01→2026-01-01로 옮겨 기존 "미확정" 테스트의 의도를 유지했다.
+- **전제 연쇄** `release_claims`: 전제가 표기 오류(`DETACHABLE_PREMISE_ERRORS`)로만 막히고 Judge supported면, 의존 주장은
+  자기 검사를 모두 통과할 때 공개한다. 화면에 `DETACHED_NOTE`, 보고서에 `detached_from`을 남긴다.
+- **피드백**: 이전 항목의 구조화 피드백을 유지한다. 실제 통과율 개선은 실모델 실행 전까지 **미확인**이다.
+- 대체 표시 경로 `render_claims`의 "A회사" 접미사도 `subject_label`로 통일했다.
+- 검증: WSL venv 전체 pytest **1,068 passed/2 skipped/6 xfailed/4 failed**(기존 BM25 4건), `git diff --check` 통과.
+  신규 `tests/test_temporal_scope.py`(12), `tests/test_dependency_release.py`(8). Docker 이미지 테스트·실모델 실행은 하지 않았다.
+- **다음 작업**: 새 출력 폴더에서 같은 카드로 `auto run` → `auto compare`·`auto blocks`. 확인할 점은 (1) 증여 2026-06-01
+  사례의 legal 주장 공개, (2) 양도 사례의 "적용 시점 미확인" 안내 소멸, (3) 재생성 통과율, (4) `detached_from` 발생 빈도다.
+
+## 이전 인계 — 2026-10-07 범용 품질 개선 1~3단계 (라우팅 변형·수리 피드백·차단 집계)
+
+목표는 개별 사례 수정이 아니라 3건에서 드러난 구조(코드 검사의 정답 차단, 키워드 우연 라우팅,
+의존 연쇄 보류)를 측정·완화하는 것이다. 공개 기준은 낮추지 않았다.
+
+- **라우팅 변형 계약** `tests/test_routing_variants.py`: 6세목 분석 질문에 일반어("한국 세법상")·
+  "계산"·"서류"·현재 연도를 붙여도 과거 법령/계산/조회/문서 경로가 바뀌지 않음을 고정했다(모델 호출 없음).
+  **알려진 결함 6건은 strict xfail**: 날짜+법령명이 있는 분석 질문은 `chat_service.py`에서 질문 계획보다
+  먼저 과거 법령 경로(`history_context.route`)로 분기한다. 이 순서 변경이 다음 설계 단계이며, 고치면
+  xfail이 XPASS로 실패하므로 표시를 제거한다.
+- **수리 피드백** `claim_verification.py`: 재생성은 원래 `{주장ID: [오류코드]}`만 받아 무엇을 고칠지 알 수
+  없었다. 이제 `previous_failures.failed_claims`에 보류 문장, 인용 법령·조문, 문제별
+  `code/category/detail/fix`(예: 일치하지 않은 `제3조`, Judge 사유)를 준다. 증거 별칭(E1)은 호출마다
+  바뀌므로 법령명·조문으로 전달한다. 오류 코드는 `INTEGRITY_ERRORS`(위조·출처, 다시 쓰지 않음)/
+  `REPAIRABLE_ERRORS`(같은 근거로 문구·범위 수정)/`EVIDENCE_ERRORS`(근거·의미 판정)로 분류했고,
+  분류는 재생성 지시에만 쓰며 **모든 코드는 여전히 차단한다**. 새 코드를 추가하면
+  `test_every_withholding_code_has_one_retry_category`가 분류를 요구한다. 생성 프롬프트 해시가 바뀐다.
+- **차단 집계** `evaluation/block_report.py`, `scripts/evaluate.py auto blocks <run...>`: 저장 결과만 읽는다.
+  2026-10-04 `rejudge-final`+`live-final` 적용 결과: 주장 8개 중 5개 보류, Judge supported인데 코드가 막은
+  후보 2건(모두 `prose_reference_mismatch`, 결함 A로 수정), 연쇄 보류 1건, 주장 없이 끝난 사례 1건(증여 라우팅).
+- 검증: WSL venv 전체 pytest **1,048 passed/2 skipped/6 xfailed/4 failed**. 실패 4건은 아래와 같은 기존
+  `tests/test_bm25_search.py`다. `git diff --check` 통과. Docker 이미지 테스트·실모델 실행은 하지 않았다.
+- **다음 작업**: (4) 새 출력 폴더에서 같은 카드로 `auto run` → `auto compare`와 `auto blocks`로 수정 전후 비교
+  (실모델 비용 발생). (5) 그 결과로 날짜+법령명 라우팅 순서 변경, 형식형 전제 보류 시 조건부 강등 여부를 결정.
+
+## 이전 인계 — 2026-10-07 답변 결함 3건 코드 수정
+
+- `claim_verification.py`: 인용한 원문 자체가 언급하는 교차참조(법명 없는 `제127조` 등)는 `prose_reference_mismatch`로 차단하지 않는다. 원문에 없는 조문·다른 법명 참조는 계속 차단한다.
+- `history_context.py`: "세법상" 같은 일반어와 사건일만으로 과거 법령 조회로 분기하지 않는다(증여 사례의 "조회할 법령명을 지정" 오류).
+- `claim_verification.py` 표시: 질문에 `A회사`/`A사`가 있을 때만 주체 `A`에 "회사"를 붙인다. `question_planning.py`의 가공거래 전용 분기는 변경하지 않았다.
+- 검증: WSL venv 전체 pytest 1,006 passed/2 skipped/4 failed(`tests/test_bm25_search.py`). 4건은 변경을 stash한 기준선에서도 실패해 이번 수정과 무관하나 원인(WSL venv의 Kiwi 등)은 미확인이다. **실모델 재실행·고정 카드 `auto run` 비교는 아직 하지 않았다.** 다음 작업은 새 출력 폴더에서 같은 3개 카드를 `auto run`해 수정 전후를 비교하는 것이다.
+
+## 이전 인계 — 2026-10-06 대화·작업 문서 동기화
 
 - 요청 범위는 지금까지의 대화와 구현 결과를 다음 작업자에게 전달할 `AGENTS.md`·`CLAUDE.md` 최신화다. 기존 작업 트리의 코드·문서 변경과 새 자동 평가 파일을 보존했다.
 - [AGENTS.md](../../AGENTS.md)에 합의한 품질 목표, 질문/도구/검색/계산/표시/자동 평가의 구현 경계, 2026-10-04 실제 검증 범위, 결과 위치와 후속 우선순위를 추가했다.

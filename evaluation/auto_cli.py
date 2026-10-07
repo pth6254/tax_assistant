@@ -39,6 +39,14 @@ def configure(parser):
     compare = commands.add_parser('compare', help='Compare runs bound to the same frozen automatic cards')
     compare.add_argument('--baseline', required=True)
     compare.add_argument('--candidate', required=True)
+    blocks = commands.add_parser('blocks', help='Tabulate withheld claims by release check and Judge verdict (no model calls)')
+    blocks.add_argument('runs', nargs='+', help='experiment.json files or run directories')
+    blocks.add_argument('--output', help='Also write the JSON report to this file')
+    filters = commands.add_parser('filters', help='Inject known errors into stored clean claims and see which checks catch them')
+    filters.add_argument('runs', nargs='+', help='experiment.json files or run directories')
+    filters.add_argument('--cards', help='Card directory for the original questions (else plan request quotes)')
+    filters.add_argument('--judge', action='store_true', help='Also run the claim Judge on seeds and mutants (model calls)')
+    filters.add_argument('--output', help='Also write the JSON report to this file')
     pipeline = commands.add_parser('pipeline', help='Build, evaluate and optionally publish in one resumable command')
     pipeline.add_argument('--output', required=True)
     pipeline.add_argument('--as-of', type=date.fromisoformat,
@@ -138,4 +146,21 @@ async def execute(args):
 
 
 def main(args):
+    if args.auto_command == 'filters':
+        from evaluation.filter_value import filter_report
+        report = asyncio.run(filter_report(args.runs, cards=args.cards, judge=args.judge))
+        text = json.dumps(report, ensure_ascii=False, indent=2)
+        if args.output:
+            Path(args.output).write_text(text + chr(10), encoding='utf-8')
+        print(text)
+        return 0
+    if args.auto_command == 'blocks':
+        # Pure file analysis: no BM25 index, model client or tracing to open.
+        from evaluation.block_report import block_report
+        report = block_report(args.runs)
+        text = json.dumps(report, ensure_ascii=False, indent=2)
+        if args.output:
+            Path(args.output).write_text(text + '\n', encoding='utf-8')
+        print(text)
+        return 0
     return asyncio.run(execute(args))

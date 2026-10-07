@@ -72,11 +72,32 @@ python scripts/evaluate.py auto run --cards evaluation/runs/cards-NEW \
 python scripts/evaluate.py auto compare \
   --baseline evaluation/runs/answer-BASE/experiment.json \
   --candidate evaluation/runs/answer-NEW/experiment.json
+# 저장 결과의 주장 차단 사유 × Judge 판정 집계: 모델 호출 없음, 여러 실행 가능
+python scripts/evaluate.py auto blocks evaluation/runs/answer-NEW \
+  --output evaluation/runs/answer-NEW/blocks.json
+# 저장된 정상 주장에 알려진 오류를 넣어 검사별 탐지 측정: 기본은 모델 호출 없음
+python scripts/evaluate.py auto filters evaluation/runs/answer-NEW --cards evaluation/runs/cards-NEW \
+  --output evaluation/runs/answer-NEW/filters.json
+# 같은 변형을 Judge에도 보여 코드만/Judge만 잡는 오류를 구분: 실제 모델 호출
+python scripts/evaluate.py auto filters evaluation/runs/answer-NEW --cards evaluation/runs/cards-NEW --judge
 ```
 
 `run --taxes corporate vat`/`--types compound temporal`/`--split dev|test|all`/
 `--limit N`으로 실행 범위를 정한다. 같은 고정 카드·선택 목록의 실행만 compare할 수 있다.
 코드/모델/검색 설정을 바꾼 실험은 새 출력 폴더에서 실행한다. `--resume`은 변경된 설정을 거부한다.
+
+`auto blocks`는 보류된 주장을 공개 검사 코드별로 세고 같은 주장의 Judge 판정과 교차한다.
+`false_block_candidates`는 Judge가 supported인데 결정적 검사가 막은 주장이고, `sole_blocker`는
+그 코드 하나만으로 막힌 수다. `cases_without_claims`는 라우팅·도구·계획에서 끝나 주장 공개 단계에
+도달하지 못한 사례다. Judge는 독립 세무 정답이 아니므로 이 표는 점검할 검사의 순서이며
+검사 오류의 입증이 아니다. 코드 분류(integrity/repairable/evidence)는
+`app/services/claim_verification.py`의 재생성 피드백과 같다.
+
+`auto filters`는 저장 실행에서 현재 검사를 모두 통과하는 주장을 씨앗으로 고르고, 없는 조문·조문 번호 이동·
+지어낸 세액·인용 변조·다른 세목·다른 주체·결론 뒤집기·예외 삭제·다른 근거 연결을 하나씩 넣어 어느 검사가 잡는지
+센다. `--judge`면 씨앗과 변형을 Judge에도 보이고 `only_code`(코드만 잡음)·`only_judge`·`missed`를 나눈다.
+검사별 `false_block_candidates`는 같은 실행의 `auto blocks` 값이다. 코드만 잡는 오류가 있는 검사는 차단을 유지하고,
+Judge와 겹치면서 오탐이 많은 검사는 신호로 낮출 후보다. 합성 변형의 수치이며 실제 정확도 입증이 아니다.
 
 ## 실제 채팅 평가와 LangSmith
 
