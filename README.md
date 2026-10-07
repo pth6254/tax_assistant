@@ -1,6 +1,6 @@
 # 세무 AI 어시스턴트
 
-## 현재 상태와 문서 안내 — 2026-10-04
+## 현재 구현과 문서 안내
 
 대한민국 세무 질문을 주체·세목·요청별로 나누고, 확보한 원문과 계산 결과에 연결된 주장을 검사해 답변하는 플랫폼입니다.
 
@@ -8,29 +8,26 @@
 |---|---|
 | 생성·계획·Judge | OpenRouter `openai/gpt-6-luna`, 작업별 설정 8개 |
 | 임베딩 | Windows Ollama `qwen3-embedding:4b`, v1, 2,560차원 |
-| 공식 현행 검색 | 한국어 BM25 + 조문/항 벡터 + 검증된 GraphRAG, Fuzzy·Regex·MMR |
-| 답변 검증·표시 | 쟁점 계획/근거 충족/주장·인용 검사 → SSE 진행 → 질문별 구조화 답변·근거 패널 |
+| 공식 현행 검색 | 한국어 BM25 + 조문/항 벡터 + 검증된 GraphRAG, Fuzzy·Regex·MMR. 법 이름 없이 제도·가산세 이름으로 물어도 계획 모델이 해당 세법을 고르고, 법령명이 명시된 조문은 정확 조회 |
+| 답변 검증·표시 | 쟁점 계획/근거 충족/주장·인용 검사 → SSE 진행 → 질문별 구조화 답변·근거 패널. 사실로 확정되는 검사는 직접 보류하고, 단어로 추정하는 검사는 Judge가 확인합니다 |
 | 계산 | 전용 계산기 6종 + 공식 근거 기반 제한 JSON 산식/Decimal 참고 계산 |
-| 운영자 평가 | 공식 XML 기반 합성 질문/기준 자동 생성·실제 채팅/Judge·LangSmith 게시. 독립 전문가 검수는 후속 작업 |
+| 운영자 평가 | 공식 XML 기반 합성 질문/기준 자동 생성·실제 채팅/Judge·LangSmith 게시, 저장 결과의 차단 집계·오류 주입 측정. 독립 전문가 검수는 후속 작업 |
 | 전용 Reranker | **미구현**. 모델·별도 서비스·후보 풀 변경은 후속 제안 |
 
 - **실행**: WSL 가상환경에서 `bash dev/docker-up-wsl.sh backend frontend`. 웹 `http://localhost:3001`, 백엔드 `http://127.0.0.1:8001`. llama.cpp는 선택형 실험입니다.
-- **직전 제품 검증(2026-10-01)**: backend **969 passed, 2 skipped, 5 subtests passed**; frontend **19 passed**/build. 실모델 부가가치세·증여 예제와 Edge PC/모바일 표시를 확인했습니다. 이는 전체 세무 정답률이 아닙니다.
-- **자동 평가 구현 검증(2026-10-04)**: 최신 backend **1,005 passed, 2 skipped, 5 subtests passed**. 실제 생성 6개 중 3개 채택, 동일 채팅 답변 3개 최종 재판정 및 실제 추가 실행 1개의 평가기 오류 0; LangSmith 게시/원격 저장 확인. 발견한 답변 누락·과도한 유보·버전 문제는 후속 서비스 수정 대상입니다.
-- **문서 작업의 읽기 확인(2026-10-01 14:18 KST)**: readiness/dependencies `ready`, Graph `ok`, 웹 200, Alembic `20260930_0010`. 이때 전체 테스트·DB 감사를 다시 실행한 것은 아닙니다.
-- **남은 범위**: 동일 시행본 복원이 미확인인 원문 후보 27행, 연결 보류 인용 4,952개, 독립 holdout/Judge 교정과 추가 검색 범위.
+- **검증 상태·테스트 수치**: 날짜와 범위가 함께 기록된 [현재 상태](docs/ai/CURRENT_STATUS.md)를 확인하세요. 이 문서의 날짜별 실험 수치는 기록된 시점과 범위에 한정하며 전체 세무 정답률이 아닙니다.
+- **남은 범위**: 동일 시행본 복원이 미확인인 원문 후보 27행, 연결 보류 인용 4,952개, 독립 holdout/Judge 교정과 추가 검색 범위. 상세는 [인수인계](docs/ai/HANDOFF.md)의 "현재 인계"입니다.
 
 | 문서 | 용도 |
 |---|---|
-| [AGENTS.md](AGENTS.md) · [CLAUDE.md](CLAUDE.md) | AI 작업 시작·실행·검증 규칙 |
+| [AGENTS.md](AGENTS.md) · [CLAUDE.md](CLAUDE.md) | AI 작업 규칙(공통) · Claude Code 진입점. 문서별 작성 형식 포함 |
 | [프로젝트 컨텍스트](docs/ai/PROJECT_CONTEXT.md) | 목적·코드 책임·도메인 불변 규칙 |
-| [현재 상태](docs/ai/CURRENT_STATUS.md) · [설계 결정](docs/ai/DECISIONS.md) | 완료 결과·검증 범위·설계 이유 |
-| [인수인계](docs/ai/HANDOFF.md) | 다음 작업·최종 결과/백업 위치·재현 방법 |
+| [현재 상태](docs/ai/CURRENT_STATUS.md) | **상태·검증 수치의 원본**(날짜·범위 포함) |
+| [설계 결정](docs/ai/DECISIONS.md) | 결정과 그 이유 |
+| [인수인계](docs/ai/HANDOFF.md) | 다음 작업·미해결 결함·결과/백업 위치·세션 기록 |
 | [검증 흐름](docs/ai/RELIABILITY_WORKFLOW.md) | 질문·도구·근거·주장·SSE의 실제 연결 |
 | [추가 RAG 개선 제안](docs/ai/RAG_IMPROVEMENT_PLAN.md) | Reranker와 시점·근거 구성·실무 자료 확대의 미구현 설계 |
-| [자동 질문·평가 카드](evaluation/AUTO_EVALUATION.md) | 원문/조건/기대 판단 고정·실제 답변 평가·LangSmith 자동 게시/재개 |
-
-아래 날짜별 수치·실험은 기록된 시점과 범위에 한정합니다. 현재 동작은 위 요약과 실제 코드, 미완료 작업은 최신 인수인계를 기준으로 확인합니다.
+| [자동 질문·평가 카드](evaluation/AUTO_EVALUATION.md) | 원문/조건/기대 판단 고정·실제 답변 평가·LangSmith 게시·차단 집계·오류 주입 측정 |
 
 ### 자동 질문·평가 카드 (2026-10-04)
 
