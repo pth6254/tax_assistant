@@ -511,6 +511,12 @@ def successful_tools(claims, context):
 
 
 DATE_INPUT = "거래·사건의 적용 시점"
+UNSPECIFIED_SCOPE = "거래 시점이 제시되지 않아, 확보한 법령 자료 기준의 일반적·조건부 설명입니다. 실제 적용 시점은 확인이 필요합니다."
+
+
+def states_general_scope(claim):
+    """The answer already says it rests on the retrieved text, not on an event date."""
+    return claim.kind == "source_summary" or UNSPECIFIED_SCOPE in claim.conditions
 
 
 def law_label(law):
@@ -521,8 +527,14 @@ def law_label(law):
 
 
 def requested_inputs(context, claims):
-    """The date prompt is only useful next to an answer; with nothing released the cause is evidence."""
-    return [value for value in context.plan.missing_inputs if not (value == DATE_INPUT and not claims)]
+    """Inputs worth asking the user for, matching what the answer itself already says.
+
+    With nothing released the cause is evidence, not a date. When the released text
+    already states it is a general explanation of the retrieved law, asking again for
+    a date only repeats that notice.
+    """
+    no_date_prompt = not claims or any(states_general_scope(claim) for claim in claims)
+    return [value for value in context.plan.missing_inputs if not (value == DATE_INPUT and no_date_prompt)]
 
 
 def subject_label(subject, text):
@@ -652,7 +664,7 @@ def render_structured_answer(claims, context, query=""):
                     return name, heading.group(2).strip()
         return None
 
-    unspecified_scope = "거래 시점이 제시되지 않아, 확보한 법령 자료 기준의 일반적·조건부 설명입니다. 실제 적용 시점은 확인이 필요합니다."
+    unspecified_scope = UNSPECIFIED_SCOPE
     source_scope = any(c.kind == "source_summary" or unspecified_scope in c.conditions for c in claims)
     historical_scope = any(version_undetermined(c, context) for c in claims)
 
@@ -944,7 +956,7 @@ async def generate_issue(query, issue, context, on_progress=None, feedback=None)
                     scope.append("질문의 거래·사건 연도에 적용되는 법령 버전은 미확정입니다.")
                 claim.conditions = list(dict.fromkeys([*scope, *claim.conditions]))
             elif claim.kind in {"legal", "guidance"} and not context.plan.dates:
-                scope = "거래 시점이 제시되지 않아, 확보한 법령 자료 기준의 일반적·조건부 설명입니다. 실제 적용 시점은 확인이 필요합니다."
+                scope = UNSPECIFIED_SCOPE
                 claim.conditions = list(dict.fromkeys([scope, *claim.conditions]))
         checks = check_claims(draft, scoped, query)
         if on_progress:
@@ -1110,6 +1122,8 @@ async def generate_verified_answer(query, context, *, repair=None, on_progress=N
                       if provisional else
                       "공개된 법적 주장에 대해 근거 및 의미 대조를 수행했습니다. 법적 정확성 보증은 아닙니다."
                       if report['checks']['legal_application'] == 'checked' else
+                      "확보한 법령 원문의 설명과 인용을 대조했습니다. 실제 거래 시점의 시행본과 적용 요건은 별도 확인이 필요합니다."
+                      if any(c.kind == "source_summary" for c in released) else
                       "요청한 원문 또는 계산 결과를 확인했습니다." if tool_ids else
                       "근거·조건 검사를 통과한 법적 설명이 없습니다. 쟁점별 부족한 근거와 처리 상태를 확인해 주세요.")
     return render_structured_answer(released, context, query), report
