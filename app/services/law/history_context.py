@@ -12,10 +12,30 @@ PAST = re.compile(r'과거\s*법|구법|종전|개정\s*전|당시')
 CURRENT = re.compile(r'현행|현재|오늘|지금\s*기준')
 OTHER_TASK = re.compile(r'계산|얼마|계약서|문서|서류|업로드|첨부|PDF|pdf')
 FOLLOWUP = re.compile(r'그럼|그러면|해당|같은|그\s*(?:법|조|항)|제\s*\d+\s*[조항호]|[가-하]\s*목')
+# Asking to see a provision's text, as opposed to asking for an explanation.
+LOOKUP = re.compile(r'원문|전문|조문|보여|조회|뭐라고')
+# What a lookup-shaped request is made of; anything left over is a question about facts.
+_LOOKUP_PARTS = re.compile(
+    r'\d{4}\s*년(?:\s*\d{1,2}\s*월)?(?:\s*\d{1,2}\s*일)?|\d{4}[-./]\d{1,2}[-./]\d{1,2}'
+    r'|[가-힣]+법(?:률)?(?:\s*시행(?:령|규칙))?|법령|버전'
+    r'|제?\s*\d+\s*조(?:\s*의\s*\d+)?|제?\s*\d+\s*[항호]|[가-하]\s*목'
+    r'|과거|구법|종전|개정\s*전|당시|기준|시점|시행|알려\s*(?:줘|주세요)|주세요|해\s*줘'
+    r'|[은는이가을를의에과와및도]|[\s.,!?·()]')
+MAX_LOOKUP_RESIDUE = 4
 
 
 def names_law(query):
     return any(m[0] not in GENERIC_LAW and ''.join(m[0].split()) not in GENERIC_LAW for m in LAW.finditer(query))
+
+
+def lookup_shaped(query):
+    """A request to read a provision as of a time, not a question about a situation.
+
+    Dates and statute names also appear in ordinary analysis questions ("2026년 6월
+    거래입니다. 소득세법 기준으로 … 설명해 주세요"). Those belong to question planning,
+    which keeps every issue check and still withholds conclusions it cannot date.
+    """
+    return bool(LOOKUP.search(query)) or len(_LOOKUP_PARTS.sub('', query)) <= MAX_LOOKUP_RESIDUE
 
 
 def temporal_request(query):
@@ -23,7 +43,8 @@ def temporal_request(query):
         return True
     if OTHER_TASK.search(query):
         return False
-    return bool(PAST.search(query) or (DATE.search(query) and names_law(query)))
+    explicit = PAST.search(query) or (DATE.search(query) and names_law(query))
+    return bool(explicit and lookup_shaped(query))
 
 
 def needs_history(query):

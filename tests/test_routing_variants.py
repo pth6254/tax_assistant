@@ -39,11 +39,13 @@ NEUTRAL = {
     "bare_current_year": lambda q: "2026년에 " + q,
 }
 
-# An event date together with a statute name is still an analysis request, but the
-# archive route takes it before question planning. Changing that order is a
-# separate design step (see docs/ai/HANDOFF.md), so the gap is pinned here.
+# An event date together with a statute name is still an analysis request. Only a
+# lookup-shaped request (read a provision as of a time) goes to the archive.
 EVENT_DATE_WITH_LAW = {
     "event_date_and_law_name": lambda q: "2026년 6월 1일 거래입니다. 소득세법 기준으로 " + q,
+    "past_year_and_law_name": lambda q: "2024년 귀속분이고 법인세법도 함께 봐야 합니다. " + q,
+    "word_dangsi": lambda q: q.replace("설명해 주세요", "당시 기준으로 설명해 주세요").replace(
+        "판단해 주세요", "당시 기준으로 판단해 주세요").replace("검토해 주세요", "당시 기준으로 검토해 주세요"),
 }
 
 
@@ -58,7 +60,6 @@ def test_neutral_rewording_keeps_route(base, variant):
     assert signature(NEUTRAL[variant](BASES[base])) == signature(BASES[base])
 
 
-@pytest.mark.xfail(strict=True, reason="날짜+법령명 분석 질문이 질문 계획 전에 과거 법령 경로로 분기됨")
 @pytest.mark.parametrize("variant", EVENT_DATE_WITH_LAW)
 @pytest.mark.parametrize("base", BASES)
 def test_event_date_with_law_name_keeps_route(base, variant):
@@ -76,3 +77,11 @@ def test_event_date_with_law_name_keeps_route(base, variant):
 ])
 def test_explicit_signals_still_route(query, key):
     assert signature(query)[key]
+
+
+@pytest.mark.parametrize("query", [
+    "2010년 소득세법", "2025년 소득세법 제55조", "2025-01-01 소득세법 시행령", "구법 기준",
+    "2010년 소득세법 제55조 원문 보여줘", "2024년 부가가치세법 제38조 조문", "개정 전 소득세법 제14조",
+])
+def test_reading_a_provision_as_of_a_time_still_goes_to_the_archive(query):
+    assert signature(query)["archive"]
