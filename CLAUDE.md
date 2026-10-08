@@ -22,6 +22,7 @@
 |---|---|
 | 주체·쟁점 계획·세법 선택 | [question_planning.py](app/services/question_planning.py), [tax_laws.py](app/services/tax_laws.py) |
 | 재검색·교차 법령 조회 | [reliable_workflow.py](app/services/reliable_workflow.py), [hybrid_search_service.py](app/services/search/hybrid_search_service.py) |
+| 쟁점별 근거 충족 판정 | [issue_coverage.py](app/services/issue_coverage.py) |
 | 질문 경로(과거 법령·도구) | [history_context.py](app/services/law/history_context.py), [policy.py](app/services/tools/policy.py), [planner.py](app/services/tools/planner.py) |
 | 검색 후보·Graph 확장 | [hybrid_search_service.py](app/services/search/hybrid_search_service.py), [graph_search_service.py](app/services/search/graph_search_service.py) |
 | 근거·주장 공개 검사 | [evidence.py](app/services/evidence.py), [claim_verification.py](app/services/claim_verification.py) (검사 등록표 `CHECKS`) |
