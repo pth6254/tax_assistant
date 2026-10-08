@@ -62,7 +62,7 @@ question_part에는 이 주장이 답하는 요청을 원 질문에서 짧게 �
 '준비할 서류' 중 자신이 답하는 원문을 기록하세요. 공통 설명은 관련된 첫 요청을 사용하고,
 대응하는 원문이 없으면 빈 문자열로 두세요. 이 값은 검증 결과를 바꾸지 않고 질문 순서로 배치하는 데만 사용합니다.
 depends_on은 선행 주장 ID입니다. 주체·세목·시점·가정을 보존하세요. 조문 존재만으로 적용을 단정하지 마세요.
-거래 시점이 없으면 현재 확보한 자료에 따른 일반적인 조건부 설명으로 한정하세요.
+거래 시점이 없으면 적용 시점은 확인이 필요하다고 두고, 확보한 자료에 따른 조건부 설명과 질문 사실에의 적용까지 쓰세요.
 질문이 비용·거래 항목을 여러 개 열거하면 항목별 판단을 가능한 한 별도 주장으로 작성하세요.
 각 항목 주장의 text는 질문에 나온 항목명 그대로 `항목명: 판단`으로 시작하세요.
 같은 법적 기준을 공유해도 비용별 사실관계가 다르면 여러 항목을 한 주장으로 합치지 마세요.
@@ -74,7 +74,10 @@ JUDGE_PROMPT = """세무 답변의 주장을 제공된 근거만으로 독립적
 applicability는 주체/세목/시점/요건/예외와 사용자의 가정이 맞는지 판단하세요.
 각각 supported/contradicted/insufficient로 판정하고 한국어 이유를 적으세요.
 사건에 대한 확정 판단에 필요한 원문 정보나 시점이 부족하면 insufficient입니다.
-사용자가 명시한 가정 아래의 일반적인 조건부 설명은 사실확정과 구분하세요. 거래일 미상임을 밝히고
+사용자가 명시한 가정 아래의 일반적인 조건부 설명은 사실확정과 구분하세요.
+질문의 사실에 규칙을 적용한 주장은, 인용 원문이 그 규칙을 뒷받침하고 질문에 실제로 적힌 사실만 전제로 하며
+판단에 필요한 빠진 사실을 조건으로 밝혔다면 supported로 판정할 수 있습니다. 질문에 없는 사실을 전제하거나
+사용자 진술을 확인된 사실처럼 단정하면 applicability는 contradicted입니다. 거래일 미상임을 밝히고
 확보한 자료 기준으로 설명하는 주장에 거래일 미상만을 이유로 일괄 insufficient를 주지 마세요.
 guidance의 자료 확인 제안은 조문에 목록이 열거됐는지가 아니라 확인 목적과 근거의 논리적 연결을 심사하세요.
 source_summary의 applicability는 사건 연도에 법령을 적용할 수 있는지가 아니라, 주장 자체가 확보한 원문의
@@ -235,8 +238,8 @@ def current_version_note(claims, context):
             claim.kind == "legal" and covered_by_current_version(
                 context.plan.dates, linked_context(claim, records).records) for claim in claims):
         return None
-    return ("> **적용 시점:** 질문의 사건일(" + ", ".join(context.plan.dates) + ")은 인용한 법령 시행본의 시행일 이후이므로 "
-            "그 시행본을 기준으로 판단했습니다. 부칙의 적용례·경과규정은 별도로 확인해야 합니다.")
+    return ("> **적용 시점:** 질문의 사건일(" + ", ".join(context.plan.dates) + ")에 시행 중이던 법령 시행본을 "
+            "기준으로 판단했습니다. 부칙의 적용례·경과규정과 조문별 시행일은 별도로 확인해야 합니다.")
 
 
 def unverified_citations(claim, linked):
@@ -319,7 +322,7 @@ CHECKS = {
     "issue_evidence_unavailable": Check("block", "evidence", False),
     "issue_execution_failed": Check("block", "evidence", False),
     "historical_version_required": Check("block", "evidence", False,
-        "사건 연도의 법령 버전이 확인되지 않아 legal 주장을 확정할 수 없습니다. 확보한 원문 기준의 source_summary로 쓰세요."),
+        "인용한 근거가 사건 당시 시행본이 아니어서 legal 주장을 확정할 수 없습니다. governs_event_dates가 true인 근거(사건 당시 시행본)가 있으면 그것을 인용하고, 없으면 확보한 원문 기준의 source_summary로 쓰세요."),
     "semantic_check_not_passed": Check("block", "evidence", False,
         "인용한 원문이 이 결론이나 적용을 뒷받침하지 않는다고 판정됐습니다. 여러 명제를 한 주장에 묶었다면 근거가 직접 뒷받침하는 명제만 남기고 나머지는 지우거나 별도 주장으로 나누며, 원문이 직접 말하는 범위로 줄이거나 조건을 명시하세요."),
 }
@@ -846,9 +849,10 @@ def render_structured_answer(claims, context, query=""):
     sources = [record for record in context.records if record.id in used and is_official(record)]
     references = {}
     for record in sources:
+        # An archived version keeps its own entry: it is a different text from the current one.
         refs = references.setdefault(record.law_name, [])
-        if record.reference not in refs:
-            refs.append(record.reference)
+        if (record.reference, record.location) not in refs:
+            refs.append((record.reference, record.location))
     if unresolved:
         pending_checks.append(", ".join(label(issue) for issue in unresolved) +
                          "에 필요한 근거 또는 적용 조건을 확인하지 못해 해당 판단을 보류합니다.")
@@ -873,13 +877,18 @@ def render_structured_answer(claims, context, query=""):
         sections.append("## 추가 확인이 필요한 부분\n\n" + "\n\n".join(
             "- " + prose(value).replace("\n", "\n  ") for value in dict.fromkeys(pending_checks)))
     if references:
-        def source_link(law, reference):
+        def source_link(law, entry):
+            reference, location = entry
+            if location:
+                # No "[법률]" marker: the web turns that into a current-law viewer link,
+                # which would show today's text for an archived version.
+                return f"{law} {reference} ({location})"
             category = next(r.category for r in sources if r.law_name == law and r.reference == reference)
             # Official DB types differ from the Markdown citation/viewer labels.
             category = {"대통령령": "시행령", "총리령": "시행규칙", "부령": "시행규칙"}.get(category, category)
             return f"[{category}] {law} {reference}"
         sections.append("**확인한 근거**\n\n" + "\n".join(
-            "- " + " · ".join(source_link(law, ref) for ref in refs) for law, refs in references.items()))
+            "- " + " · ".join(source_link(law, entry) for entry in refs) for law, refs in references.items()))
     if historical_scope:
         sections.append("> **적용 시점:** 질문의 사건 연도에 적용되는 법령 버전과 부칙은 아직 확인되지 않았습니다. "
                         "실제 거래일과 당시 시행본을 대조해야 합니다.")
@@ -939,6 +948,10 @@ SCOPED_GENERATION_PROMPT = GENERATION_PROMPT + """
 이번 호출은 plan에 포함된 단일 쟁점만 답하세요. 다른 주체나 다른 세목의 결론은 작성하지 마세요.
 원 질문은 사실관계 참고용이며 이 호출에서 모든 질문에 답할 필요는 없습니다.
 최대 5개 주장으로 핵심 법적 효과와 조건 또는 요청한 자료·확인 목적을 설명하세요. 질문 사실을 반복하는 fact는 생략하세요.
+질문이 사용자의 구체적 상황을 묻는다면 일반 규칙만 쓰고 끝내지 말고, 그 규칙을 질문에 나온 사실에 적용한 주장을 따로 쓰세요.
+적용 주장은 질문에 실제로 적힌 사실만 전제로 하고, 판단에 필요하지만 질문에 없는 사실(신고 여부, 금액, 시점 등)은
+conditions에 '…인지 확인이 필요합니다'처럼 적으세요. 그 사실에 따라 결과가 갈리면 갈리는 경우를 나눠 쓰세요.
+질문에 없는 사실을 지어내거나 확정하지 마세요.
 독립적으로 읽을 수 있는 조건부 주장으로 작성하고 단순 설명 순서는 depends_on으로 연결하지 마세요.
 한 주장에는 법적 명제 하나와 그것을 직접 뒷받침하는 인용만 담으세요. 일반 규칙, 그 규칙의 요건, 사례에의 적용,
 다른 조문이나 다른 법에 의존하는 명제는 서로 다른 주장으로 나누세요. 근거 검사는 주장 단위로 통과 여부를 정하므로

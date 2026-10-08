@@ -84,3 +84,17 @@ async def test_generation_is_told_what_the_other_issues_own(monkeypatch):
                                         'question': ctx.plan.issues[1].question}]
     system = sent[0][0]['content']
     assert 'other_issues는 같은 질문의 다른 쟁점' in system and '되풀이하면 새 주장이 아닙니다' in system
+
+
+def test_planner_generation_and_judge_share_one_rule_for_applying_the_users_facts():
+    """Prompt contracts only: whether the model follows them needs a live run."""
+    import inspect
+    from app.services import question_planning
+    planner = inspect.getsource(question_planning.plan_question)
+    assert '질문의 사실관계에 대한 적용' in planner
+    scoped = claims.SCOPED_GENERATION_PROMPT
+    assert '질문에 나온 사실에 적용한 주장을 따로 쓰세요' in scoped
+    assert '질문에 없는 사실을 지어내거나 확정하지 마세요' in scoped
+    assert '일반적인 조건부 설명으로 한정하세요' not in scoped  # no longer forbids the application
+    assert '질문에 실제로 적힌 사실만 전제로' in claims.JUDGE_PROMPT
+    assert 'applicability는 contradicted' in claims.JUDGE_PROMPT

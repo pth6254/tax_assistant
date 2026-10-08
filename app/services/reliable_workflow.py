@@ -3,6 +3,7 @@ from app.services.evidence import EvidenceContext, context_from_records
 from app.services.search.query_constraints import extract_constraints
 from app.services.tax_laws import KNOWN_LAWS
 from app.services.question_planning import plan_question, retrieve_issues
+from app.services.historical_evidence import attach_event_versions
 from app.services.tools.planner import run_tools_for_query
 from app.services.claim_verification import generate_verified_answer
 from app.schemas.reliability import QuestionPlan
@@ -50,6 +51,7 @@ async def prepare_context(query, laws, user_id, history, search, on_event=None):
     progress({"type": "verification", "status": "planning"})
     plan = await plan_question(query, laws, history)
     context = await retrieve_issues(plan, query, user_id, search, on_progress=progress)
+    context = await attach_event_versions(context)
     records = list(context.records)
     coverage = dict(context.coverage)
     tool_count = 0
@@ -139,8 +141,8 @@ async def answer_context(query, context, user_id, search, on_event=None):
         for issue_id, state in context.coverage.items():
             if state.get('formula_diagnostics'):
                 merged_coverage[issue_id] = dict(merged_coverage[issue_id], formula_diagnostics=state['formula_diagnostics'])
-        return context_from_records([*context.records, *extra.records], plan=context.plan,
-                                    coverage=merged_coverage)
+        return await attach_event_versions(context_from_records(
+            [*context.records, *extra.records], plan=context.plan, coverage=merged_coverage))
     try:
         async with asyncio.timeout(240):
             return await generate_verified_answer(query, context, repair=repair, on_progress=on_event)

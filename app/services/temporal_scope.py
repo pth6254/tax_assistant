@@ -1,11 +1,12 @@
-"""Decide by dates alone whether a dated question may rely on the stored current version.
+"""Decide by dates alone whether a dated question may rely on a cited version.
 
-Official records in the current index are the version in force today. If an event
-falls entirely between a record's effective date and today, that version governed
-the event, so the record can support a definite legal claim about it. Anything
-else (an earlier or partly earlier period, a future date, an unparseable date or
-a record without an effective date) stays unresolved and keeps the historical
-gate. Supplementary provisions (부칙) can still apply different rules; the
+A record is in force from its effective date until the day before the next version
+(`effective_to`), or until today for the current index. If an event falls entirely
+inside that window, that version governed the event, so the record can support a
+definite legal claim about it. Archived versions enter through
+historical_evidence. Anything else (a partly covered period, a future date, an
+unparseable date or a record without an effective date) stays unresolved and
+keeps the historical gate. Supplementary provisions (부칙) can still apply different rules; the
 rendered note says so instead of claiming they were checked.
 """
 import calendar
@@ -52,18 +53,28 @@ def effective_date(record):
         return None
 
 
+def in_force_until(record, today):
+    try:
+        return date.fromisoformat(record.effective_to.replace("-", "")) if record.effective_to else today
+    except ValueError:
+        return None
+
+
+def covers(record, interval, today):
+    start, end = effective_date(record), in_force_until(record, today)
+    return start is not None and end is not None and start <= interval[0] and interval[1] <= min(end, today)
+
+
 def unresolved_dates(dates, records, today=None):
-    """Dates for which the given current versions are not shown to have governed."""
+    """Dates for which the given versions are not shown to have governed."""
     today = today or datetime.now(ZoneInfo("Asia/Seoul")).date()
     official = [record for record in records if is_official(record)]
-    effective = [effective_date(record) for record in official]
-    if not official or any(value is None for value in effective):
+    if not official:
         return list(dates)
-    latest = max(effective)
     unresolved = []
     for value in dates:
         interval = event_interval(value)
-        if interval is None or interval[0] < latest or interval[1] > today:
+        if interval is None or not all(covers(record, interval, today) for record in official):
             unresolved.append(value)
     return unresolved
 
