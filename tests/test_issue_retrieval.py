@@ -24,7 +24,7 @@ async def test_insufficient_issue_gets_targeted_retry_only(monkeypatch):
     search = AsyncMock(side_effect=lambda queries, law, **kwargs: [source(law_name=law)])
     rounds = 0
 
-    async def assess(issues, records):
+    async def assess(issues, records, scope_issues=None):
         nonlocal rounds
         rounds += 1
         return {issue.id: {

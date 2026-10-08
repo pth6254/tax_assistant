@@ -1,3 +1,5 @@
+import { issueLabel } from './issueLabel.js'
+
 const CHECKS = {
   citation: { checked: '인용 내용과 확보한 원문을 대조했습니다.', failed: '인용 근거를 확인하지 못했습니다.',
     not_assessed: '공식 법령 인용 검사를 수행하지 않았습니다.' },
@@ -10,11 +12,6 @@ const PROGRESS = { planning: '질문의 요청과 쟁점을 확인하고 있습�
 
 const STATES = { checked: '근거 대조', limited: '일부 확인 필요', withheld: '답변 보류',
   not_assessed: '검토 범위 미확인' }
-
-function issueLabel(issue) {
-  const subject = /^[A-Z]$/.test(issue.subject || '') ? `${issue.subject}회사` : issue.subject
-  return [subject, issue.law === 'ALL' ? '확인 사항' : issue.law].filter(Boolean).join(' · ')
-}
 
 function FormulaDetails({ calculation }) {
   if (!calculation?.execution) return null
@@ -60,7 +57,7 @@ export default function VerificationPanel({ verification, loading, progress, onC
       </dl>
       {verification.plan?.issues?.length > 0 && <ul className="verification-issues" aria-label="쟁점별 확인 상태">
         {verification.plan.issues.map(issue => <li key={issue.id}>
-          <span>{issueLabel(issue)}</span><span>
+          <span>{issueLabel(issue, verification.plan.issues)}</span><span>
           {verification.judge?.missing_issue_ids?.includes(issue.id) ? '설명 보완 필요' :
             verification.claims?.some(c => c.issue_id === issue.id && c.released) ? '근거가 연결된 설명 제공' :
               verification.coverage?.[issue.id]?.calculation ? '계산 결과 제공' : '추가 확인 필요'}</span>

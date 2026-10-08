@@ -1,5 +1,6 @@
 """Generate bounded claims, check evidence, then render only released claims."""
 import asyncio
+import itertools
 import json
 import re
 import logging
@@ -537,6 +538,43 @@ def requested_inputs(context, claims):
     return [value for value in context.plan.missing_inputs if not (value == DATE_INPUT and no_date_prompt)]
 
 
+def _grams(text):
+    compact = re.sub(r"[\s*#>\-.,·]+", "", text)
+    return {compact[i:i + 2] for i in range(len(compact) - 1)}
+
+
+def _overlap(first, second):
+    one, two = _grams(first), _grams(second)
+    return len(one & two) / len(one | two) if one and two else 0.0
+
+
+def repeat_diagnostics(claims, text_threshold=0.3, condition_threshold=0.8):
+    """Released claims that repeat each other. Diagnostic only: nothing is dropped.
+
+    Character overlap cannot prove two sentences mean the same, and a condition that
+    differs by a phrase may matter, so this feeds measurement, never the release.
+    """
+    text, conditions = [], []
+    for first, second in itertools.combinations(claims, 2):
+        score = _overlap(first.text, second.text)
+        if score >= text_threshold:
+            text.append({"claims": [first.id, second.id], "similarity": round(score, 2)})
+    seen = [(c.id, value) for c in claims for value in c.conditions]
+    for (first_id, first), (second_id, second) in itertools.combinations(seen, 2):
+        if first_id != second_id and first != second and _overlap(first, second) >= condition_threshold:
+            conditions.append({"claims": [first_id, second_id], "similarity": round(_overlap(first, second), 2)})
+        elif first_id != second_id and first == second:
+            conditions.append({"claims": [first_id, second_id], "similarity": 1.0})
+    return {"text": text, "conditions": conditions}
+
+
+def common_subject(plan):
+    """The one subject every analysis issue shares; headings need not repeat it (same rule as the panel)."""
+    issues = [i for i in plan.issues if i.kind == "analysis"]
+    subjects = {i.subject.strip() for i in issues}
+    return subjects.pop() if len(issues) > 1 and len(subjects) == 1 else ""
+
+
 def subject_label(subject, text):
     """A bare letter is a company only when the user wrote it so (A회사/A사)."""
     if re.fullmatch(r"[A-Z]", subject) and re.search(r"(?<![A-Za-z])" + subject + r"(?:[가-힣]{0,8}회사|사)", text):
@@ -641,7 +679,7 @@ def render_structured_answer(claims, context, query=""):
             law = "양도소득세"
         elif issue.law == "소득세법" and "금융" in issue.question:
             law = "금융소득 종합과세"
-        subject = subject_label(issue.subject.strip(), query)
+        subject = "" if issue.subject.strip() == common_subject(context.plan) else subject_label(issue.subject.strip(), query)
         subject = subject + " · " if subject else ""
         return subject + law
 
@@ -906,6 +944,11 @@ SCOPED_GENERATION_PROMPT = GENERATION_PROMPT + """
 다른 조문이나 다른 법에 의존하는 명제는 서로 다른 주장으로 나누세요. 근거 검사는 주장 단위로 통과 여부를 정하므로
 여러 명제를 한 주장에 묶으면 근거가 없는 한 부분 때문에 근거가 있는 부분까지 함께 보류됩니다.
 인용한 원문에 없는 조문·요건은 그 주장에 쓰지 말고, 원문이 직접 말하는 명제만 주장으로 만드세요.
+other_issues는 같은 질문의 다른 쟁점입니다. 그 쟁점의 법·주체에 속한 내용은 쓰지 말고 이 쟁점의 법과 근거만 쓰세요.
+두 법의 관계(중복 조정·준용)는 그 관계를 정한 조문이 이 쟁점의 근거에 있을 때만 쓰세요.
+conclusion을 쓴 쟁점에서 나머지 주장은 그 결론의 결과 문장을 다시 쓰지 말고, 근거 조문이 추가로 정하는
+요건·범위·예외·준용 대상만 쓰세요. 이미 쓴 결론을 다른 표현으로 되풀이하면 새 주장이 아닙니다.
+여러 주장에 공통인 조건은 가장 먼저 필요한 주장 한 곳에만 적고 다른 주장의 conditions에 되풀이하지 마세요.
 공통 출처·적용연도 유보는 서버가 기록합니다. conditions에는 개별 조건과 별도 미확인 범위만 넣으세요.
 citations.evidence_id에는 E1 같은 제공된 짧은 ID, quote에는 E1:P2 같은 span_id를 선택하세요.
 text와 conditions에서 근거 법령·조문을 가리킬 때는 조문 번호를 직접 쓰지 말고 [[E1]]처럼 그 주장이 인용한 근거 ID를 쓰세요.
@@ -931,6 +974,9 @@ async def generate_issue(query, issue, context, on_progress=None, feedback=None)
         for item in evidence:
             item["governs_event_dates"] = covered_by_current_version(context.plan.dates, [sources[item["id"]]])
     payload = {"question": query, "plan": scoped.plan.model_dump(), "evidence": evidence,
+               "other_issues": [{"id": other.id, "subject": other.subject, "law": other.law,
+                                 "question": other.question}
+                                for other in context.plan.issues if other.id != issue.id],
                "coverage": scoped.coverage, "previous_failures": feedback}
     try:
         schema = strict_schema(AnswerDraft)
@@ -1113,6 +1159,9 @@ async def generate_verified_answer(query, context, *, repair=None, on_progress=N
         report['formula_calculations'] = formula_reports
     # The stored plan feeds the evidence panel; it asks for the same inputs as the answer.
     report["plan"]["missing_inputs"] = requested_inputs(context, released)
+    repeats = repeat_diagnostics(released)
+    if repeats["text"] or repeats["conditions"]:
+        report["repeats"] = repeats
     report["citations"] = [dict(evidence_id=r.id, law_name=r.law_name, reference=r.reference,
                                  label=r.category, origin=r.origin, version_id=r.version_id,
                                  effective_from=r.effective_from, source=r.source,

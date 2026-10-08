@@ -145,7 +145,7 @@ async def test_search_retains_each_tax_and_reports_missing(monkeypatch):
     monkeypatch.setattr(planning.config, 'TAVILY_API_KEY', '')
     plan = planning.fallback_plan('법인세와 부가가치세', ['법인세법', '부가가치세법'])
     search = AsyncMock(side_effect=lambda queries, law, **kw: [source(law_name='법인세법')] if law == '법인세법' else [])
-    async def assess(issues, records):
+    async def assess(issues, records, scope_issues=None):
         return {issue.id: {'status': 'sufficient' if records.get(issue.id) else 'missing',
                            'relevant_ids': [r.id for r in records.get(issue.id, [])],
                            'missing_requirements': []} for issue in issues}

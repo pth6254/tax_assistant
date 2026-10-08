@@ -63,7 +63,8 @@ async def test_repair_search_names_the_missing_article(monkeypatch):
         seen['repair'] = repair
         return 'answer', {}
 
-    async def retrieve(plan, query, user_id, search, on_progress=None):
+    async def retrieve(plan, query, user_id, search, on_progress=None, scope_issues=None):
+        seen["scope"] = scope_issues
         seen['plan'] = plan
         return context_from_records([], plan=plan, coverage=ctx.coverage)
 
@@ -75,3 +76,11 @@ async def test_repair_search_names_the_missing_article(monkeypatch):
     question = seen['plan'].issues[0].question
     assert '소득세법 제81조의5' in question and question.startswith('가산세 중복 적용')
     assert seen['plan'].issues[0].law == '국세기본법'  # the issue itself keeps its law
+
+
+def test_gap_articles_are_read_even_when_a_word_precedes_the_statute_name():
+    # Judges write "관련 소득세법 제81조의5(…)" more often than a bare "소득세법 제81조의5".
+    issue, ctx = issue_and_context(['관련 소득세법 제81조의5(무기장가산세) 전문 및 복식부기의무자 요건',
+                                    '위 규정이 준용하는 국세기본법 제47조의2 제6항의 범위'])
+    refs = workflow.gap_references(issue, ctx, judge('그리고 상속세 및 증여세법 제53조도 필요합니다.'))
+    assert refs == ['소득세법 제81조의5', '국세기본법 제47조의2', '상속세 및 증여세법 제53조']

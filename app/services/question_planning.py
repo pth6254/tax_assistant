@@ -136,6 +136,9 @@ async def plan_question(query, laws, history=None):
         "개별 세법의 가산세·특례·의무와 공통 절차 규정(국세기본법 등)은 법별 쟁점으로 나누고, 근거가 되는 법만 쓰세요. "
         "어느 법인지 알 수 없으면 ALL. 보조 법령 필요성은 question에 적으세요. "
         "같은 주체와 세목의 요건·증빙·예외는 하나의 분석 쟁점에 합치세요. 검색어에 질문의 모든 요구를 담으세요. "
+        "쟁점이 여러 법에 걸치면 각 쟁점의 question에는 그 쟁점의 law와 주체에 속한 요건만 적으세요. "
+        "다른 쟁점의 법이 정한 요건을 이 쟁점에서 확인하라고 적지 마세요. 두 법의 관계(중복 조정·준용)는 "
+        "그 관계를 정한 규정이 속한 법의 쟁점 하나에만 적으세요. "
         "등장인물 모두를 별도 납세 쟁점으로 만들지 마세요. 한 사람의 세금에 관한 질문이면 거래 상대방이나 가족은 "
         "그 쟁점의 사실관계로 포함하고, 실제 질문에서 세무 처리를 묻는 주체를 subject로 쓰세요. "
         "반대로 양 당사자의 세무 문제를 각각 묻거나 서로 다른 납세의무를 묻는 경우에는 주체별 쟁점을 유지하세요. "
@@ -169,7 +172,7 @@ async def plan_question(query, laws, history=None):
         return fallback_plan(query, laws)
 
 
-async def retrieve_issues(plan, query, user_id, search, *, on_progress=None):
+async def retrieve_issues(plan, query, user_id, search, *, on_progress=None, scope_issues=None):
     """Retrieve and assess each analysis issue without losing its tax scope."""
     semaphore = asyncio.Semaphore(2)
     async def retrieve(issue):
@@ -221,7 +224,8 @@ async def retrieve_issues(plan, query, user_id, search, *, on_progress=None):
     by_issue = {key: records for key, records, _ in rows}
     coverage = {key: state for key, _, state in rows}
     issues = [issue for issue in plan.issues if issue.kind == "analysis"]
-    assessments = await assess_issues(issues, by_issue)
+    owners = [issue for issue in (scope_issues or plan.issues) if issue.kind == "analysis"]
+    assessments = await assess_issues(issues, by_issue, scope_issues=owners)
     for key, assessment in assessments.items():
         coverage[key].update(assessment)
     retry = [issue for issue in issues if coverage[issue.id]["status"] == "missing"
@@ -241,7 +245,12 @@ async def retrieve_issues(plan, query, user_id, search, *, on_progress=None):
             coverage[issue.id]["error"] = type(exc).__name__
     if retry:
         await asyncio.gather(*(retry_issue(issue) for issue in retry))
-        second = await assess_issues(retry, by_issue)
+        # The searched terms may name an article of another statute; the second
+        # assessment must see it under the same rule the search used to fetch it.
+        asked = [issue.model_copy(update={"question": " ".join([issue.question,
+                                                                *coverage[issue.id]["missing_requirements"][:2]])})
+                 for issue in retry]
+        second = await assess_issues(asked, by_issue, scope_issues=owners)
         for key, assessment in second.items():
             if assessment["status"] == "unverified":
                 coverage[key]["retry_assessment_error"] = assessment.get("error")

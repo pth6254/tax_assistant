@@ -1,6 +1,6 @@
 """Bounded orchestration; tool failure affects its issue and dependencies."""
 from app.services.evidence import EvidenceContext, context_from_records
-from app.services.law.reference_parser import reference_spans
+from app.services.search.query_constraints import extract_constraints
 from app.services.tax_laws import KNOWN_LAWS
 from app.services.question_planning import plan_question, retrieve_issues
 from app.services.tools.planner import run_tools_for_query
@@ -36,7 +36,7 @@ def gap_references(issue, context, judge):
         texts += [row.reason for row in judge.claims if row.claim_id.split(":", 1)[0] == issue.id]
     found = []
     for text in texts:
-        for _, reference in reference_spans(text):
+        for reference in extract_constraints(text).references:
             if (reference.law_name and reference.article_no
                     and any(reference.law_name.startswith(law) for law in KNOWN_LAWS)):
                 found.append(f"{reference.law_name} {reference.article_no}")
@@ -133,7 +133,8 @@ async def answer_context(query, context, user_id, search, on_event=None):
         retry_plan = QuestionPlan(issues=issues, dates=context.plan.dates,
                                   assumptions=context.plan.assumptions,
                                   missing_inputs=context.plan.missing_inputs)
-        extra = await retrieve_issues(retry_plan, query, user_id, search, on_progress=on_event)
+        extra = await retrieve_issues(retry_plan, query, user_id, search, on_progress=on_event,
+                                      scope_issues=context.plan.issues)
         merged_coverage = context.coverage | extra.coverage
         for issue_id, state in context.coverage.items():
             if state.get('formula_diagnostics'):
