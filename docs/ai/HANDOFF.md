@@ -36,6 +36,21 @@
 - `evaluation/runs/auto-evaluation-20261004/`: `pipeline-v2/cards/`(고정 카드), `rejudge-final/`(저장 답변 재판정), `live-final/`(새 실제 실행), `verification-final.json`, `langsmith-readback-final.json`. LangSmith Dataset/Experiment ID는 아래 2026-10-04 기록에 있다.
 - 컨테이너를 재생성하거나 다른 환경으로 인계할 때 이 폴더를 호스트에서 따로 보존한다.
 
+## 2026-10-08 참고 계산 재시도 피드백과 근거 중복
+
+사용자가 "금융소득으로 1억을 벌게 된다면 금융종합소득과세로 세금 얼마나 납부하게 될까?"를 다시 답변(대화 기록 722의 4번째 버전,
+10-08 11:02)했는데 금액 없이 원문 설명만 나왔다. 저장된 검증 기록과 코드로 확인했다.
+
+**원인(확인한 것)**
+
+- 참고 계산이 두 번 모두 거부됐다(`formula_review_incomplete`, 마지막 오류 `missing_prepaid_or_balance`). 산식 엔진은 기납부세액(prepaid)이 있으면 차감 납부·환급액(balance)도 요구하는데(`formula_engine.execute`), 모델이 balance 단계를 빠뜨렸다. 재시도에 전달된 피드백은 이 코드 문자열 하나뿐이었고, 계획 지시도 "필요하면 … prepaid 한 개와 balance 한 개"로 짝을 이뤄야 한다는 점이 모호했다.
+- 이 대화의 9-28 버전 1~3도 계산에 실패했다(입력 부족 안내). 기록의 1,588만원 성공 사례는 이 대화가 아닌 시험 실행이었다. 따라서 이번 실패를 10-07·10-08 변경 탓으로 볼 근거는 없다(계산 경로 `formula_workflow`는 그 변경과 별개). 모델 출력의 변동은 배제하지 못한다.
+- 근거 패널에 소득세법 제14조가 두 번 나왔다(근거 4건, 실제 조문 3개). 같은 DB 행(`version_id` 동일)이 계산 경로와 쟁점 검색 경로에서 머리말만 다르게 들어와 서로 다른 근거 ID가 됐다.
+
+**변경**: `formula_engine.complete_balance`가 기납부세액(prepaid)은 있는데 차감 납부·환급액(balance)이 없는 계획에 "총세액 − 기납부세액" 뺄셈 단계를 보통 단계로 추가한다(근거 rule은 두 단계의 것을 잇고 이름에 "서버 산출" 표시). 실행 전에 넣으므로 근거 연결 검사·실행·산식 심사·표시를 그대로 거친다. 의미가 하나로 정해지지 않는 경우(balance만 있음)는 보완하지 않고 엔진이 거부한다. `app/services/calculator/formula_feedback.py`가 산식 규칙 코드마다 의미와 고칠 방법을 붙여 재시도에 전달한다(뒤에 값 ID가 붙는 코드 포함, 규칙 자체는 그대로 거부). 계획 지시는 "prepaid와 balance는 함께 쓰거나 둘 다 빼고, prepaid를 쓰면 total-prepaid step을 balance로"로 명확히 했다. 검증 보고서의 근거 목록은 같은 저장 원문(`version_id`)을 한 번만 싣는다(`claim_verification.distinct_sources`).
+
+**검증**: WSL 전체 백엔드 **1,145 passed, 2 skipped**. 신규 `tests/test_formula_feedback.py`(6: 차감액 보완과 보완하지 않는 경우, 보완으로 재시도 없이 계산 성공, 엔진·근거 규칙 코드 전부에 설명이 있음, 보완할 수 없는 규칙은 두 번째 시도가 설명을 받음), `test_answer_panel` 1개(정리 코드를 끄면 실패함을 확인). 실모델 호출은 하지 않았다. 같은 질문의 수정 후 계산 성공 여부는 미확인이며, 모델이 balance 단계를 쓰는지는 웹에서 확인해야 한다.
+
 ## 2026-10-08 날짜+법령명 경로, 사실 적용, 사건 당시 법령 버전
 
 결정은 [DECISIONS.md](DECISIONS.md)의 2026-10-08 항목. 커밋 `4ca5af3`(경로), `bf3c83a`(사실 적용·사건 당시 버전).
