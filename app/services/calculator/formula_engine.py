@@ -24,6 +24,38 @@ def _same_units(units):
     return units[0]
 
 
+BALANCE_STEP = "derived_balance"
+
+
+def complete_balance(plan: FormulaPlan) -> FormulaPlan:
+    """Add the balance step a plan left out when it already reports prepaid tax.
+
+    Balance is total minus prepaid by definition, so the only correct step is that
+    subtraction. Adding it as an ordinary step keeps it under the same grounding,
+    execution, review and display as the planner's own steps. A balance without
+    prepaid has no single meaning and is left for the engine to reject.
+    """
+    roles = {}
+    for output in plan.outputs:
+        roles.setdefault(output.role, []).append(output)
+    if len(roles.get("total", [])) != 1 or len(roles.get("prepaid", [])) != 1 or roles.get("balance"):
+        return plan
+    steps = {step.id: step for step in plan.steps}
+    total, prepaid = steps.get(roles["total"][0].step_id), steps.get(roles["prepaid"][0].step_id)
+    if total is None or prepaid is None:
+        return plan
+    step_id = BALANCE_STEP
+    while step_id in steps or step_id in {value.id for value in plan.values}:
+        step_id += "_x"
+    rule_ids = list(dict.fromkeys([*total.rule_ids, *prepaid.rule_ids]))[:12]
+    step = {"id": step_id, "label": "차감 납부(환급) 세액 (총세액 − 기납부세액, 서버 산출)", "op": "subtract",
+            "args": [total.id, prepaid.id], "table_id": "", "rule_ids": rule_ids, "rounding": "none"}
+    return FormulaPlan.model_validate(plan.model_dump() | {
+        "steps": [*plan.model_dump()["steps"], step],
+        "outputs": [*plan.model_dump()["outputs"],
+                    {"label": "차감 납부(환급) 세액", "step_id": step_id, "role": "balance"}]})
+
+
 def execute(plan: FormulaPlan):
     values, units = {}, {}
     tables = {table.id: table for table in plan.tables}

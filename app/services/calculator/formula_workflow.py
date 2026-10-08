@@ -12,7 +12,8 @@ from app.schemas.formula import FormulaPlan, FormulaResearch, FormulaReview
 from app.schemas.reliability import Issue, QuestionPlan, strict_schema
 from app.schemas.tool_call import LawLookupRequest
 from app.services.calculator.engine import CalcRun
-from app.services.calculator.formula_engine import execute, number, FormulaError
+from app.services.calculator.formula_engine import complete_balance, execute, number, FormulaError
+from app.services.calculator.formula_feedback import formula_feedback
 from app.services.claim_verification import source_units
 from app.services.evidence import context_from_records, is_official, record_from_result
 from app.services.llm_client import call_llm_structured
@@ -41,7 +42,8 @@ tables의 bands는 상한 오름차순입니다. 필요한 구간까지만 작�
 min/max/add/multiply는 인수 2개 이상, subtract/divide는 2개, progressive/round는 1개입니다.
 원화×원화는 금지됩니다. count/ratio/KRW 단위를 구분하세요. 반올림은 원문 근거가 있을 때만 선택하세요.
 필요 없는 table_id/rule_id/quote는 빈 문자열, 불필요한 tables는 빈 배열입니다.
-outputs에는 total 한 개, 필요하면 component(국세/지방세), prepaid 한 개와 balance 한 개를 넣으세요.
+outputs에는 total 한 개, 필요하면 component(국세/지방세)를 넣으세요. prepaid와 balance는 반드시 함께 쓰거나 둘 다 빼세요.
+원천징수 등 이미 낸 세액을 prepaid로 내보내면 total-prepaid를 계산하는 step을 만들어 balance로 함께 내보내세요.
 total은 components 합, balance는 total-prepaid여야 합니다. 공제 전 산출세액을 최종 결정세액으로 부르지 마세요.
 follow_up은 실제 조건으로 조정하기 위한 핵심 질문 최대 3개입니다.
 비교과세·공제 순서·예외·지방세·원천징수 차감의 범위를 근거와 일치시키세요.
@@ -272,7 +274,9 @@ async def calculate_reference(query, history, user_id, search, on_event=None):
                              'previous_plan': previous_plan}, ensure_ascii=False)}],
                             strict_schema(FormulaPlan), max_tokens=8500, purpose='answer')
                     previous_plan = raw
-                    plan = FormulaPlan.model_validate(raw)
+                    # A prepaid amount without its balance has one correct completion;
+                    # add it as an ordinary step instead of rejecting the plan.
+                    plan = complete_balance(FormulaPlan.model_validate(raw))
                     rules, used = ground_plan(plan, context, query, history, today.isoformat())
                     result = execute(plan)
                     if on_event: on_event({'type': 'verification', 'status': 'checking'})
@@ -294,7 +298,8 @@ async def calculate_reference(query, history, user_id, search, on_event=None):
                     emit('ok', context='근거·산식 대조와 연산을 완료한 참고 계산입니다. 가정과 결과는 답변에서 확인하세요.')
                     return published, CalcRun(answer, 'formula_calculation', {}, verification=report)
                 except (ValueError, ArithmeticError) as exc:
-                    feedback = [str(exc)[:400]]
+                    # A bare rule code does not tell the planner what to change.
+                    feedback = [formula_feedback(exc)]
             raise FormulaError('formula_review_incomplete')
     except Exception as exc:
         logger.warning('Reference calculation unavailable: %s', type(exc).__name__)

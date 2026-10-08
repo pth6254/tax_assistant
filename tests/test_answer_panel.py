@@ -48,3 +48,35 @@ def test_date_prompt_stays_only_when_the_answer_never_states_a_general_scope():
     assert claims.requested_inputs(ctx, [claim('legal')]) == [claims.DATE_INPUT, '과거 증여 내역']
     assert claims.requested_inputs(ctx, [claim('source_summary')]) == ['과거 증여 내역']
     assert claims.requested_inputs(ctx, [claim('legal', [claims.UNSPECIFIED_SCOPE])]) == ['과거 증여 내역']
+
+
+@pytest.mark.asyncio
+async def test_one_stored_article_formatted_twice_is_listed_once(monkeypatch):
+    """Formula sources and issue retrieval give the same DB row different headers."""
+    from app.services.evidence import context_from_records, digest, record_from_result
+    from app.schemas.reliability import Issue, QuestionPlan
+    from tests.test_reliability_workflow import source
+    body = '① 조건을 충족한 경우에만 적용한다.'
+    rows = [record_from_result(source(content=header + '\n' + body, original_text=body, content_hash=digest(body)))
+            for header in ('소득세법 제1조', '제1조 [시험 규정]')]
+    assert rows[0].id != rows[1].id and rows[0].version_id == rows[1].version_id
+    plan = QuestionPlan(issues=[Issue(id='I1', request_quote='질문', question='질문')])
+    ctx = context_from_records(rows, plan=plan, coverage={'I1': {'status': 'sufficient',
+                                                                 'evidence_ids': [r.id for r in rows]}})
+
+    async def generate(messages, schema, **kwargs):
+        import json
+        evidence = json.loads(messages[1]['content'])['evidence']
+        return {'claims': [{'id': f'C{n}', 'issue_id': 'I1', 'text': '조건을 충족하면 적용합니다.', 'kind': 'source_summary',
+                            'citations': [{'evidence_id': item['id'], 'quote': f"{item['id']}:P2"}],
+                            'conditions': [], 'depends_on': []} for n, item in enumerate(evidence, 1)]}
+
+    async def judge(query, draft, context):
+        return supported(draft), None
+
+    monkeypatch.setattr(claims, 'call_llm_structured', generate)
+    monkeypatch.setattr(claims, 'judge_claims', judge)
+    _, report = await claims.generate_verified_answer('질문', ctx)
+    assert report['metrics']['claims_released'] >= 1
+    assert len(report['citations']) == 1
+    assert claims.distinct_sources(rows) == rows[:1]

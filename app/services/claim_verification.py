@@ -571,6 +571,18 @@ def repeat_diagnostics(claims, text_threshold=0.3, condition_threshold=0.8):
     return {"text": text, "conditions": conditions}
 
 
+def distinct_sources(records):
+    """One entry per stored source. Different retrieval paths format the same DB row
+    with different headers, which gives it another evidence ID but not another source."""
+    seen, kept = set(), []
+    for record in records:
+        key = record.version_id or record.id
+        if key not in seen:
+            seen.add(key)
+            kept.append(record)
+    return kept
+
+
 def common_subject(plan):
     """The one subject every analysis issue shares; headings need not repeat it (same rule as the panel)."""
     issues = [i for i in plan.issues if i.kind == "analysis"]
@@ -1179,7 +1191,7 @@ async def generate_verified_answer(query, context, *, repair=None, on_progress=N
                                  label=r.category, origin=r.origin, version_id=r.version_id,
                                  effective_from=r.effective_from, source=r.source,
                                  content_hash=r.content_hash, text=r.text, location=r.location)
-                           for r in context.records if r.id in used]
+                           for r in distinct_sources([r for r in context.records if r.id in used])]
     report["note"] = ("확보한 원문 설명과 인용을 대조했습니다. 질문의 사건 연도에 적용되는지는 별도 확인이 필요합니다."
                       if provisional else
                       "공개된 법적 주장에 대해 근거 및 의미 대조를 수행했습니다. 법적 정확성 보증은 아닙니다."
