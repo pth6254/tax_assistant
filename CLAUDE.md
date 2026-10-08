@@ -26,7 +26,7 @@
 | 질문 경로(과거 법령·도구) | [history_context.py](app/services/law/history_context.py), [policy.py](app/services/tools/policy.py), [planner.py](app/services/tools/planner.py) |
 | 검색 후보·Graph 확장 | [hybrid_search_service.py](app/services/search/hybrid_search_service.py), [graph_search_service.py](app/services/search/graph_search_service.py) |
 | 근거·주장 공개 검사 | [evidence.py](app/services/evidence.py), [claim_verification.py](app/services/claim_verification.py) (검사 등록표 `CHECKS`) |
-| 사건일과 시행본 비교 | [temporal_scope.py](app/services/temporal_scope.py) |
+| 사건일과 시행본 비교·사건 당시 조문 | [temporal_scope.py](app/services/temporal_scope.py), [historical_evidence.py](app/services/historical_evidence.py) |
 | 참고 계산 | [formula_workflow.py](app/services/calculator/formula_workflow.py) |
 | 답변·근거 표시 | [answerSections.js](frontend/src/components/Chat/answerSections.js), [VerificationPanel.jsx](frontend/src/components/Chat/VerificationPanel.jsx) |
 | 자동 카드·실제 관측·Judge | [auto_cards.py](evaluation/auto_cards.py), [auto_pipeline.py](evaluation/auto_pipeline.py), [auto_cli.py](evaluation/auto_cli.py) |
