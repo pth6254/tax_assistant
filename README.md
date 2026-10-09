@@ -10,7 +10,7 @@
 | 임베딩 | Windows Ollama `qwen3-embedding:4b`, v1, 2,560차원 |
 | 공식 현행 검색 | 한국어 BM25 + 조문/항 벡터 + 검증된 GraphRAG, Fuzzy·Regex·MMR. 법 이름 없이 제도·가산세 이름으로 물어도 계획 모델이 해당 세법을 고르고, 법령명이 명시된 조문은 정확 조회 |
 | 답변 검증·표시 | 쟁점 계획/근거 충족/주장·인용 검사 → SSE 진행 → 질문별 구조화 답변·근거 패널. 사실로 확정되는 검사는 직접 보류하고, 단어로 추정하는 검사는 Judge가 확인합니다. 과거 연도 사건은 그때 시행 중이던 조문 텍스트가 확정될 때만 그 버전으로 판단합니다 |
-| 계산 | 전용 계산기 6종 + 공식 근거 기반 제한 JSON 산식/Decimal 참고 계산 |
+| 계산 | 전용 계산기 7종(금융소득 종합과세 포함) + 공식 근거 기반 제한 JSON 산식/Decimal 참고 계산 |
 | 운영자 평가 | 공식 XML 기반 합성 질문/기준 자동 생성·실제 채팅/Judge·LangSmith 게시, 저장 결과의 차단 집계·오류 주입 측정. 독립 전문가 검수는 후속 작업 |
 | 전용 Reranker | **미구현**. 모델·별도 서비스·후보 풀 변경은 후속 제안 |
 
@@ -279,6 +279,7 @@ Agentic RAG 파이프라인 (검색 → 계산 → 합성 → 인용 검증)
 - **실패와 0원 결과 분리**: 필수 세율·공제 데이터가 없거나 DB 연결이 실패하면 계산을 중단한다. 입력 오류·미지원 조건·일시 장애를 구분해 화면과 채팅 도구 카드에 안내하며, 실패한 계산을 LLM이 임의로 보완하지 않도록 최종 생성을 우회한다. 정상적인 0원 및 부가세 환급 결과는 유지한다.
 
 - 종합소득세·양도소득세·상속세·증여세·부가가치세·가산세(무신고·과소신고·납부지연) 6종, DB 세율표(`tax_brackets`/`tax_deductions`) 기반 계산
+- 금융소득 종합과세(`financial_income_tax`): 이자·비영업대금이익·배당(가산 대상 여부)·다른 종합소득·소득공제·국내 원천징수 여부를 받아 종합과세기준금액(제14조), 배당가산(제17조), 비교과세(제62조), 배당세액공제(제56조), 원천징수세율(제129조)로 계산합니다. 법정 수치는 DB에서 읽고 산식은 국세청 「2022년 귀속 금융소득종합과세 해설」 계산 사례 5개로 검증합니다. 채팅의 금융소득 계산 질문은 이 계산기를 먼저 쓰고, 말하지 않은 값은 가정으로 채워 결과 앞에 밝힙니다(해석할 수 없으면 근거 기반 참고 산식으로).
 - 계산 단계·근거 조문을 함께 반환, 프론트 계산기 화면과 챗봇 tool calling 양쪽에서 재사용
 - **계산기 ↔ 챗봇 왕복 연결**: 챗봇이 계산기를 실행하면 답변에 "계산기에서 조건 바꿔보기" 버튼(입력값 프리필), 계산기 결과에서 "이 결과에 대해 챗봇에게 질문하기" 버튼으로 상호 이동
 
@@ -552,7 +553,7 @@ tax-assistant/
     │   ├── chat.py               # POST /api/chat, /api/chat/stream
     │   ├── health.py             # live/ready/dependencies 상태 진단
     │   ├── upload.py             # POST /api/upload, 문서 목록/삭제
-    │   ├── calculator.py         # POST /api/calculator/{income-tax,capital-gains,inheritance,gift,vat,penalty-tax}
+    │   ├── calculator.py         # POST /api/calculator/{income-tax,financial-income-tax,capital-gains,inheritance,gift,vat,penalty-tax}
     │   ├── law.py                # GET /api/law-articles/lookup (조문 원문 뷰어)
     │   └── tax_schedule.py       # GET /api/tax-schedule
     │
@@ -1055,6 +1056,7 @@ python scripts/evaluate.py suite --mode live --include-draft --output evaluation
 | POST | `/api/chat` | 채팅 질문 (일반 응답, 계산기 메타데이터 포함) | ✅ 필요 |
 | POST | `/api/chat/stream` | 채팅 질문 (SSE 스트리밍, `tool`/`chunk`/`calc` 이벤트) | ✅ 필요 |
 | POST | `/api/calculator/income-tax` | 종합소득세 계산 | ✅ 필요 |
+| POST | `/api/calculator/financial-income-tax` | 금융소득 종합과세(비교과세·배당세액공제) 계산 | ✅ 필요 |
 | POST | `/api/calculator/capital-gains` | 양도소득세 계산 | ✅ 필요 |
 | POST | `/api/calculator/inheritance` | 상속세 계산 | ✅ 필요 |
 | POST | `/api/calculator/gift` | 증여세 계산 | ✅ 필요 |

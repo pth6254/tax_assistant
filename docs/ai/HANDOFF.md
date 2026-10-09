@@ -36,6 +36,26 @@
 - `evaluation/runs/auto-evaluation-20261004/`: `pipeline-v2/cards/`(고정 카드), `rejudge-final/`(저장 답변 재판정), `live-final/`(새 실제 실행), `verification-final.json`, `langsmith-readback-final.json`. LangSmith Dataset/Experiment ID는 아래 2026-10-04 기록에 있다.
 - 컨테이너를 재생성하거나 다른 환경으로 인계할 때 이 폴더를 호스트에서 따로 보존한다.
 
+## 2026-10-08 금융소득 종합과세 계산기
+
+사용자 제안("금융소득 종합과세는 종합소득세의 일부이므로 종합소득세 계산기 고도화가 필요")에 따라 결정적 계산기를 만들었다.
+결정은 [DECISIONS.md](DECISIONS.md)의 같은 날짜 마지막 항목.
+
+**자료 수집**: 국세청 「2022년 귀속 금융소득종합과세 해설」(2023.4, 188쪽, taxnet 공개자료 PDF)에서 숫자가 모두 실린 계산 사례 5개(p.141 종합 사례, p.170~172 비교과세 사례 1~3, p.173 질의 7-3)와 2021년 이후 세율표를 옮겼다(`tests/data/nts_financial_income_2022.json`, 출처·쪽수 포함, PDF 원본은 저장소에 넣지 않음). 2024 귀속 이후 공식 해설서 원본은 찾지 못했다. 현행 수치는 DB의 현행 조문(제14조·제17조·제56조·제62조·제129조)과 과거 법령 저장소에서 시행일까지 확인했다. 배당가산율은 2027-01-01 시행본(2025-12-23 공포)에서 다시 11%가 된다.
+
+**변경**
+
+- `app/services/calculator/financial_income_tax.py`: DB 없이 계산하는 `compute`(검증 대상)와 기준일 수치를 읽는 `calculate`. 기납부세액은 법정 원천징수세율 추정이라고 표시. 금융소득이 없으면 `unsupported_condition`.
+- `FinancialIncomeTaxRequest`, `CalculationResult.notes`(계산 범위·가정), 엔진·도구 등록, API `/api/calculator/financial-income-tax`, Alembic `20261008_0011`(수치 6행, 없을 때만 삽입).
+- `policy.py`: 새 입력의 표현(이자·비영업대금·배당·다른 소득·소득공제)과 원천징수 여부("원천징수된"/"원천징수되지", "원천징수"만으로는 판정하지 않음). `financial_income_scope`의 후속 질문 판단에서 금융소득 패턴은 제외.
+- `financial_inputs.py` + `planner.financial_calculation`: 채팅 금융소득 계산 질문을 계산기로 먼저 처리하고 가정을 결과 앞에 둔다. 해석 불가·계산 실패면 모델 산식 경로.
+- 프런트엔드: 계산기 "금융소득 종합과세" 탭, 결과 카드의 "계산 범위와 가정", 채팅 도구 이름, `forms.js`의 import에 `.js`(Node 테스트가 불러오도록).
+- 기존 테스트 2개(`test_scoped_answers`, `test_formula_calculation`의 금융소득 경로)는 DB 연결 실패로 새 계산기가 포기해서 통과하던 것이었다. 계산기를 쓸 수 없는 경우라고 명시하도록 고쳤다(그대로 두면 DB가 연결되는 이미지에서 실패).
+
+**검증**: 공식 사례 5개의 공개 수치 전부 일치. WSL 전체 백엔드 **1,178 passed, 2 skipped**, 프런트엔드 `npm test` 25 passed·`npm run build` 정상. 신규 `test_financial_income_tax`(10), `test_financial_income_api`(8), `test_financial_chat`(16), `frontend/tests/financialForm.test.js`(3). 실모델 호출 없음.
+
+**남은 것**: 이미지 재빌드 후 마이그레이션 적용·DB 수치 확인과 웹 확인, 2024 귀속 이후 공식 사례 확보, 지방소득세, 출자공동사업자 배당·외국납부세액공제.
+
 ## 2026-10-08 참고 계산 재시도 피드백과 근거 중복
 
 사용자가 "금융소득으로 1억을 벌게 된다면 금융종합소득과세로 세금 얼마나 납부하게 될까?"를 다시 답변(대화 기록 722의 4번째 버전,
