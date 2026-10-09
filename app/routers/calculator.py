@@ -7,13 +7,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.schemas.calculator import (
     CalculationResult,
     CapitalGainsRequest,
+    FinancialIncomeTaxRequest,
     GiftTaxRequest,
     IncomeTaxRequest,
     InheritanceRequest,
     PenaltyTaxRequest,
     VatRequest,
 )
-from app.services.calculator import capital_gains, gift_tax, income_tax, inheritance, penalty_tax, vat
+from app.services.calculator import (capital_gains, financial_income_tax, gift_tax, income_tax, inheritance,
+                                     penalty_tax, vat)
 from app.core.security import verify_token
 
 logger = logging.getLogger(__name__)
@@ -27,6 +29,14 @@ async def calc_income_tax(
     user: dict = Depends(verify_token),
 ):
     return await _calculate(income_tax.calculate, req)
+
+
+@router.post("/financial-income-tax", response_model=CalculationResult)
+async def calc_financial_income_tax(
+    req: FinancialIncomeTaxRequest,
+    user: dict = Depends(verify_token),
+):
+    return await _calculate(financial_income_tax.calculate, req)
 
 
 @router.post("/capital-gains", response_model=CalculationResult)

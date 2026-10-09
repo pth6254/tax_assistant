@@ -8,7 +8,7 @@ from app.services.law.reference_parser import parse_law_reference
 
 
 class ToolSelection(AIOutput):
-    tool: Literal["none", "income_tax", "capital_gains", "inheritance", "gift", "vat", "penalty_tax", "law_lookup", "document_search", "formula_calculation"]
+    tool: Literal["none", "income_tax", "financial_income_tax", "capital_gains", "inheritance", "gift", "vat", "penalty_tax", "law_lookup", "document_search", "formula_calculation"]
     params: dict = Field(default_factory=dict)
 
 

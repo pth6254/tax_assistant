@@ -1,8 +1,9 @@
-import { calcIncomeTax, calcCapitalGains, calcInheritance, calcGiftTax, calcVat, calcPenaltyTax } from '../../api/calculatorApi'
+import { calcIncomeTax, calcFinancialIncomeTax, calcCapitalGains, calcInheritance, calcGiftTax, calcVat, calcPenaltyTax } from '../../api/calculatorApi.js'
 
 // 챗봇 계산기 엔진(app/services/calculator/engine.py _TOOLS)의 도구명 → 화면 탭 키
 const TOOL_TO_TAB = {
   income_tax:    'income',
+  financial_income_tax: 'financial',
   capital_gains: 'capital',
   inheritance:   'inheritance',
   gift:          'gift',
@@ -12,6 +13,7 @@ const TOOL_TO_TAB = {
 
 const TABS = [
   { key: 'income',      label: '소득세',    icon: '💼' },
+  { key: 'financial',   label: '금융소득 종합과세', icon: '💰' },
   { key: 'capital',     label: '양도소득세', icon: '🏠' },
   { key: 'inheritance', label: '상속세',    icon: '📜' },
   { key: 'gift',        label: '증여세',    icon: '🎁' },
@@ -34,6 +36,28 @@ const FORMS = {
       expense:                  toWon(f.expense),
       personal_deduction_count: toInt(f.personal_deduction_count, 1),
       other_deductions:         toWon(f.other_deductions),
+    }),
+  },
+  financial: {
+    apiFn: calcFinancialIncomeTax,
+    fields: [
+      { key: 'interest_income',       label: '이자소득',            unit: '만원', required: false, hint: '예금·채권 이자 등 원천징수세율 14%' },
+      { key: 'non_business_interest', label: '비영업대금의 이익',    unit: '만원', required: false, hint: '개인 간 금전 대여 이자 등 원천징수세율 25%' },
+      { key: 'dividend_gross_up',     label: '배당소득(배당가산 대상)', unit: '만원', required: false, hint: '내국법인 배당 등' },
+      { key: 'dividend_other',        label: '배당소득(가산 대상 아님)', unit: '만원', required: false },
+      { key: 'other_income',          label: '다른 종합소득금액',    unit: '만원', required: false, hint: '사업·근로 등 소득금액(필요경비·근로소득공제 차감 후)' },
+      { key: 'income_deductions',     label: '종합소득공제 합계',    unit: '만원', required: false, hint: '본인 기본공제 150만원 포함' },
+      { key: 'withheld',              label: '국내에서 원천징수됨',  type: 'checkbox', hint: '국외 소득 등 원천징수되지 않았다면 해제' },
+    ],
+    defaults: { withheld: true, income_deductions: '150' },
+    toPayload: (f) => ({
+      interest_income:       toWon(f.interest_income),
+      non_business_interest: toWon(f.non_business_interest),
+      dividend_gross_up:     toWon(f.dividend_gross_up),
+      dividend_other:        toWon(f.dividend_other),
+      other_income:          toWon(f.other_income),
+      income_deductions:     toWon(f.income_deductions),
+      withheld:              f.withheld !== false,
     }),
   },
   capital: {
@@ -151,6 +175,9 @@ const QUESTION_BUILDERS = {
   income: (f, r) =>
     `총수입 ${f.income || 0}만원, 필요경비 ${f.expense || 0}만원, 부양가족 ${f.personal_deduction_count || 1}명 기준으로 ` +
     `계산한 종합소득세 결정세액이 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인하고, 추가로 절세 방법이 있으면 알려주세요.`,
+  financial: (f, r) =>
+    `이자 ${f.interest_income || 0}만원, 비영업대금 이익 ${f.non_business_interest || 0}만원, 배당 ${Number(f.dividend_gross_up || 0) + Number(f.dividend_other || 0)}만원, ` +
+    `다른 종합소득 ${f.other_income || 0}만원 기준으로 계산한 금융소득 종합과세 결정세액이 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인해주세요.`,
   capital: (f, r) =>
     `양도가액 ${f.transfer_price || 0}만원, 취득가액 ${f.acquisition_price || 0}만원, 보유기간 ${f.holding_years || 0}년 기준으로 ` +
     `계산한 양도소득세가 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인하고, 추가로 절세 방법이 있으면 알려주세요.`,

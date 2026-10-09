@@ -4,16 +4,19 @@ from dataclasses import dataclass
 from app.schemas.calculator import (
     CalculationResult,
     CapitalGainsRequest,
+    FinancialIncomeTaxRequest,
     GiftTaxRequest,
     IncomeTaxRequest,
     InheritanceRequest,
     PenaltyTaxRequest,
     VatRequest,
 )
-from app.services.calculator import capital_gains, gift_tax, income_tax, inheritance, penalty_tax, vat
+from app.services.calculator import (capital_gains, financial_income_tax, gift_tax, income_tax, inheritance,
+                                     penalty_tax, vat)
 
 CALCULATORS = {
     "income_tax":    (IncomeTaxRequest,    income_tax),
+    "financial_income_tax": (FinancialIncomeTaxRequest, financial_income_tax),
     "capital_gains": (CapitalGainsRequest, capital_gains),
     "inheritance":   (InheritanceRequest,  inheritance),
     "gift":          (GiftTaxRequest,      gift_tax),
@@ -37,6 +40,7 @@ def format_calculation_context(result: CalculationResult) -> str:
     lines.append(f"- 실효세율: {result.effective_rate * 100:.2f}%")
     if result.source_articles:
         lines.append("근거 조문: " + ", ".join(result.source_articles))
+    lines += [f"- 참고: {note}" for note in result.notes]
     return "\n".join(lines)
 
 

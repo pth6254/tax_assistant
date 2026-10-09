@@ -1,0 +1,133 @@
+{
+  "source": {
+    "title": "2022년 귀속 금융소득종합과세 해설",
+    "publisher": "국세청 개인납세국",
+    "published": "2023-04",
+    "url": "https://file.taxnet.co.kr/taxnetfile/public_data/22년 귀속 금융소득종합과세 해설_3887696.pdf",
+    "retrieved": "2026-10-08",
+    "note": "Only figures printed in the guide are recorded. Values the guide does not print are left out, not derived. Amounts in won."
+  },
+  "parameters": {
+    "tax_year": 2022,
+    "comprehensive_threshold": 20000000,
+    "withholding_rate": "0.14",
+    "non_business_loan_rate": "0.25",
+    "gross_up_rate": "0.11",
+    "brackets_source": "p.137 종합소득세 기본세율, 2021년 이후 귀속",
+    "brackets": [
+      {"upper": 12000000, "rate": "0.06", "progressive_deduction": 0},
+      {"upper": 46000000, "rate": "0.15", "progressive_deduction": 1080000},
+      {"upper": 88000000, "rate": "0.24", "progressive_deduction": 5220000},
+      {"upper": 150000000, "rate": "0.35", "progressive_deduction": 14900000},
+      {"upper": 300000000, "rate": "0.38", "progressive_deduction": 19400000},
+      {"upper": 500000000, "rate": "0.40", "progressive_deduction": 25400000},
+      {"upper": 1000000000, "rate": "0.42", "progressive_deduction": 35400000},
+      {"upper": null, "rate": "0.45", "progressive_deduction": 65400000}
+    ]
+  },
+  "cases": [
+    {
+      "id": "nts-2022-p141-worked",
+      "page": 141,
+      "title": "금융소득 종합과세 계산 사례",
+      "inputs": {
+        "interest_14": 20000000,
+        "interest_25": 10000000,
+        "dividend_gross_up": 30000000,
+        "dividend_no_gross_up": 0,
+        "other_income": 50000000,
+        "deductions": 5100000
+      },
+      "inputs_note": "은행예금 이자 20,000,000 / 비영업대금이익 10,000,000 / 비상장법인 배당 30,000,000 / 사업소득금액 50,000,000",
+      "expected": {
+        "financial_income": 60000000,
+        "excess_over_threshold": 40000000,
+        "gross_up_base": 30000000,
+        "gross_up": 3300000,
+        "general_method_tax": 18770000,
+        "separate_method_tax": 15155000,
+        "calculated_tax": 18770000,
+        "dividend_tax_credit": 3300000
+      }
+    },
+    {
+      "id": "nts-2022-p170-case1",
+      "page": 170,
+      "title": "2천만원을 초과하는 이자소득이 있는 경우(14% 이자소득만 있음)",
+      "inputs": {
+        "interest_14": 100000000,
+        "interest_25": 0,
+        "dividend_gross_up": 0,
+        "dividend_no_gross_up": 0,
+        "other_income": 0,
+        "deductions": 5100000
+      },
+      "inputs_note": "은행예금 이자 50,000,000 + 회사채 이자 50,000,000. 세금우대종합저축 이자 5,000,000은 분리과세라 종합과세 금융소득에서 제외(입력에 넣지 않음)",
+      "expected": {
+        "financial_income": 100000000,
+        "excess_over_threshold": 80000000,
+        "general_method_tax": 15556000,
+        "separate_method_tax": 14000000,
+        "calculated_tax": 15556000
+      }
+    },
+    {
+      "id": "nts-2022-p171-case2",
+      "page": 171,
+      "title": "이자소득과 배당소득이 함께 있는 경우",
+      "inputs": {
+        "interest_14": 10000000,
+        "interest_25": 30000000,
+        "dividend_gross_up": 50000000,
+        "dividend_no_gross_up": 0,
+        "other_income": 0,
+        "deductions": 5100000
+      },
+      "inputs_note": "은행예금 이자 10,000,000 / 비영업대금이익 30,000,000 / 비상장법인 배당 30,000,000 / 상장법인 배당 20,000,000 (해설서는 두 배당 모두 가산 대상으로 계산)",
+      "expected": {
+        "financial_income": 90000000,
+        "excess_over_threshold": 70000000,
+        "gross_up": 5500000,
+        "general_method_tax": 14476000,
+        "separate_method_tax": 15900000,
+        "calculated_tax": 15900000
+      }
+    },
+    {
+      "id": "nts-2022-p172-case3",
+      "page": 172,
+      "title": "이자소득과 사업소득이 함께 있는 경우",
+      "inputs": {
+        "interest_14": 60000000,
+        "interest_25": 0,
+        "dividend_gross_up": 0,
+        "dividend_no_gross_up": 0,
+        "other_income": 30000000,
+        "deductions": 5100000
+      },
+      "expected": {
+        "financial_income": 60000000,
+        "general_method_tax": 13156000,
+        "separate_method_tax": 11055000,
+        "calculated_tax": 13156000
+      }
+    },
+    {
+      "id": "nts-2022-p173-qa7-3",
+      "page": 173,
+      "title": "국내에서 원천징수되지 않는 국외금융소득 370만원과 타소득 1,000만원(소득공제 210만원)",
+      "inputs": {
+        "interest_14": 3700000,
+        "interest_25": 0,
+        "dividend_gross_up": 0,
+        "dividend_no_gross_up": 0,
+        "other_income": 10000000,
+        "deductions": 2100000
+      },
+      "inputs_note": "기준금액 이하 금융소득이지만 국내에서 원천징수되지 않아 종합소득 신고에 포함되는 경우",
+      "expected": {
+        "calculated_tax": 992000
+      }
+    }
+  ]
+}

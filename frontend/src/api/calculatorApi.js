@@ -28,6 +28,7 @@ async function post(path, body) {
 }
 
 export const calcIncomeTax    = (data) => post('/income-tax', data)
+export const calcFinancialIncomeTax = (data) => post('/financial-income-tax', data)
 export const calcCapitalGains = (data) => post('/capital-gains', data)
 export const calcInheritance  = (data) => post('/inheritance', data)
 export const calcGiftTax      = (data) => post('/gift', data)

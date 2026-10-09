@@ -68,7 +68,7 @@ async def select_tool(query: str, history: list[dict] | None = None) -> tuple[st
     prompt = chat_prompt(
         "세무 보조 도구를 최대 하나 선택하고 JSON만 출력하세요. "
         "원문 조회는 law_lookup, 내 업로드 문서 검색은 document_search. "
-        "세액 계산은 income_tax(종합소득세), capital_gains(양도소득세), inheritance(상속세), "
+        "세액 계산은 income_tax(종합소득세), financial_income_tax(이자·배당 금융소득이 있는 종합소득세), capital_gains(양도소득세), inheritance(상속세), "
         "gift(증여세), vat(부가가치세), penalty_tax(가산세)를 사용하세요. "
         "위 계산기의 지원 대상 밖인 세액 계산은 formula_calculation을 선택하고 params는 빈 객체로 두세요. "
         "일반 설명이나 기존 계산기의 단순 입력 부족을 formula_calculation으로 보내지 마세요. "
@@ -97,6 +97,11 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
     if not has_tool_intent(query) and not calculation_followup:
         return None
     if (has_calculation_intent(query) or calculation_followup) and financial_income_scope(query, history):
+        # The deterministic calculator answers when the amounts can be read; the model's
+        # free-form formula is the fallback, not the first choice.
+        result = await financial_calculation(query, history, on_event)
+        if result is not None:
+            return result
         return ToolRun("formula_calculation", "planned", "공식 근거를 확인한 산식으로 참고 계산을 준비합니다.")
     if on_event:
         on_event({"type": "tool", "id": "primary", "tool": "none", "status": "selecting"})
@@ -161,6 +166,31 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
         on_event({"type": "tool", "id": "primary", "tool": selection[0], "status": "running"})
     result = await execute_tool(*selection, user_id=user_id)
     _emit_result(result, selection[1], on_event)
+    return result
+
+
+async def financial_calculation(query, history, on_event=None):
+    """금융소득 종합과세 계산기 결과와 그 가정, or None to use the reference-formula path."""
+    from app.services.calculator.engine import run_calculation
+    from app.services.calculator.errors import CalculationError
+    from app.services.calculator.financial_inputs import stated_financial_inputs
+    from app.services.calculator.repository import get_deduction
+    try:
+        row = await get_deduction("소득세", "기본공제")
+        stated = stated_financial_inputs(query, history, basic_deduction=int(row["amount"]) if row else None)
+        if stated is None:
+            return None
+        if on_event:
+            on_event({"type": "tool", "id": "primary", "tool": "financial_income_tax", "status": "running"})
+        run = await run_calculation("financial_income_tax", stated.params)
+    except (CalculationError, ValueError, KeyError, TypeError) as exc:
+        logger.info("Financial income calculator not used (%s)", type(exc).__name__)
+        return None
+    # Assumptions lead the result: they change the amounts as much as the inputs do.
+    run.context = "\n".join(["계산에 쓴 가정:", *[f"- {item}" for item in stated.assumptions], "", run.context]) \
+        if stated.assumptions else run.context
+    result = ToolRun("financial_income_tax", "ok", "", run)
+    _emit_result(result, stated.params, on_event)
     return result
 
 

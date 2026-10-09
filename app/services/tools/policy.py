@@ -28,6 +28,7 @@ def has_lookup_intent(query):
 CALC_TAX = {
     "income_tax": r"소득|수입", "capital_gains": r"양도|매도", "inheritance": r"상속|유산",
     "gift": r"증여", "vat": r"부가세|부가가치세|매출|매입|VAT", "penalty_tax": r"가산세",
+    "financial_income_tax": r"금융소득|이자|배당",
 }
 FINANCIAL_INCOME = re.compile(r"금융\s*(?:소득|종합)|이자\s*소득|배당\s*소득")
 
@@ -35,7 +36,9 @@ FINANCIAL_INCOME = re.compile(r"금융\s*(?:소득|종합)|이자\s*소득|배�
 def financial_income_scope(query, history=None):
     if FINANCIAL_INCOME.search(query):
         return True
-    if any(re.search(pattern, query, re.I) for pattern in CALC_TAX.values()):
+    # Another tax named in this turn ends a financial-income follow-up; the financial
+    # pattern itself must not, or "이자 1억이면?" would leave the financial scope.
+    if any(re.search(pattern, query, re.I) for tool, pattern in CALC_TAX.items() if tool != "financial_income_tax"):
         return False
     previous = next((m.get("content", "") for m in reversed(history or []) if m.get("role") == "user"), "")
     return bool(FINANCIAL_INCOME.search(previous))
@@ -51,6 +54,12 @@ ALIASES = {
     "prior_gifts_10y": "사전증여|사전 증여|10년 이내 증여", "sales": "매출액|매출",
     "purchases": "매입액|매입", "exempt_sales": "면세매출|면세 매출",
     "unpaid_tax": "미납세액|미납 세액|미납세금", "days_late": "지연일수|지연 일수",
+    "interest_income": "이자소득|이자 소득|예금이자|예금 이자|이자",
+    "non_business_interest": "비영업대금의 이익|비영업대금이익|비영업대금",
+    "dividend_gross_up": "배당가산 대상 배당|내국법인 배당|배당소득|배당",
+    "dividend_other": "배당가산 비대상 배당|가산 비대상 배당|외국법인 배당",
+    "other_income": "다른 종합소득금액|다른 종합소득|다른 소득금액|다른 소득|사업소득금액|근로소득금액",
+    "income_deductions": "종합소득공제|소득공제",
 }
 NUMBER = r"(?P<number>\d[\d,]*(?:\.\d+)?)\s*(?P<unit>억원?|천만원?|백만원?|만원?|천원|원|명|년|일)?"
 UNITS = {"억": 10**8, "억원": 10**8, "천만": 10**7, "천만원": 10**7,
@@ -60,6 +69,8 @@ BOOL_TEXT = {
     "is_one_home": {True: "1세대 1주택", False: "다주택"},
     "is_minor": {True: "미성년", False: "성년"},
     "is_negligent": {True: "부정행위 있음", False: "부정행위 없음"},
+    # "원천징수" alone is also inside "원천징수되지 않은"; the two forms must not overlap.
+    "withheld": {True: "원천징수된", False: "원천징수되지"},
 }
 
 
