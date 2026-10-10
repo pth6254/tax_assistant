@@ -1,0 +1,126 @@
+{
+  "source": {
+    "filing_cases": {
+      "title": "국세청 주요서식 작성요령/사례(상속세) — 사례02·03(2021년 1월 10일 상속개시, 거주자)",
+      "url": "https://www.nts.go.kr/nts/na/ntt/selectNttList.do?mi=2334&bbsId=30021",
+      "retrieved": "2026-10-10",
+      "note": "HWP 첨부파일의 '상속세 과세가액·과세표준·차가감납부할세액 계산' 표에 인쇄된 금액만 옮겼다. 사례01(피상속인 비거주자)은 계산기 범위 밖이라 제외했다. 상속재산가액에는 사례가 계산한 간주상속재산(생명보험금)과 추정상속재산 산입액을 포함해 입력한다."
+    },
+    "guide": {
+      "title": "국세청 「2026 세금절약가이드 Ⅱ」 상속세 알뜰정보15(128~129쪽)·17(배우자 법정상속분)",
+      "url": "https://www.nts.go.kr/nts/na/ntt/selectNttList.do?mi=40298&bbsId=50696",
+      "retrieved": "2026-10-10",
+      "note": "가이드는 산출세액까지만 인쇄하고 장례비용을 빼지 않는다. 법령상 장례비용은 증빙이 없어도 최소 500만원을 빼므로 같은 과세표준을 만들려고 상속재산에 500만원을 더해 입력한다. 상속포기 후 손자녀 상속 사례(142~143쪽)는 손자녀 몫 비율이 인쇄되지 않아 제외했다."
+    },
+    "brackets": "상속세 세율(제26조)은 2000년 이후 10%·20%·30%·40%·50%(1억·5억·10억·30억 구간)로 같다."
+  },
+  "cases": [
+    {
+      "id": "filing-02-below-threshold",
+      "title": "사례02 피상속인이 거주자인 경우(유형① 과세미달)",
+      "inputs": {
+        "estate_value": 1000000000,
+        "debts": 315000000,
+        "funeral_expenses": 4000000,
+        "financial_assets": 300000000,
+        "prior_gifts": 100000000,
+        "has_spouse": true,
+        "spouse_inheritance": 190000000,
+        "children_count": 1
+      },
+      "inputs_note": "상속재산 8억원(예금 2억·아파트 5억·생명보험금 1억) + 추정상속재산 산입액 2억원. 채무 3억원 + 공과금 1,500만원. 배우자 실제 상속 2억원 - 승계 공과금 1천만원. 2020년 배우자 사전증여 1억원(과세표준 0원).",
+      "expected": {
+        "base": 780000000,
+        "basic": 500000000,
+        "financial": 60000000,
+        "deductions": 780000000,
+        "taxable": 0,
+        "decided_tax": 0
+      }
+    },
+    {
+      "id": "filing-03-taxed",
+      "title": "사례03 피상속인이 거주자인 경우(유형② 과세)",
+      "inputs": {
+        "estate_value": 2100000000,
+        "debts": 315000000,
+        "funeral_expenses": 4000000,
+        "financial_assets": 700000000,
+        "prior_gifts": 100000000,
+        "has_spouse": true,
+        "spouse_inheritance": 590000000,
+        "children_count": 1,
+        "disabled_years": 63
+      },
+      "inputs_note": "상속재산 19억원(예금 6억·부동산 12억·생명보험금 1억) + 추정상속재산 산입액 2억원. 자녀는 장애인(기대여명 63년). 배우자 실제 상속 6억원 - 승계 공과금 1천만원, 한도 18.85억원 x 1.5/2.5 = 11.31억원.",
+      "expected": {
+        "base": 1880000000,
+        "basic": 880000000,
+        "spouse": 590000000,
+        "financial": 140000000,
+        "deductions": 1610000000,
+        "taxable": 270000000,
+        "calculated_tax": 44000000,
+        "filing_credit": 1320000,
+        "decided_tax": 42680000
+      }
+    },
+    {
+      "id": "guide-gift-older-than-ten-years",
+      "title": "가이드 알뜰정보15: 상속재산 25억원, 자녀 2명, 12년 전 증여(합산 안 함)",
+      "inputs": {
+        "estate_value": 2505000000,
+        "children_count": 2
+      },
+      "expected": {
+        "basic": 500000000,
+        "taxable": 2000000000,
+        "calculated_tax": 640000000
+      }
+    },
+    {
+      "id": "guide-gift-within-ten-years",
+      "title": "가이드 알뜰정보15: 같은 상속, 8년 전 자녀에게 5억원 증여(합산)",
+      "inputs": {
+        "estate_value": 2505000000,
+        "children_count": 2,
+        "prior_gifts": 500000000,
+        "prior_gifts_taxable": 450000000
+      },
+      "inputs_note": "증여재산공제 5천만원을 뺀 증여세 과세표준 4.5억원은 공제 적용 한도에서 빠지지만 한도(25.5억원)가 공제(5억원)보다 커서 결과는 같다.",
+      "expected": {
+        "taxable": 2500000000,
+        "calculated_tax": 840000000
+      }
+    },
+    {
+      "id": "guide-spouse-inherits-nothing",
+      "title": "가이드 알뜰정보17: 상속재산 35억원, 배우자와 자녀 2명, 배우자는 상속받지 않음",
+      "inputs": {
+        "estate_value": 3505000000,
+        "has_spouse": true,
+        "children_count": 2
+      },
+      "expected": {
+        "spouse": 500000000,
+        "taxable": 2500000000,
+        "calculated_tax": 840000000
+      }
+    },
+    {
+      "id": "guide-spouse-legal-share",
+      "title": "가이드 알뜰정보17: 같은 상속, 배우자가 법정상속분 15억원 상속",
+      "inputs": {
+        "estate_value": 3505000000,
+        "has_spouse": true,
+        "spouse_inheritance": 1500000000,
+        "children_count": 2
+      },
+      "expected": {
+        "spouse": 1500000000,
+        "taxable": 1500000000,
+        "calculated_tax": 440000000
+      }
+    }
+  ]
+}

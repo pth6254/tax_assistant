@@ -58,6 +58,15 @@ class CaseFactsPatch(StrictCaseModel):
     debts: int | None = Field(default=None, ge=0, strict=True)
     spouse_inheritance: int | None = Field(default=None, ge=0, strict=True)
     children_count: int | None = Field(default=None, ge=0, strict=True)
+    financial_assets: int | None = Field(default=None, ge=0, strict=True)
+    funeral_expenses: int | None = Field(default=None, ge=0, strict=True)
+    has_spouse: bool | None = None
+    parents_count: int | None = Field(default=None, ge=0, strict=True)
+    minor_years: int | None = Field(default=None, ge=0, strict=True)
+    elderly_count: int | None = Field(default=None, ge=0, strict=True)
+    disabled_years: int | None = Field(default=None, ge=0, strict=True)
+    prior_gifts: int | None = Field(default=None, ge=0, strict=True)
+    prior_gifts_taxable: int | None = Field(default=None, ge=0, strict=True)
     gift_amount: int | None = Field(default=None, ge=0, strict=True)
     relation: Literal['배우자', '직계존비속', '기타친족', '기타'] | None = None
     is_minor: bool | None = None

@@ -74,6 +74,20 @@ _DEDUCTIONS: dict[tuple[str, str], dict] = {
     ("상속세", "기초공제"):                     {"amount": 200000000, "rate": None},
     ("상속세", "일괄공제"):                     {"amount": 500000000, "rate": None},
     ("상속세", "배우자상속공제_최소"):           {"amount": 500000000, "rate": None},
+    ("상속세", "배우자상속공제_한도"):           {"amount": 3000000000, "rate": None},
+    ("상속세", "자녀공제"):                     {"amount": 50000000,  "rate": None},
+    ("상속세", "미성년자공제_연"):               {"amount": 10000000,  "rate": None},
+    ("상속세", "연로자공제"):                   {"amount": 50000000,  "rate": None},
+    ("상속세", "장애인공제_연"):                 {"amount": 10000000,  "rate": None},
+    ("상속세", "금융재산상속공제"):              {"amount": 20000000,  "rate": 0.20, "max_amount": 200000000},
+    ("상속세", "공제한도_증여가산_기준"):         {"amount": 500000000, "rate": None},
+    ("상속세", "장례비용_최소"):                 {"amount": 5000000,   "rate": None},
+    ("상속세", "장례비용_한도"):                 {"amount": 10000000,  "rate": None},
+    ("상속세", "봉안비용_한도"):                 {"amount": 5000000,   "rate": None},
+    ("상속세", "세대생략할증률"):                {"amount": None,      "rate": 0.30},
+    ("상속세", "세대생략할증률_미성년_고액"):     {"amount": 2000000000, "rate": 0.40},
+    ("상속세", "신고세액공제율"):                {"amount": None,      "rate": 0.03},
+    ("상속세", "과세최저한"):                    {"amount": 500000,    "rate": None},
     ("양도소득세", "고가주택기준금액"):                  {"amount": 1200000000, "rate": None},
     ("양도소득세", "장기보유특별공제_일반_연공제율"):     {"amount": None, "rate": 0.02},
     ("양도소득세", "장기보유특별공제_일반_한도"):         {"amount": None, "rate": 0.30},
@@ -209,22 +223,22 @@ async def test_gift_tax_prior_gifts_added():
 
 @pytest.mark.asyncio
 async def test_inheritance_lump_sum_and_spouse():
-    """재산 15억, 배우자 5억 상속, 자녀 2명.
-    일괄공제 5억(기초 2억+인적 1억보다 큼) + 배우자공제 5억 = 과세표준 5억 → 20% 구간.
-    5억 × 0.2 - 1,000만 = 9,000만 → 신고세액공제 3%(270만) = 8,730만."""
+    """재산 15억, 배우자 5억 상속, 자녀 2명. 장례비용은 증빙이 없어도 최소 500만원을 뺀다.
+    과세가액 14.95억 - 일괄공제 5억 - 배우자공제 5억 = 과세표준 4.95억 → 20% 구간.
+    4.95억 × 0.2 - 1,000만 = 8,900만 → 신고세액공제 3%(267만) = 8,633만."""
     with _patch_repository(inheritance):
         r = await inheritance.calculate(estate_value=1500000000, spouse_inheritance=500000000, children_count=2)
-    assert r.taxable_income == 500000000
-    assert r.calculated_tax == 90000000
-    assert r.final_tax == 87300000
+    assert r.taxable_income == 495000000
+    assert r.calculated_tax == 89000000
+    assert r.final_tax == 86330000
 
 
 @pytest.mark.asyncio
 async def test_inheritance_itemized_exceeds_lump_sum():
-    """자녀 7명이면 기초 2억 + 인적 3.5억 = 5.5억 > 일괄공제 5억 → 항목별 공제 적용."""
+    """자녀 7명이면 기초 2억 + 인적 3.5억 = 5.5억 > 일괄공제 5억 → 항목별 공제 적용(장례비용 500만원 차감)."""
     with _patch_repository(inheritance):
         r = await inheritance.calculate(estate_value=1000000000, children_count=7)
-    assert r.taxable_income == 450000000
+    assert r.taxable_income == 445000000
 
 
 @pytest.mark.asyncio

@@ -14,7 +14,8 @@ from app.services.law.coverage_service import NATIONAL_TAX_LAWS
 from app.services.tools.registry import TOOL_SCHEMAS
 from app.services.tools.executor import ToolRun, execute_tool
 from app.services.tools.policy import DOCUMENT_INTENT, CALC_TAX, ALIASES, check_proposal, has_lookup_intent
-from app.services.tools.policy import capital_gains_scope, financial_income_scope, gift_scope, income_tax_scope
+from app.services.tools.policy import (capital_gains_scope, financial_income_scope, gift_scope, income_tax_scope,
+                                       inheritance_scope)
 
 logger = logging.getLogger(__name__)
 _AMOUNT_RE = re.compile(r"(?:\d[\d,.]*|[일이삼사오육칠팔구십백천]+)\s*(?:억|천만|백만|천|만|원)")
@@ -110,6 +111,10 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
             return result
     if (has_calculation_intent(query) or calculation_followup) and gift_scope(query, history):
         result = await gift_calculation(query, history, on_event)
+        if result is not None:
+            return result
+    if (has_calculation_intent(query) or calculation_followup) and inheritance_scope(query, history):
+        result = await inheritance_calculation(query, history, on_event)
         if result is not None:
             return result
     if on_event:
@@ -231,6 +236,12 @@ async def gift_calculation(query, history, on_event=None):
     """증여세 계산기 결과, a request for the facts it must not assume, or None for the model path."""
     from app.services.calculator.gift_inputs import stated_gift_inputs
     return await _stated_calculation("gift", "증여세", stated_gift_inputs(query, history), on_event)
+
+
+async def inheritance_calculation(query, history, on_event=None):
+    """상속세 계산기 결과, a request for the facts it must not assume, or None for the model path."""
+    from app.services.calculator.inheritance_inputs import stated_inheritance_inputs
+    return await _stated_calculation("inheritance", "상속세", stated_inheritance_inputs(query, history), on_event)
 
 
 def _emit_result(result, params, callback):

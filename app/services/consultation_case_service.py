@@ -22,11 +22,22 @@ INACTIVE_DEFAULTS = {'is_minor': False, 'business_type': '소매업',
                      'is_negligent': False, 'days_late': 0,
                      'is_one_home': False, 'residence_years': 0, 'acquired_in_adjusted_area': False,
                      'multi_home_surcharge': '없음', 'expense': 0, 'sincere_business': False, 'withheld': True,
-                     'generation_skipping': False, 'marriage_birth': False, 'prior_gift_taxable': 0, 'prior_gift_tax': 0}
+                     'generation_skipping': False, 'marriage_birth': False, 'prior_gift_taxable': 0, 'prior_gift_tax': 0,
+                     'spouse_inheritance': 0, 'parents_count': 0, 'prior_gifts_taxable': 0}
 
 
 def _active_question_specs(kind, facts):
     questions = case_kind(kind)['questions']
+    if kind == 'inheritance':
+        # The spouse's share only with a spouse, parents only without children, the gift's tax only with a gift.
+        skip = set()
+        if facts.get('has_spouse') is False:
+            skip.add('spouse_inheritance')
+        if (facts.get('children_count') or 0) > 0:
+            skip.add('parents_count')
+        if facts.get('prior_gifts') == 0:
+            skip |= {'prior_gifts_taxable', 'prior_gift_tax'}
+        return tuple(q for q in questions if q[0] not in skip)
     if kind == 'gift':
         # Minor, generation-skipping and marriage questions only apply to lineal relatives; the
         # earlier gift's tax figures only when an earlier gift is added.
@@ -88,7 +99,7 @@ def _answered(value, options):
 
 def _questions(facts, kind='income_tax'):
     return [{'key': key, 'question': question, 'type': field_type,
-             'unit': '원' if field_type == 'amount' else '명' if key in {'personal_deduction_count', 'children_count'} else '년' if key in {'holding_years', 'residence_years'} else '일' if key == 'days_late' else None,
+             'unit': '원' if field_type == 'amount' else '명' if key in {'personal_deduction_count', 'children_count', 'parents_count', 'elderly_count'} else '년' if key in {'holding_years', 'residence_years', 'minor_years', 'disabled_years'} else '일' if key == 'days_late' else None,
              'options': list(options) if options else None,
              'answered': _answered(facts.get(key), options), 'value': facts.get(key)}
             for key, question, field_type, options in _active_question_specs(kind, facts)]

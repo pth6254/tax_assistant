@@ -141,6 +141,9 @@ def test_conditional_questions_only_ask_relevant_calculator_inputs():
     spouse = {q['key'] for q in cases._questions({'relation': '배우자', 'prior_gifts_10y': 0}, 'gift')}
     assert not spouse & {'generation_skipping', 'marriage_birth', 'prior_gift_tax', 'prior_gift_taxable'}
     assert 'prior_gift_tax' in {q['key'] for q in cases._questions({'prior_gifts_10y': 10}, 'gift')}
+    heirs = {q['key'] for q in cases._questions({'has_spouse': False, 'children_count': 2, 'prior_gifts': 0}, 'inheritance')}
+    assert not heirs & {'spouse_inheritance', 'parents_count', 'prior_gifts_taxable', 'prior_gift_tax'}
+    assert 'parents_count' in {q['key'] for q in cases._questions({'children_count': 0}, 'inheritance')}
     assert 'business_type' not in {q['key'] for q in cases._questions({'is_simplified': False}, 'vat')}
     assert 'business_type' in {q['key'] for q in cases._questions({'is_simplified': True}, 'vat')}
     assert 'days_late' in {q['key'] for q in cases._questions({'penalty_type': '납부지연'}, 'penalty_tax')}

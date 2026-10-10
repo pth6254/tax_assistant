@@ -86,13 +86,32 @@ def gift_scope(query, history=None):
     return bool(GIFT.search(previous)) and not NOT_GIFT.search(previous)
 
 
+INHERITANCE = re.compile(r"상속|유산")
+NOT_INHERITANCE = re.compile(r"증여세|양도|종합소득세|부가세|부가가치세|가산세|법인세")
+
+
+def inheritance_scope(query, history=None):
+    """An inheritance is being calculated in this turn, or the previous one for a follow-up."""
+    if NOT_INHERITANCE.search(query):
+        return False
+    if INHERITANCE.search(query):
+        return True
+    previous = next((m.get("content", "") for m in reversed(history or []) if m.get("role") == "user"), "")
+    return bool(INHERITANCE.search(previous)) and not NOT_INHERITANCE.search(previous)
+
+
 ALIASES = {
     "income": "연소득|소득|총수입|수입", "expense": "필요경비|경비", "personal_deduction_count": "공제인원|공제 인원|기본공제 인원",
     "other_deductions": "기타공제|기타 공제", "transfer_price": "양도가액|양도 가액|매도가|매도금액",
     "acquisition_price": "취득가액|취득 가액|매수가", "expenses": "필요경비|경비",
     "holding_years": "보유기간|보유 기간", "residence_years": "거주기간|거주 기간", "estate_value": "상속재산|상속 재산|유산",
     "debts": "채무|부채", "spouse_inheritance": "배우자 상속액|배우자 상속",
-    "children_count": "자녀 수|자녀수|자녀", "gift_amount": "증여액|증여금액|증여 금액|증여",
+    "children_count": "자녀 수|자녀수|자녀", "financial_assets": "순금융재산|금융재산",
+    "funeral_expenses": "장례비용|장례비", "memorial_expenses": "봉안비용|봉안시설", "prior_gifts": "사전증여재산|사전증여",
+    "prior_gifts_non_heirs": "상속인 아닌 자 증여", "prior_gifts_taxable": "사전증여 과세표준",
+    "spouse_prior_gifts_taxable": "배우자 사전증여 과세표준", "parents_count": "직계존속 수|부모 수",
+    "minor_years": "미성년자 연수", "elderly_count": "연로자 수|65세 이상", "disabled_years": "장애인 기대여명",
+    "non_heir_bequests": "유증", "skipped_generation_assets": "손자녀 상속분|세대생략 재산", "gift_amount": "증여액|증여금액|증여 금액|증여",
     "prior_gifts_10y": "사전증여|사전 증여|10년 이내 증여", "prior_gift_tax": "이전 증여 산출세액|사전증여 산출세액",
     "prior_gift_taxable": "이전 증여 과세표준|사전증여 과세표준", "deduction_used_10y": "이미 쓴 증여재산공제|사용한 증여재산공제",
     "marriage_birth_used": "이미 받은 혼인공제|이미 받은 혼인·출산공제", "sales": "매출액|매출",
@@ -117,6 +136,8 @@ BOOL_TEXT = {
     "is_minor": {True: "미성년", False: "성년"},
     "marriage_birth": {True: "혼인·출산 공제 대상", False: "혼인·출산 공제 대상 아님"},
     "generation_skipping": {True: "세대생략", False: "자녀에게 직접"},
+    "has_spouse": {True: "배우자 있음", False: "배우자 없음"},
+    "skipped_generation_minor": {True: "손자녀 미성년", False: "손자녀 성년"},
     "filed_on_time": {True: "기한 내 신고", False: "기한 후 신고"},
     "is_negligent": {True: "부정행위 있음", False: "부정행위 없음"},
     # "원천징수" alone is also inside "원천징수되지 않은"; the two forms must not overlap.
@@ -158,7 +179,8 @@ def input_proof(field, value, texts):
                     return None  # Do not accept only the first part of 5억 5000만원.
                 unit = hit['unit']
                 expected_unit = {"holding_years": "년", "residence_years": "년", "days_late": "일", "children_count": "명",
-                                 "personal_deduction_count": "명"}.get(field)
+                                 "personal_deduction_count": "명", "parents_count": "명", "elderly_count": "명",
+                                 "minor_years": "년", "disabled_years": "년"}.get(field)
                 if expected_unit and unit not in {None, expected_unit}:
                     return None
                 if not expected_unit and (unit in {"명", "년", "일"} or unit is None and Decimal(hit['number'].replace(',', '')) != 0):

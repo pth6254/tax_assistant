@@ -78,10 +78,29 @@ class CapitalGainsRequest(BaseModel):
 
 
 class InheritanceRequest(BaseModel):
-    estate_value: NonNegativeInt
-    debts: NonNegativeInt = 0
-    spouse_inheritance: NonNegativeInt = 0
-    children_count: NonNegativeInt = 0
+    """거주자 사망에 따른 상속 전체의 상속세. 금액은 원 단위."""
+    estate_value: NonNegativeInt = Field(description="상속재산가액(보험금·퇴직금 등 간주상속재산, 추정상속재산 포함)")
+    debts: NonNegativeInt = Field(0, description="상속인이 승계한 채무와 공과금 합계")
+    spouse_inheritance: NonNegativeInt = Field(0, description="배우자가 실제 상속받은 금액(배우자가 승계한 채무 차감)")
+    children_count: NonNegativeInt = Field(0, description="자녀 수(태아 포함)")
+    funeral_expenses: NonNegativeInt = Field(0, description="장례비용(500만원 미만이면 500만원, 한도 1천만원)")
+    memorial_expenses: NonNegativeInt = Field(0, description="봉안시설·자연장지 비용(한도 500만원)")
+    financial_assets: NonNegativeInt = Field(0, description="순금융재산(예금·보험금·주식 등 금융재산 - 금융채무)")
+    prior_gifts: NonNegativeInt = Field(0, description="상속인이 상속개시 전 10년 내 피상속인에게 받은 증여재산가액")
+    prior_gifts_non_heirs: NonNegativeInt = Field(0, description="상속인 아닌 자가 상속개시 전 5년 내 받은 증여재산가액")
+    prior_gifts_taxable: NonNegativeInt = Field(0, description="가산한 사전증여재산의 증여세 과세표준 합계")
+    prior_gift_tax: NonNegativeInt = Field(0, description="가산한 사전증여재산의 증여세 산출세액 합계")
+    has_spouse: bool = Field(False, description="배우자가 상속인인지(실제 상속받지 않아도 최소 5억원 공제)")
+    spouse_prior_gifts_taxable: NonNegativeInt = Field(0, description="가산한 증여 중 배우자가 받은 증여의 과세표준")
+    parents_count: NonNegativeInt = Field(0, description="자녀가 없을 때 상속인인 직계존속 수(배우자 법정상속분 계산)")
+    minor_years: NonNegativeInt = Field(0, description="상속인·동거가족 중 미성년자의 19세까지 남은 연수 합계")
+    elderly_count: NonNegativeInt = Field(0, description="상속인(배우자 제외)·동거가족 중 65세 이상인 사람 수")
+    disabled_years: NonNegativeInt = Field(0, description="상속인·동거가족 중 장애인의 기대여명 연수 합계")
+    non_heir_bequests: NonNegativeInt = Field(
+        0, description="상속인 아닌 자에게 유증·사인증여한 재산과 상속포기로 다음 순위 상속인이 받은 재산")
+    skipped_generation_assets: NonNegativeInt = Field(0, description="자녀가 아닌 직계비속(손자녀 등)이 받은 상속재산")
+    skipped_generation_minor: bool = Field(False, description="그 손자녀 등이 미성년자인지(20억원 초과 시 40%)")
+    filed_on_time: bool = Field(True, description="신고기한(상속개시일이 속하는 달 말일부터 6개월) 내 신고")
 
 
 class GiftTaxRequest(BaseModel):
