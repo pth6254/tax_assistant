@@ -102,27 +102,23 @@ def _dummy_result() -> CalculationResult:
 
 @pytest.mark.asyncio
 async def test_run_calculation_full_flow():
+    # A model-selected tool runs only when every input, defaults included, is written by the user.
     with (
         patch(
             "app.services.tools.planner.select_tool",
-            AsyncMock(return_value=("income_tax", {"income": 50000000})),
+            AsyncMock(return_value=("gift", {"gift_amount": 50000000})),
         ),
         patch(
-            "app.services.calculator.engine.income_tax.calculate",
+            "app.services.calculator.engine.gift_tax.calculate",
             AsyncMock(return_value=_dummy_result()),
         ) as mock_calc,
     ):
-        run = await run_calculation_for_query("연소득 5천만원, 경비 0원, 공제 인원 1명, 기타 공제 0원 세금 얼마야?")
+        run = await run_calculation_for_query("증여액 5천만원, 관계 기타, 성년, 사전증여 0원이면 증여세 얼마야?")
     assert run is not None
     assert "소득세법 제55조" in run.context
-    assert run.tool == "income_tax"
-    assert run.params == {
-        "income": 50000000, "expense": 0,
-        "personal_deduction_count": 1, "other_deductions": 0,
-    }
-    mock_calc.assert_awaited_once_with(
-        income=50000000, expense=0, personal_deduction_count=1, other_deductions=0
-    )
+    assert run.tool == "gift"
+    assert run.params == {"gift_amount": 50000000, "relation": "기타", "is_minor": False, "prior_gifts_10y": 0}
+    mock_calc.assert_awaited_once_with(gift_amount=50000000, relation="기타", is_minor=False, prior_gifts_10y=0)
 
 
 @pytest.mark.asyncio

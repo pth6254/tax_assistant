@@ -25,9 +25,12 @@ def current_parameters():
 
 @pytest.fixture
 def stored_parameters(monkeypatch):
+    from app.services.calculator import income_tax
+    from tests.test_income_tax import params
+
     async def load(as_of=None):
-        return current_parameters()
-    monkeypatch.setattr(fit, "load_parameters", load)
+        return params()
+    monkeypatch.setattr(income_tax, "load_parameters", load)
 
 
 def test_requires_login(client):
@@ -48,16 +51,22 @@ def test_interest_of_100_million_with_the_basic_deduction(client, auth_cookie, s
     # (80M - 1.5M) x 24% - 5.76M + 20M x 14% = 15.88M  vs  100M x 14% = 14M
     assert steps["① 종합과세 방식 산출세액"] == 15_880_000
     assert steps["② 원천징수세율 방식 산출세액"] == 14_000_000
-    assert body["calculated_tax"] == body["final_tax"] == 15_880_000
-    assert steps["기납부세액(법정 원천징수세율로 추정)"] == 14_000_000
-    assert steps["차감 납부할 세액"] == 1_880_000
-    assert body["tax_type"] == "소득세(금융소득 종합과세)"
+    assert body["calculated_tax"] == 15_880_000
+    # 표준세액공제 7만원: 원천징수세율로 과세된 2,000만원분을 뺀 산출세액 안에서 공제된다(제61조 제2항).
+    assert steps["표준세액공제"] == 70_000 and body["final_tax"] == 15_810_000
+    assert steps["기납부세액(금융소득 원천징수 추정액 포함)"] == 14_000_000
+    assert steps["차감 납부할 세액"] == 1_810_000
+    assert body["tax_type"] == "종합소득세"
     assert any("비교과세" in note for note in body["notes"]) and any("지방소득세" in note for note in body["notes"])
 
 
-def test_no_financial_income_is_refused_with_a_reason(client, auth_cookie, stored_parameters):
-    response = client.post("/api/calculator/financial-income-tax", cookies=auth_cookie, json={"other_income": 1})
-    assert response.status_code == 422
+def test_the_old_endpoint_is_the_comprehensive_income_tax_calculator(client, auth_cookie, stored_parameters):
+    response = client.post("/api/calculator/financial-income-tax", cookies=auth_cookie,
+                           json={"other_income": 30_000_000, "income_deductions": 1_500_000})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["calculated_tax"] == 28_500_000 * 15 // 100 - 1_260_000
+    assert "소득 종류를 알 수 없어" in body["notes"][0]
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,94 @@
+{
+  "source": {
+    "filing_cases": {
+      "title": "국세청 주요서식 작성요령/사례(종합소득세) — 2025년 귀속 종합소득세 신고서 작성사례 9종",
+      "url": "https://www.nts.go.kr/nts/na/ntt/selectNttList.do?mi=2241&bbsId=3066",
+      "retrieved": "2026-10-10",
+      "note": "HWP 첨부파일의 '세액계산 흐름도'와 작성요령에 인쇄된 금액만 옮겼다. 추계(경비율) 사례의 소득금액 계산과 가산세는 계산기 범위 밖이라, 인쇄된 사업소득금액을 입력으로 쓰고 결정세액까지 비교한다."
+    },
+    "guide": {
+      "title": "국세청 「2026 세금절약가이드 Ⅰ」(2026.05.14.) — 간편장부 비교 사례(152~153쪽), 금융소득 상담사례 Q7",
+      "url": "https://www.nts.go.kr/nts/na/ntt/selectNttList.do?mi=40298&bbsId=50696",
+      "retrieved": "2026-10-10"
+    },
+    "brackets": "2024~2026년 귀속 기본세율(제55조, 가이드 238쪽 표와 같음). 근로소득공제·근로소득세액공제·표준세액공제는 tests/test_income_tax.py의 params()가 법조문 값으로 만든다."
+  },
+  "cases": [
+    {
+      "id": "filing-1-simple-books",
+      "title": "간편장부 신고서 작성사례(학원 사업자, 정치자금기부금, 중간예납)",
+      "inputs": {"income": 60000000, "expense": 35000000, "other_deductions": 500000, "other_tax_credits": 90909, "prepaid_tax": 500000},
+      "inputs_note": "인적공제 본인 150만 + 부녀자공제 50만. 그 밖의 세액공제는 정치자금기부금 세액공제 90,909원(조특법). 표준세액공제 7만원.",
+      "expected": {"taxable": 23000000, "calculated_tax": 2190000, "decided_tax": 2029091, "balance": 1529091}
+    },
+    {
+      "id": "filing-2-two-employers",
+      "title": "근무지가 2이상인 근로소득자 신고서 작성사례",
+      "inputs": {"wage_income": 41000000, "personal_deduction_count": 4, "other_deductions": 3215000, "itemized_special_credits": true, "other_tax_credits": 980500},
+      "inputs_note": "총급여 3,100만 + 1,000만. 소득공제: 기본 4명 600만, 경로우대 100만, 국민연금 50만, 주택자금 140만, 신용카드 31.5만(사례 본문의 9,295,000원은 오기이고 합계·과세표준은 9,215,000원 기준). 그 밖의 세액공제: 자녀 25만, 연금계좌 6만, 보험료 12만, 의료비 32.55만, 교육비 22.5만. 특별세액공제를 받아 표준세액공제 없음.",
+      "expected": {"wage_deduction": 11400000, "taxable": 20385000, "calculated_tax": 1797750, "wage_credit": 676000, "decided_tax": 141250, "balance": 141250}
+    },
+    {
+      "id": "filing-3-wage-and-other",
+      "title": "기타소득과 근로소득 신고서 작성사례(위약금 2,000만원이 있는 근로소득자)",
+      "inputs": {"wage_income": 100000000, "other_income": 20000000, "personal_deduction_count": 4, "other_deductions": 3000000, "itemized_special_credits": true, "other_tax_credits": 2620000, "prepaid_tax": 7810000},
+      "inputs_note": "소득공제: 기본 4명 600만, 경로우대 100만, 한부모 100만, 국민연금 100만. 그 밖의 세액공제: 자녀 55만, 보험료 12만, 의료비 105만, 교육비 90만. 근로소득 산출세액 상당액 14,780,041원은 사례에 인쇄된 금액.",
+      "expected": {"wage_deduction": 14750000, "taxable": 96250000, "calculated_tax": 18247500, "wage_tax": 14780041, "wage_credit": 500000, "decided_tax": 15127500, "balance": 7317500}
+    },
+    {
+      "id": "filing-4-simple-rate",
+      "title": "단일소득-단순경비율 신고서 작성사례(학원강사, 사업소득 원천징수)",
+      "inputs": {"income": 26040000, "personal_deduction_count": 3, "other_deductions": 1100000, "other_tax_credits": 250000, "prepaid_tax": 1800000},
+      "inputs_note": "사업소득금액 26,040,000원(단순경비율 계산은 범위 밖이라 소득금액을 입력). 소득공제: 기본 3명 450만, 부녀자 50만, 국민연금 60만. 자녀세액공제 25만, 표준세액공제 7만.",
+      "expected": {"taxable": 20440000, "calculated_tax": 1806000, "decided_tax": 1486000, "balance": -314000}
+    },
+    {
+      "id": "filing-5-new-business",
+      "title": "신규로 사업을 개시하는 사업자 신고서 작성사례(기준경비율)",
+      "inputs": {"income": 84000000, "personal_deduction_count": 4, "other_deductions": 1200000, "other_tax_credits": 550000},
+      "inputs_note": "사업소득금액 84,000,000원(기준경비율 추계). 소득공제: 기본 4명 600만, 국민연금 120만. 자녀세액공제 55만, 표준세액공제 7만. 가산세 125,000원은 범위 밖이라 결정세액까지 비교.",
+      "expected": {"taxable": 76800000, "calculated_tax": 12672000, "decided_tax": 12052000}
+    },
+    {
+      "id": "filing-6-standard-rate-simple-books",
+      "title": "추계-기준경비율(간편장부대상자) 신고서 작성사례",
+      "inputs": {"income": 34496000, "personal_deduction_count": 4, "other_deductions": 1200000, "other_tax_credits": 250000},
+      "inputs_note": "사업소득금액 34,496,000원(비교소득금액). 소득공제: 기본 4명 600만, 국민연금 120만. 자녀세액공제 25만, 표준세액공제 7만. 가산세 30,000원은 범위 밖.",
+      "expected": {"taxable": 27296000, "calculated_tax": 2834400, "decided_tax": 2514400}
+    },
+    {
+      "id": "filing-7-standard-rate-double-entry",
+      "title": "추계-기준경비율(복식부기의무자) 신고서 작성사례",
+      "inputs": {"income": 21220000, "personal_deduction_count": 4, "other_deductions": 2720000, "other_tax_credits": 550000, "prepaid_tax": 600000},
+      "inputs_note": "사업소득금액 21,220,000원. 소득공제: 기본 4명 600만, 장애인 200만, 국민연금 72만. 자녀세액공제 55만, 표준세액공제 7만. 가산세 160,000원이 더해진 인쇄 납부(환급)세액 △310,000원은 범위 밖.",
+      "expected": {"taxable": 12500000, "calculated_tax": 750000, "decided_tax": 130000}
+    },
+    {
+      "id": "filing-8-house-rental",
+      "title": "주택임대사업자의 신고서 작성사례(종합과세)",
+      "inputs": {"income": 43845863, "expense": 1500000, "other_deductions": 800000},
+      "inputs_note": "총수입금액 43,845,863원(임대료+간주임대료), 필요경비 150만. 소득공제: 본인 150만, 국민연금 80만. 표준세액공제 7만.",
+      "expected": {"taxable": 40045863, "calculated_tax": 4746879, "decided_tax": 4676879}
+    },
+    {
+      "id": "filing-9-religious-income",
+      "title": "종교인소득(기타소득) 신고서 작성사례",
+      "inputs": {"other_income": 23800000, "personal_deduction_count": 4, "other_deductions": 2000000, "other_tax_credits": 400000, "prepaid_tax": 106840},
+      "inputs_note": "종교인소득 금액(총수입금액-필요경비 30,200,000원) 23,800,000원. 소득공제: 기본 4명 600만, 경로우대 100만, 국민연금 100만. 자녀세액공제 25만, 연금계좌 15만, 표준세액공제 7만(본문의 세액공제 합계 370,000원은 오기이고 인쇄된 결정세액 640,000원과 맞는 합계는 470,000원).",
+      "expected": {"taxable": 15800000, "calculated_tax": 1110000, "decided_tax": 640000}
+    },
+    {
+      "id": "guide-bookkeeping",
+      "title": "2026 세금절약가이드 Ⅰ 152쪽: 장부 기장(김성실) 편의점 사업자",
+      "inputs": {"income": 100000000, "expense": 86500000},
+      "expected": {"taxable": 12000000, "calculated_tax": 720000, "decided_tax": 650000}
+    },
+    {
+      "id": "guide-deposit-interest",
+      "title": "2026 세금절약가이드 Ⅰ 상담사례 Q7: 은행예금이자 6,000만원만 있는 경우",
+      "inputs": {"interest_income": 60000000, "personal_deduction_count": 0, "other_deductions": 5100000},
+      "inputs_note": "② 원천징수세율 방식이 커서 금융소득 전부가 원천징수세율로 과세되므로 표준세액공제의 공제 기준 산출세액이 0원(제61조 제2항)이고, 납부할 세액은 0원.",
+      "expected": {"calculated_tax": 8400000, "decided_tax": 8400000, "balance": 0}
+    }
+  ]
+}

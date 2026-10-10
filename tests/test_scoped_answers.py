@@ -117,7 +117,7 @@ async def test_financial_income_never_uses_business_calculator(monkeypatch):
     select = AsyncMock(side_effect=AssertionError('unsupported calculator'))
     monkeypatch.setattr(planner, 'select_tool', select)
     # When the deterministic calculator cannot read the inputs, the formula path follows.
-    monkeypatch.setattr(planner, 'financial_calculation', AsyncMock(return_value=None))
+    monkeypatch.setattr(planner, 'income_calculation', AsyncMock(return_value=None))
     question = '금융소득으로 1억을 벌게 된다면 금융종합소득과세로 세금 얼마나 납부하게 될까?'
     events = []
     result = await planner.run_tools_for_query(question, user_id='unused', on_event=events.append)

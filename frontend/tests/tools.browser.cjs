@@ -58,7 +58,7 @@ const assert = require('node:assert/strict')
     assert.equal(await page.getByRole('button', { name: '조문 원문 열기 →' }).isVisible(), false)
     for (const summary of await page.locator('.answer-tools > summary').all()) await summary.click()
     await page.getByRole('button', { name: '조문 원문 열기 →' }).waitFor()
-    for (const name of ['법령 원문 조회', '내 문서 검색', '소득세 계산']) {
+    for (const name of ['법령 원문 조회', '내 문서 검색', '종합소득세 계산']) {
       assert.equal(await page.getByRole('region', { name }).count(), 1)
     }
     await page.getByRole('region', { name: '내 문서 검색' }).locator('summary').click()
@@ -74,16 +74,16 @@ const assert = require('node:assert/strict')
     const values = await page.locator('input').evaluateAll(inputs => inputs.map(input => input.value))
     assert.ok(values.some(value => value.replaceAll(',', '') === '5000')) // UI 단위: 만원
     await page.getByRole('button', { name: '계산하기', exact: true }).click()
-    await page.getByText('소득세 계산 결과', { exact: true }).waitFor()
+    await page.getByText('종합소득세 계산 결과', { exact: true }).waitFor()
     await page.locator('input[type=number]').first().fill('')
-    assert.equal(await page.getByText('소득세 계산 결과', { exact: true }).count(), 0)
+    assert.equal(await page.getByText('종합소득세 계산 결과', { exact: true }).count(), 0)
     await page.getByRole('button', { name: '계산하기', exact: true }).click()
     await page.getByRole('alert').waitFor()
     await page.locator('input[type=number]').first().fill('5000')
     calculatorFailure = true
     await page.getByRole('button', { name: '계산하기', exact: true }).click()
     await page.getByText('세율 데이터 확인 필요', { exact: true }).waitFor()
-    assert.equal(await page.getByText('소득세 계산 결과', { exact: true }).count(), 0)
+    assert.equal(await page.getByText('종합소득세 계산 결과', { exact: true }).count(), 0)
     assert.deepEqual(errors, [])
     console.log('PASS: restored cards, law viewer, escaped document, SSE not_found, calculator prefill, no page errors')
   } finally {

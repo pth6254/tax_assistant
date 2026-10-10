@@ -21,7 +21,7 @@ CALCULATORS = {
 INACTIVE_DEFAULTS = {'is_minor': False, 'business_type': '소매업',
                      'is_negligent': False, 'days_late': 0,
                      'is_one_home': False, 'residence_years': 0, 'acquired_in_adjusted_area': False,
-                     'multi_home_surcharge': '없음'}
+                     'multi_home_surcharge': '없음', 'expense': 0, 'sincere_business': False, 'withheld': True}
 
 
 def _active_question_specs(kind, facts):
@@ -41,6 +41,17 @@ def _active_question_specs(kind, facts):
             skip = {'residence_years', 'acquired_in_adjusted_area'}
         else:
             skip = set()
+        return tuple(q for q in questions if q[0] not in skip)
+    if kind == 'income_tax':
+        # Expenses and the 성실사업자 credit belong to business income; a wage earner's standard
+        # credit is 13만원 whatever the business; withholding matters only with interest or dividends.
+        skip = set()
+        if facts.get('income') == 0:
+            skip |= {'expense', 'sincere_business'}
+        if (facts.get('wage_income') or 0) > 0:
+            skip.add('sincere_business')
+        if facts.get('interest_income') == 0 and facts.get('dividend_gross_up') == 0:
+            skip.add('withheld')
         return tuple(q for q in questions if q[0] not in skip)
     if kind == 'penalty_tax':
         skip = 'is_negligent' if facts.get('penalty_type') == '납부지연' else 'days_late'

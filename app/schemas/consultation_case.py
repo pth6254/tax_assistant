@@ -36,6 +36,15 @@ class CaseFactsPatch(StrictCaseModel):
     expense: int | None = Field(default=None, ge=0, strict=True)
     personal_deduction_count: int | None = Field(default=None, ge=1, strict=True)
     other_deductions: int | None = Field(default=None, ge=0, strict=True)
+    wage_income: int | None = Field(default=None, ge=0, strict=True)
+    sincere_business: bool | None = None
+    other_income: int | None = Field(default=None, ge=0, strict=True)
+    interest_income: int | None = Field(default=None, ge=0, strict=True)
+    dividend_gross_up: int | None = Field(default=None, ge=0, strict=True)
+    withheld: bool | None = None
+    itemized_special_credits: bool | None = None
+    other_tax_credits: int | None = Field(default=None, ge=0, strict=True)
+    prepaid_tax: int | None = Field(default=None, ge=0, strict=True)
     transfer_price: int | None = Field(default=None, ge=0, strict=True)
     acquisition_price: int | None = Field(default=None, ge=0, strict=True)
     expenses: int | None = Field(default=None, ge=0, strict=True)

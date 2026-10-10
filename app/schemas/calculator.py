@@ -32,14 +32,28 @@ class CalculationResult(BaseModel):
 # ── 요청 스키마 ──────────────────────────────────────────────────────
 
 class IncomeTaxRequest(BaseModel):
-    income: NonNegativeInt
-    expense: NonNegativeInt = 0
-    personal_deduction_count: NonNegativeInt = 1
-    other_deductions: NonNegativeInt = 0
+    """종합소득세(금융소득 종합과세 포함). 금액은 연간 원 단위이고, 없는 소득은 0."""
+    income: NonNegativeInt = Field(0, description="사업소득 총수입금액")
+    expense: NonNegativeInt = Field(0, description="사업소득 필요경비")
+    wage_income: NonNegativeInt = Field(0, description="근로소득 총급여액(비과세소득 제외, 근무지가 둘 이상이면 합계)")
+    other_income: NonNegativeInt = Field(0, description="연금·기타소득 등 그 밖의 종합소득금액(필요경비·공제 차감 후)")
+    interest_income: NonNegativeInt = Field(0, description="원천징수세율 14%가 적용되는 이자소득(예금·채권 이자 등)")
+    non_business_interest: NonNegativeInt = Field(0, description="비영업대금의 이익(원천징수세율 25%)")
+    dividend_gross_up: NonNegativeInt = Field(0, description="배당가산(Gross-up) 대상 배당소득(내국법인 배당 등)")
+    dividend_other: NonNegativeInt = Field(0, description="배당가산 대상이 아닌 배당소득")
+    withheld: bool = Field(True, description="금융소득이 국내에서 원천징수되었는지")
+    personal_deduction_count: NonNegativeInt = Field(1, description="기본공제 인원(본인 포함)")
+    other_deductions: NonNegativeInt = Field(0, description="기본공제 외 종합소득공제 합계(추가공제·연금보험료·특별소득공제 등)")
+    itemized_special_credits: bool = Field(
+        False, description="특별소득공제·특별세액공제·월세세액공제를 신청했는지(신청하면 표준세액공제 없음)")
+    sincere_business: bool = Field(False, description="성실사업자(근로소득이 없을 때 표준세액공제 12만원)")
+    other_tax_credits: NonNegativeInt = Field(
+        0, description="근로소득·배당·표준세액공제 외 세액공제 합계(자녀·연금계좌·보험료·의료비·교육비·기부금 등)")
+    prepaid_tax: NonNegativeInt = Field(0, description="중간예납·원천징수 등 기납부세액(금융소득 원천징수 제외)")
 
 
 class FinancialIncomeTaxRequest(BaseModel):
-    """금융소득 종합과세를 포함한 종합소득세. 금액은 연간 총수입금액(원)."""
+    """이전 금융소득 계산기 입력(종합소득세 계산기의 별칭). 금액은 연간 총수입금액(원)."""
     interest_income: NonNegativeInt = Field(0, description="원천징수세율 14%가 적용되는 이자소득(예금·채권 이자 등)")
     non_business_interest: NonNegativeInt = Field(0, description="비영업대금의 이익(원천징수세율 25%)")
     dividend_gross_up: NonNegativeInt = Field(0, description="배당가산(Gross-up) 대상 배당소득(내국법인 배당 등)")

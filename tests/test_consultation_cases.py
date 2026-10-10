@@ -12,15 +12,31 @@ from app.services import consultation_case_service as cases
 from app.services.consultation_catalog import CASE_KINDS
 
 
+INCOME_FACTS = {'wage_income': 0, 'income': 50000000, 'expense': 100, 'sincere_business': False, 'other_income': 0,
+                'interest_income': 0, 'dividend_gross_up': 0, 'personal_deduction_count': 1, 'other_deductions': 0,
+                'itemized_special_credits': False, 'other_tax_credits': 0, 'prepaid_tax': 0}
+
+
 def test_case_questions_require_explicit_zero_and_checklist_detects_changed_document():
-    facts = {'income': 0, 'expense': 100, 'personal_deduction_count': 1,
-             'other_deductions': 0}
-    assert all(item['answered'] for item in cases._questions(facts))
-    checklist = cases._checklist(facts, {
+    assert all(item['answered'] for item in cases._questions(INCOME_FACTS))
+    checklist = cases._checklist(INCOME_FACTS, {
         'income_proof': {'status': 'attached', 'filename': 'income.pdf', 'uploaded_at': 'old'},
     }, {'income.pdf': 'new'})
-    assert [item['needed'] for item in checklist] == [True, True, False]
-    assert checklist[0]['status'] == 'needs_recheck'
+    assert {item['key']: item['needed'] for item in checklist} == {
+        'wage_proof': False, 'income_proof': True, 'expense_proof': True, 'financial_proof': False,
+        'deduction_proof': False, 'credit_proof': False}
+    assert checklist[1]['status'] == 'needs_recheck'
+
+
+def test_income_case_asks_only_the_facts_that_apply():
+    keys = lambda facts: [q['key'] for q in cases._questions(facts)]
+    assert 'expense' not in keys({'income': 0}) and 'sincere_business' not in keys({'income': 0})
+    assert 'sincere_business' not in keys({'income': 10, 'wage_income': 10})
+    assert 'withheld' not in keys({'interest_income': 0, 'dividend_gross_up': 0})
+    assert 'withheld' in keys({'interest_income': 30000000, 'dividend_gross_up': 0})
+    # A case saved before income kinds were split asks for the new facts instead of assuming them.
+    old = {'income': 50000000, 'expense': 0, 'personal_deduction_count': 1, 'other_deductions': 0}
+    assert {q['key'] for q in cases._questions(old) if not q['answered']} >= {'wage_income', 'other_income', 'prepaid_tax'}
 
 
 def test_case_input_rejects_future_year_and_missing_document_reason():
@@ -56,8 +72,7 @@ def fake_pool(conn):
 async def test_case_calculation_uses_selected_year_and_saves_exact_facts(monkeypatch):
     uid, cid = uuid.uuid4(), uuid.uuid4()
     now = datetime.now(timezone.utc)
-    facts = {'income': 50000000, 'expense': 0, 'personal_deduction_count': 1,
-             'other_deductions': 0}
+    facts = dict(INCOME_FACTS, expense=0)
     row = {'id': cid, 'user_id': uid, 'conversation_id': None, 'kind': 'income_tax',
            'title': 'test', 'question': 'tax', 'tax_year': 2024, 'facts': facts,
            'checklist': {}, 'calculation': None, 'created_at': now, 'updated_at': now}

@@ -14,7 +14,7 @@ from app.services.law.coverage_service import NATIONAL_TAX_LAWS
 from app.services.tools.registry import TOOL_SCHEMAS
 from app.services.tools.executor import ToolRun, execute_tool
 from app.services.tools.policy import DOCUMENT_INTENT, CALC_TAX, ALIASES, check_proposal, has_lookup_intent
-from app.services.tools.policy import capital_gains_scope, financial_income_scope
+from app.services.tools.policy import capital_gains_scope, financial_income_scope, income_tax_scope
 
 logger = logging.getLogger(__name__)
 _AMOUNT_RE = re.compile(r"(?:\d[\d,.]*|[일이삼사오육칠팔구십백천]+)\s*(?:억|천만|백만|천|만|원)")
@@ -68,7 +68,7 @@ async def select_tool(query: str, history: list[dict] | None = None) -> tuple[st
     prompt = chat_prompt(
         "세무 보조 도구를 최대 하나 선택하고 JSON만 출력하세요. "
         "원문 조회는 law_lookup, 내 업로드 문서 검색은 document_search. "
-        "세액 계산은 income_tax(종합소득세), financial_income_tax(이자·배당 금융소득이 있는 종합소득세), capital_gains(양도소득세), inheritance(상속세), "
+        "세액 계산은 income_tax(근로·사업·기타·연금·이자·배당 소득의 종합소득세, 금융소득 종합과세 포함), capital_gains(양도소득세), inheritance(상속세), "
         "gift(증여세), vat(부가가치세), penalty_tax(가산세)를 사용하세요. "
         "위 계산기의 지원 대상 밖인 세액 계산은 formula_calculation을 선택하고 params는 빈 객체로 두세요. "
         "일반 설명이나 기존 계산기의 단순 입력 부족을 formula_calculation으로 보내지 마세요. "
@@ -96,13 +96,14 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
     calculation_followup = is_calculation_followup(query, history)
     if not has_tool_intent(query) and not calculation_followup:
         return None
-    if (has_calculation_intent(query) or calculation_followup) and financial_income_scope(query, history):
-        # The deterministic calculator answers when the amounts can be read; the model's
-        # free-form formula is the fallback, not the first choice.
-        result = await financial_calculation(query, history, on_event)
+    if (has_calculation_intent(query) or calculation_followup) and income_tax_scope(query, history):
+        # The deterministic calculator answers when the amounts can be read; for financial
+        # income the model's free-form formula is the fallback, not the first choice.
+        result = await income_calculation(query, history, on_event)
         if result is not None:
             return result
-        return ToolRun("formula_calculation", "planned", "공식 근거를 확인한 산식으로 참고 계산을 준비합니다.")
+        if financial_income_scope(query, history):
+            return ToolRun("formula_calculation", "planned", "공식 근거를 확인한 산식으로 참고 계산을 준비합니다.")
     if (has_calculation_intent(query) or calculation_followup) and capital_gains_scope(query, history):
         result = await capital_gains_calculation(query, history, on_event)
         if result is not None:
@@ -173,27 +174,33 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
     return result
 
 
-async def financial_calculation(query, history, on_event=None):
-    """금융소득 종합과세 계산기 결과와 그 가정, or None to use the reference-formula path."""
+async def income_calculation(query, history, on_event=None):
+    """종합소득세 계산기 결과, a request for the facts it must not assume, or None for another path."""
     from app.services.calculator.engine import run_calculation
     from app.services.calculator.errors import CalculationError
-    from app.services.calculator.financial_inputs import stated_financial_inputs
+    from app.services.calculator.income_tax_inputs import MissingInputs, stated_income_tax_inputs
     from app.services.calculator.repository import get_deduction
     try:
         row = await get_deduction("소득세", "기본공제")
-        stated = stated_financial_inputs(query, history, basic_deduction=int(row["amount"]) if row else None)
+        stated = stated_income_tax_inputs(query, history, basic_deduction=int(row["amount"]))
         if stated is None:
             return None
+        if isinstance(stated, MissingInputs):
+            # Which deduction and credit apply turns on these facts; guessing them would decide the tax.
+            result = ToolRun("income_tax", "needs_input",
+                             "종합소득세를 계산하려면 다음 사실을 알려주세요: " + ", ".join(stated.labels) + ".",
+                             error_code="calculation_inputs_required")
+            _emit_result(result, {}, on_event)
+            return result
         if on_event:
-            on_event({"type": "tool", "id": "primary", "tool": "financial_income_tax", "status": "running"})
-        run = await run_calculation("financial_income_tax", stated.params)
+            on_event({"type": "tool", "id": "primary", "tool": "income_tax", "status": "running"})
+        run = await run_calculation("income_tax", stated.params)
     except (CalculationError, ValueError, KeyError, TypeError) as exc:
-        logger.info("Financial income calculator not used (%s)", type(exc).__name__)
+        logger.info("Income tax calculator not used (%s)", type(exc).__name__)
         return None
     # Assumptions lead the result: they change the amounts as much as the inputs do.
-    run.context = "\n".join(["계산에 쓴 가정:", *[f"- {item}" for item in stated.assumptions], "", run.context]) \
-        if stated.assumptions else run.context
-    result = ToolRun("financial_income_tax", "ok", "", run)
+    run.context = "\n".join(["계산에 쓴 가정:", *[f"- {item}" for item in stated.assumptions], "", run.context])
+    result = ToolRun("income_tax", "ok", "", run)
     _emit_result(result, stated.params, on_event)
     return result
 

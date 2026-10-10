@@ -64,12 +64,14 @@ def test_matching_hash_does_not_approve_missing_statutory_items():
 
 
 def test_calculation_needs_labelled_inputs_including_defaults():
-    query = '종합소득세 계산. 소득 5억 5000만원, 경비 0원, 공제 인원 1명, 기타 공제 0원'
+    query = '증여세 계산. 증여액 5억 5000만원, 관계 기타, 성년, 사전증여 0원'
+    gift = {'gift_amount': 500000000, 'relation': '기타', 'is_minor': False, 'prior_gifts_10y': 0}
     # Compound Korean numeral is deliberately not silently interpreted.
-    assert not check_proposal('income_tax', {'income': 500000000}, query, [], calculation_intent=True)[0]
+    assert not check_proposal('gift', gift, query, [], calculation_intent=True)[0]
     query = query.replace('5억 5000만원', '5000만원')
-    assert check_proposal('income_tax', {'income': 50000000}, query, [], calculation_intent=True)[0]
-    assert not check_proposal('income_tax', {'income': 50000000}, '소득 5000만원 계산', [], calculation_intent=True)[0]
+    gift['gift_amount'] = 50000000
+    assert check_proposal('gift', gift, query, [], calculation_intent=True)[0]
+    assert not check_proposal('gift', {'gift_amount': 50000000}, '증여 5000만원 계산', [], calculation_intent=True)[0]
     assert input_proof('sales', 50000000, ['매입 5000만원']) is None
     assert input_proof('income', 50000000, ['소득 5000만원', '소득 6000만원']) is None
     assert input_proof('income', 5, ['소득 5년']) is None

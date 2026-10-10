@@ -10,7 +10,8 @@ from contextlib import ExitStack, contextmanager
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from app.services.calculator import capital_gains, gift_tax, income_tax, inheritance, penalty_tax, vat
+from app.services.calculator import (capital_gains, financial_income_tax, gift_tax, income_tax, inheritance,
+                                     penalty_tax, vat)
 
 
 # ── 시드 데이터 (001_tax_calculator.sql와 동일) ──────────────────
@@ -38,11 +39,28 @@ _BRACKETS[("증여세", "default")]     = _BRACKETS[("상속세", "default")]
 _BRACKETS[("양도소득세", "기본")]     = _BRACKETS[("소득세", "default")]
 for _category, _rate in (("주택_1년미만", 0.70), ("주택_2년미만", 0.60), ("토지건물_1년미만", 0.50), ("토지건물_2년미만", 0.40)):
     _BRACKETS[("양도소득세", _category)] = [{"bracket_from": 0, "bracket_to": None, "rate": _rate, "progressive_deduction": 0}]
+_BRACKETS[("소득세", "근로소득공제")] = [
+    {"bracket_from": lower, "bracket_to": None, "rate": rate, "progressive_deduction": constant}
+    for lower, rate, constant in ((0, 0.70, 0), (5000000, 0.40, -1500000), (15000000, 0.15, -5250000),
+                                  (45000000, 0.05, -9750000), (100000000, 0.02, -12750000))]
+_BRACKETS[("소득세", "근로소득세액공제")] = [
+    {"bracket_from": 0, "bracket_to": None, "rate": 0.55, "progressive_deduction": 0},
+    {"bracket_from": 1300000, "bracket_to": None, "rate": 0.30, "progressive_deduction": -325000}]
 _BRACKETS[("부가가치세", "default")] = [{"bracket_from": 0, "bracket_to": None, "rate": 0.10, "progressive_deduction": 0}]
 
 _DEDUCTIONS: dict[tuple[str, str], dict] = {
     ("소득세", "기본공제"):                     {"amount": 1500000,   "rate": None},
-    ("소득세", "표준세액공제_사업자"):           {"amount": 120000,    "rate": None},
+    ("소득세", "표준세액공제_근로"):             {"amount": 130000,    "rate": None},
+    ("소득세", "표준세액공제_성실사업자"):       {"amount": 120000,    "rate": None},
+    ("소득세", "표준세액공제_그밖"):             {"amount": 70000,     "rate": None},
+    ("소득세", "근로소득공제_한도"):             {"amount": 20000000,  "rate": None},
+    ("소득세", "근로소득세액공제_한도"):         {"amount": None, "rate": None, "condition": {"tiers": [
+        [0, 740000, "0", 740000], [33000000, 740000, "0.008", 660000],
+        [70000000, 660000, "0.5", 500000], [120000000, 500000, "0.5", 200000]]}},
+    ("소득세", "이자소득등종합과세기준금액"):     {"amount": 20000000,  "rate": None},
+    ("소득세", "금융소득원천징수율"):             {"amount": None, "rate": 0.14},
+    ("소득세", "비영업대금이익원천징수율"):       {"amount": None, "rate": 0.25},
+    ("소득세", "배당가산율"):                     {"amount": None, "rate": 0.10},
     ("소득세", "양도소득기본공제"):              {"amount": 2500000,   "rate": None},
     ("증여세", "증여재산공제_배우자"):           {"amount": 600000000, "rate": None},
     ("증여세", "증여재산공제_직계존비속"):        {"amount": 50000000,  "rate": None},
@@ -97,44 +115,45 @@ def _patch_repository(module):
 
 
 # ── 소득세 ───────────────────────────────────────────────────────
+# 근로소득이 없는 종합소득자의 표준세액공제는 7만원이다(제59조의4 제9항 제2호 나목, 성실사업자는 12만원).
 
 @pytest.mark.asyncio
 async def test_income_tax_15pct_bracket():
     """수입 5,000만 → 과세표준 4,850만 → 15% 구간.
-    4,850만 × 0.15 - 126만 = 601.5만 → 표준세액공제 12만 차감 = 589.5만."""
-    with _patch_repository(income_tax):
+    4,850만 × 0.15 - 126만 = 601.5만 → 표준세액공제 7만 차감 = 594.5만."""
+    with _patch_repository(income_tax), _patch_repository(financial_income_tax):
         r = await income_tax.calculate(income=50000000)
     assert r.taxable_income == 48500000
     assert r.calculated_tax == 6015000
-    assert r.final_tax == 5895000
+    assert r.final_tax == 5945000
 
 
 @pytest.mark.asyncio
 async def test_income_tax_38pct_bracket():
     """수입 2억 → 과세표준 1억 9,850만 → 38% 구간.
-    1억9,850만 × 0.38 - 1,994만 = 5,549만 → 세액공제 12만 = 5,537만."""
-    with _patch_repository(income_tax):
+    1억9,850만 × 0.38 - 1,994만 = 5,549만 → 표준세액공제 7만 = 5,542만."""
+    with _patch_repository(income_tax), _patch_repository(financial_income_tax):
         r = await income_tax.calculate(income=200000000)
     assert r.taxable_income == 198500000
     assert r.calculated_tax == 55490000
-    assert r.final_tax == 55370000
+    assert r.final_tax == 55420000
 
 
 @pytest.mark.asyncio
 async def test_income_tax_expense_and_multi_deduction():
     """수입 8,000만 - 경비 2,000만, 부양 2명 → 과세표준 5,700만 → 24% 구간.
-    5,700만 × 0.24 - 576만 = 792만 → 세액공제 12만 = 780만."""
-    with _patch_repository(income_tax):
+    5,700만 × 0.24 - 576만 = 792만 → 표준세액공제 7만 = 785만."""
+    with _patch_repository(income_tax), _patch_repository(financial_income_tax):
         r = await income_tax.calculate(income=80000000, expense=20000000, personal_deduction_count=2)
     assert r.taxable_income == 57000000
     assert r.calculated_tax == 7920000
-    assert r.final_tax == 7800000
+    assert r.final_tax == 7850000
 
 
 @pytest.mark.asyncio
 async def test_income_tax_zero_taxable():
     """수입이 공제보다 작으면 과세표준·세액 모두 0."""
-    with _patch_repository(income_tax):
+    with _patch_repository(income_tax), _patch_repository(financial_income_tax):
         r = await income_tax.calculate(income=1000000)
     assert r.taxable_income == 0
     assert r.calculated_tax == 0

@@ -42,7 +42,9 @@ export default function CalculatorScreen({ initial, onInitialConsumed, onAskAbou
     finally { if (version === revision.current) setLoading(false) }
   }
   const fields = FORMS[tab].fields
-  const visible = fields.filter(f => !(f.key === 'business_type' && !form.is_simplified) && !(f.key === 'days_late' && form.penalty_type !== '납부지연') && !(f.key === 'is_negligent' && form.penalty_type === '납부지연'))
+  const hasFinancial = ['interest_income', 'non_business_interest', 'dividend_gross_up', 'dividend_other'].some(k => Number(form[k] || 0) > 0)
+  const visible = fields.filter(f => !(f.key === 'business_type' && !form.is_simplified) && !(f.key === 'days_late' && form.penalty_type !== '납부지연') && !(f.key === 'is_negligent' && form.penalty_type === '납부지연')
+    && !(f.key === 'withheld' && !hasFinancial) && !(f.key === 'sincere_business' && (Number(form.wage_income || 0) > 0 || !(Number(form.income || 0) > 0))))
   return <main className="workspace-page">
     <header className="page-header"><div><p className="eyebrow">CALCULATION WORKSPACE</p><h1>세금 계산기</h1></div><span className="small muted">참고용 · 세율 및 적용 조건 확인 필요</span></header>
     <div className="page-scroll">

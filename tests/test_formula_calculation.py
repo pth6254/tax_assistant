@@ -168,7 +168,7 @@ async def test_financial_chat_routes_to_generic_workflow_instead_of_early_absten
     fallback = AsyncMock(return_value=(context(), result))
     monkeypatch.setattr(workflow, 'calculate_reference', fallback)
     from app.services.tools import planner
-    monkeypatch.setattr(planner, 'financial_calculation', AsyncMock(return_value=None))  # calculator unavailable
+    monkeypatch.setattr(planner, 'income_calculation', AsyncMock(return_value=None))  # calculator unavailable
     query = '금융소득으로 1억을 벌게 된다면 금융종합소득과세로 세금 얼마나 납부하게 될까?'
     ctx, _, _, calc = await chat._fetch_rag_and_web_context(query, uuid4(), str(uuid4()), history_override=[])
     fallback.assert_awaited_once()

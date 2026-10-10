@@ -1,9 +1,9 @@
-import { calcIncomeTax, calcFinancialIncomeTax, calcCapitalGains, calcInheritance, calcGiftTax, calcVat, calcPenaltyTax } from '../../api/calculatorApi.js'
+import { calcIncomeTax, calcCapitalGains, calcInheritance, calcGiftTax, calcVat, calcPenaltyTax } from '../../api/calculatorApi.js'
 
 // 챗봇 계산기 엔진(app/services/calculator/engine.py _TOOLS)의 도구명 → 화면 탭 키
 const TOOL_TO_TAB = {
   income_tax:    'income',
-  financial_income_tax: 'financial',
+  financial_income_tax: 'income',   // 이전 금융소득 계산기: 종합소득세 탭으로 연다
   capital_gains: 'capital',
   inheritance:   'inheritance',
   gift:          'gift',
@@ -12,8 +12,7 @@ const TOOL_TO_TAB = {
 }
 
 const TABS = [
-  { key: 'income',      label: '소득세',    icon: '💼' },
-  { key: 'financial',   label: '금융소득 종합과세', icon: '💰' },
+  { key: 'income',      label: '종합소득세', icon: '💼' },
   { key: 'capital',     label: '양도소득세', icon: '🏠' },
   { key: 'inheritance', label: '상속세',    icon: '📜' },
   { key: 'gift',        label: '증여세',    icon: '🎁' },
@@ -25,39 +24,39 @@ const FORMS = {
   income: {
     apiFn: calcIncomeTax,
     fields: [
-      { key: 'income',                   label: '총소득금액',    unit: '만원', required: true,  hint: '현재 사업소득 중심의 단순 계산식' },
-      { key: 'expense',                  label: '필요경비',      unit: '만원', required: false, hint: '사업자만 해당' },
-      { key: 'personal_deduction_count', label: '기본공제 인원', unit: '명',   required: false, hint: '본인 포함 (기본 1명)' },
-      { key: 'other_deductions',         label: '기타공제 합계', unit: '만원', required: false, hint: '과세표준에서 차감할 소득공제액 · 세액공제와 구분' },
+      { key: 'wage_income',           label: '근로소득 총급여액',     unit: '만원', required: false, hint: '비과세 제외 · 근무지가 둘 이상이면 합계' },
+      { key: 'income',                label: '사업소득 총수입금액',   unit: '만원', required: false },
+      { key: 'expense',               label: '사업소득 필요경비',     unit: '만원', required: false },
+      { key: 'other_income',          label: '그 밖의 종합소득금액',  unit: '만원', required: false, hint: '연금·기타소득 등 필요경비·공제를 뺀 소득금액' },
+      { key: 'interest_income',       label: '이자소득',              unit: '만원', required: false, hint: '예금·채권 이자 등 원천징수세율 14%' },
+      { key: 'non_business_interest', label: '비영업대금의 이익',     unit: '만원', required: false, hint: '개인 간 금전 대여 이자 등 원천징수세율 25%' },
+      { key: 'dividend_gross_up',     label: '배당소득(배당가산 대상)', unit: '만원', required: false, hint: '내국법인 배당 등' },
+      { key: 'dividend_other',        label: '배당소득(가산 대상 아님)', unit: '만원', required: false },
+      { key: 'withheld',              label: '이자·배당이 국내에서 원천징수됨', type: 'checkbox', hint: '국외 소득 등 원천징수되지 않았다면 해제' },
+      { key: 'personal_deduction_count', label: '기본공제 인원',      unit: '명',   required: false, hint: '본인 포함 (기본 1명)' },
+      { key: 'other_deductions',      label: '그 밖의 소득공제 합계', unit: '만원', required: false, hint: '추가공제·연금보험료·특별소득공제 등 · 세액공제와 구분' },
+      { key: 'itemized_special_credits', label: '특별소득공제·특별세액공제 신청', type: 'checkbox', hint: '신청하면 표준세액공제를 받지 않음' },
+      { key: 'sincere_business',      label: '성실사업자',            type: 'checkbox', hint: '근로소득이 없을 때 표준세액공제 12만원(아니면 7만원)' },
+      { key: 'other_tax_credits',     label: '그 밖의 세액공제 합계', unit: '만원', required: false, hint: '자녀·연금계좌·보험료·의료비·교육비·기부금 등' },
+      { key: 'prepaid_tax',           label: '기납부세액',            unit: '만원', required: false, hint: '근로소득 원천징수·중간예납 등 · 이자·배당 원천징수는 자동 추정' },
     ],
-    defaults: { personal_deduction_count: '1' },
+    defaults: { personal_deduction_count: '1', withheld: true },
     toPayload: (f) => ({
       income:                   toWon(f.income),
       expense:                  toWon(f.expense),
+      wage_income:              toWon(f.wage_income),
+      other_income:             toWon(f.other_income),
+      interest_income:          toWon(f.interest_income),
+      non_business_interest:    toWon(f.non_business_interest),
+      dividend_gross_up:        toWon(f.dividend_gross_up),
+      dividend_other:           toWon(f.dividend_other),
+      withheld:                 f.withheld !== false,
       personal_deduction_count: toInt(f.personal_deduction_count, 1),
       other_deductions:         toWon(f.other_deductions),
-    }),
-  },
-  financial: {
-    apiFn: calcFinancialIncomeTax,
-    fields: [
-      { key: 'interest_income',       label: '이자소득',            unit: '만원', required: false, hint: '예금·채권 이자 등 원천징수세율 14%' },
-      { key: 'non_business_interest', label: '비영업대금의 이익',    unit: '만원', required: false, hint: '개인 간 금전 대여 이자 등 원천징수세율 25%' },
-      { key: 'dividend_gross_up',     label: '배당소득(배당가산 대상)', unit: '만원', required: false, hint: '내국법인 배당 등' },
-      { key: 'dividend_other',        label: '배당소득(가산 대상 아님)', unit: '만원', required: false },
-      { key: 'other_income',          label: '다른 종합소득금액',    unit: '만원', required: false, hint: '사업·근로 등 소득금액(필요경비·근로소득공제 차감 후)' },
-      { key: 'income_deductions',     label: '종합소득공제 합계',    unit: '만원', required: false, hint: '본인 기본공제 150만원 포함' },
-      { key: 'withheld',              label: '국내에서 원천징수됨',  type: 'checkbox', hint: '국외 소득 등 원천징수되지 않았다면 해제' },
-    ],
-    defaults: { withheld: true, income_deductions: '150' },
-    toPayload: (f) => ({
-      interest_income:       toWon(f.interest_income),
-      non_business_interest: toWon(f.non_business_interest),
-      dividend_gross_up:     toWon(f.dividend_gross_up),
-      dividend_other:        toWon(f.dividend_other),
-      other_income:          toWon(f.other_income),
-      income_deductions:     toWon(f.income_deductions),
-      withheld:              f.withheld !== false,
+      itemized_special_credits: !!f.itemized_special_credits,
+      sincere_business:         !!f.sincere_business,
+      other_tax_credits:        toWon(f.other_tax_credits),
+      prepaid_tax:              toWon(f.prepaid_tax),
     }),
   },
   capital: {
@@ -164,6 +163,10 @@ const fmtWon  = (v) => (v || 0).toLocaleString('ko-KR') + '원'
 // 챗봇 계산기 엔진이 전달한 원(₩) 단위 params → 화면 폼(만원 단위) 값으로 역변환
 const buildFormFromParams = (tabKey, params) => {
   const { fields, defaults } = FORMS[tabKey]
+  // 이전 금융소득 계산기의 소득공제 합계(기본공제 포함)는 기본공제 0명 + 그 밖의 소득공제로 옮긴다.
+  if (tabKey === 'income' && 'income_deductions' in params) {
+    params = { ...params, personal_deduction_count: 0, other_deductions: params.income_deductions }
+  }
   const form = { ...defaults }
   for (const field of fields) {
     if (!(field.key in params)) continue
@@ -178,12 +181,14 @@ const buildFormFromParams = (tabKey, params) => {
 
 // 계산 결과를 챗봇에 질문하기 위한 자연어 문장 구성
 const QUESTION_BUILDERS = {
-  income: (f, r) =>
-    `총수입 ${f.income || 0}만원, 필요경비 ${f.expense || 0}만원, 부양가족 ${f.personal_deduction_count || 1}명 기준으로 ` +
-    `계산한 종합소득세 결정세액이 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인하고, 추가로 절세 방법이 있으면 알려주세요.`,
-  financial: (f, r) =>
-    `이자 ${f.interest_income || 0}만원, 비영업대금 이익 ${f.non_business_interest || 0}만원, 배당 ${Number(f.dividend_gross_up || 0) + Number(f.dividend_other || 0)}만원, ` +
-    `다른 종합소득 ${f.other_income || 0}만원 기준으로 계산한 금융소득 종합과세 결정세액이 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인해주세요.`,
+  income: (f, r) => {
+    const parts = [['총급여', f.wage_income], ['사업 수입', f.income], ['사업 필요경비', f.expense], ['그 밖의 소득금액', f.other_income],
+      ['이자', f.interest_income], ['비영업대금 이익', f.non_business_interest],
+      ['배당', Number(f.dividend_gross_up || 0) + Number(f.dividend_other || 0)]]
+      .filter(([, v]) => Number(v || 0) > 0).map(([label, v]) => `${label} ${v}만원`)
+    return `${parts.join(', ') || '소득 0원'}, 기본공제 ${f.personal_deduction_count || 1}명 기준으로 ` +
+      `계산한 종합소득세 결정세액이 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인하고, 추가로 절세 방법이 있으면 알려주세요.`
+  },
   capital: (f, r) =>
     `${f.asset_type || '주택'} 양도가액 ${f.transfer_price || 0}만원, 취득가액 ${f.acquisition_price || 0}만원, 보유기간 ${f.holding_years || 0}년` +
     `${f.is_one_home ? `, 1세대 1주택, 거주기간 ${f.residence_years || 0}년` : ''} 기준으로 ` +

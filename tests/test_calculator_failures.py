@@ -7,7 +7,8 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from app.schemas.calculator import IncomeTaxRequest
-from app.services.calculator import income_tax, gift_tax, inheritance, capital_gains, vat, penalty_tax, repository
+from app.services.calculator import (financial_income_tax, income_tax, gift_tax, inheritance, capital_gains, vat,
+                                     penalty_tax, repository)
 from app.services.calculator.errors import CalculationError, require_value
 from app.services.tools.executor import execute_tool
 from app.services import chat_service
@@ -23,8 +24,10 @@ from tests.test_calculator import _patch_repository
     (vat, {'sales': 10000000}),
 ])
 async def test_missing_brackets_never_become_zero(module, params, monkeypatch):
-    with _patch_repository(module):
+    # The income tax calculator also reads the financial income figures and brackets.
+    with _patch_repository(module), _patch_repository(financial_income_tax):
         monkeypatch.setattr(module, 'get_brackets', AsyncMock(return_value=[]))
+        monkeypatch.setattr(financial_income_tax, 'get_brackets', AsyncMock(return_value=[]))
         with pytest.raises(CalculationError, match='세율') as error:
             await module.calculate(**params)
         assert error.value.code == 'missing_tax_data'
@@ -39,7 +42,7 @@ async def test_missing_brackets_never_become_zero(module, params, monkeypatch):
     (penalty_tax, {'unpaid_tax': 10000000}),
 ])
 async def test_missing_deduction_never_uses_default(module, params, monkeypatch):
-    with _patch_repository(module):
+    with _patch_repository(module), _patch_repository(financial_income_tax):
         monkeypatch.setattr(module, 'get_deduction', AsyncMock(return_value=None))
         with pytest.raises(CalculationError):
             await module.calculate(**params)
@@ -66,9 +69,9 @@ def test_zero_config_is_valid_and_negative_input_is_not():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('params,status', [({}, 'needs_input'), ({'income': -1}, 'invalid_arguments')])
-async def test_tool_input_categories(params, status):
-    result = await execute_tool('income_tax', params, user_id=str(uuid4()))
+@pytest.mark.parametrize('tool,params,status', [('gift', {}, 'needs_input'), ('income_tax', {'income': -1}, 'invalid_arguments')])
+async def test_tool_input_categories(tool, params, status):
+    result = await execute_tool(tool, params, user_id=str(uuid4()))
     assert result.status == status
     assert result.calculation is None
 

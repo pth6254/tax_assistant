@@ -44,6 +44,20 @@ def financial_income_scope(query, history=None):
     return bool(FINANCIAL_INCOME.search(previous))
 
 
+INCOME_TAX = re.compile(r"종합소득세|(?<![가-힣])소득세|연봉|총급여|근로소득|사업소득|기타소득|연금소득|프리랜서")
+NOT_INCOME_TAX = re.compile(r"양도|매도|증여|상속|부가세|부가가치세|가산세|법인세|(?<![가-힣])팔(?:면|았|고|때|려|기|아서|게)")
+
+
+def income_tax_scope(query, history=None):
+    """종합소득세(금융소득 포함) is being calculated in this turn, or the previous one for a follow-up."""
+    if NOT_INCOME_TAX.search(query):
+        return False
+    if INCOME_TAX.search(query) or financial_income_scope(query, history):
+        return True
+    previous = next((m.get("content", "") for m in reversed(history or []) if m.get("role") == "user"), "")
+    return bool(INCOME_TAX.search(previous)) and not NOT_INCOME_TAX.search(previous)
+
+
 CAPITAL_GAINS = re.compile(r"양도|매도|(?<![가-힣])팔(?:면|았|고|때|려|기|아서|게)|판다면")
 OTHER_TAX = re.compile(r"증여|상속|부가세|부가가치세|가산세|법인세|종합소득세|금융소득")
 
@@ -72,8 +86,10 @@ ALIASES = {
     "non_business_interest": "비영업대금의 이익|비영업대금이익|비영업대금",
     "dividend_gross_up": "배당가산 대상 배당|내국법인 배당|배당소득|배당",
     "dividend_other": "배당가산 비대상 배당|가산 비대상 배당|외국법인 배당",
-    "other_income": "다른 종합소득금액|다른 종합소득|다른 소득금액|다른 소득|사업소득금액|근로소득금액",
+    "other_income": "다른 종합소득금액|다른 종합소득|다른 소득금액|다른 소득|기타소득금액|연금소득금액",
     "income_deductions": "종합소득공제|소득공제",
+    "wage_income": "총급여액|총급여|연봉", "prepaid_tax": "기납부세액|기납부 세액|중간예납세액",
+    "other_tax_credits": "그 밖의 세액공제|세액공제",
 }
 NUMBER = r"(?P<number>\d[\d,]*(?:\.\d+)?)\s*(?P<unit>억원?|천만원?|백만원?|만원?|천원|원|명|년|일)?"
 UNITS = {"억": 10**8, "억원": 10**8, "천만": 10**7, "천만원": 10**7,
@@ -86,6 +102,8 @@ BOOL_TEXT = {
     "is_negligent": {True: "부정행위 있음", False: "부정행위 없음"},
     # "원천징수" alone is also inside "원천징수되지 않은"; the two forms must not overlap.
     "withheld": {True: "원천징수된", False: "원천징수되지"},
+    "itemized_special_credits": {True: "특별세액공제를 신청", False: "표준세액공제"},
+    "sincere_business": {True: "성실사업자에 해당", False: "성실사업자 아님"},
 }
 
 
@@ -166,8 +184,6 @@ def check_proposal(tool, params, query, history, *, calculation_intent=False):
         ok = bool(expected) and re.sub(r"\s", "", expected) == re.sub(r"\s", "", params.get("law_name", ""))
         return ok, "law_not_from_user", {}
     scope_text = query if any(re.search(p, query, re.I) for p in CALC_TAX.values()) else "\n".join(texts)
-    if tool == "income_tax" and financial_income_scope(query, history):
-        return False, "unsupported_financial_income_calculation", {}
     if re.search(r"법인세.{0,10}(?:계산|얼마)|법인소득", scope_text):
         return False, "unsupported_calculation", {}
     if not calculation_intent or not re.search(CALC_TAX[tool], scope_text, re.I):
