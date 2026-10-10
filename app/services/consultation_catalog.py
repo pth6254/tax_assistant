@@ -22,8 +22,11 @@ CASE_KINDS = {
             ('acquisition_price', '취득가액은 얼마인가요?', 'amount', None),
             ('expenses', '취득·양도 관련 필요경비는 얼마인가요?', 'amount', None),
             ('holding_years', '보유기간은 몇 년인가요? (완료된 연수)', 'count', None),
-            ('asset_type', '양도 자산은 무엇인가요? 현재 부동산만 계산합니다.', 'choice', ('부동산',)),
-            ('is_one_home', '1세대 1주택에 해당한다고 보시나요? (비과세 판정은 아님)', 'boolean', None),
+            ('asset_type', '양도 자산은 무엇인가요? (비사업용 토지·분양권·주식은 계산하지 않습니다)', 'choice', ('주택', '토지·건물')),
+            ('is_one_home', '양도일 현재 1세대 1주택인가요?', 'boolean', None),
+            ('residence_years', '보유기간 중 거주한 기간은 몇 년인가요? (완료된 연수)', 'count', None),
+            ('acquired_in_adjusted_area', '취득 당시 조정대상지역이었나요?', 'boolean', None),
+            ('multi_home_surcharge', '조정대상지역 다주택 중과 대상인가요?', 'choice', ('없음', '2주택', '3주택이상')),
         ),
         'documents': (
             ('transfer_contract', '양도 계약 자료', '양도가액·양도일 확인 자료', None),

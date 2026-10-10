@@ -36,8 +36,8 @@ _BRACKETS: dict[tuple[str, str], list[dict]] = {
 }
 _BRACKETS[("증여세", "default")]     = _BRACKETS[("상속세", "default")]
 _BRACKETS[("양도소득세", "기본")]     = _BRACKETS[("소득세", "default")]
-_BRACKETS[("양도소득세", "단기1년미만")] = [{"bracket_from": 0, "bracket_to": None, "rate": 0.70, "progressive_deduction": 0}]
-_BRACKETS[("양도소득세", "단기2년미만")] = [{"bracket_from": 0, "bracket_to": None, "rate": 0.60, "progressive_deduction": 0}]
+for _category, _rate in (("주택_1년미만", 0.70), ("주택_2년미만", 0.60), ("토지건물_1년미만", 0.50), ("토지건물_2년미만", 0.40)):
+    _BRACKETS[("양도소득세", _category)] = [{"bracket_from": 0, "bracket_to": None, "rate": _rate, "progressive_deduction": 0}]
 _BRACKETS[("부가가치세", "default")] = [{"bracket_from": 0, "bracket_to": None, "rate": 0.10, "progressive_deduction": 0}]
 
 _DEDUCTIONS: dict[tuple[str, str], dict] = {
@@ -51,11 +51,16 @@ _DEDUCTIONS: dict[tuple[str, str], dict] = {
     ("상속세", "기초공제"):                     {"amount": 200000000, "rate": None},
     ("상속세", "일괄공제"):                     {"amount": 500000000, "rate": None},
     ("상속세", "배우자상속공제_최소"):           {"amount": 500000000, "rate": None},
-    ("양도소득세", "장기보유특별공제_3년"):          {"amount": None, "rate": 0.06},
-    ("양도소득세", "장기보유특별공제_4년"):          {"amount": None, "rate": 0.08},
-    ("양도소득세", "장기보유특별공제_5년"):          {"amount": None, "rate": 0.10},
-    ("양도소득세", "장기보유특별공제_10년이상"):     {"amount": None, "rate": 0.20},
-    ("양도소득세", "장기보유특별공제_15년이상_1주택"): {"amount": None, "rate": 0.30},
+    ("양도소득세", "고가주택기준금액"):                  {"amount": 1200000000, "rate": None},
+    ("양도소득세", "장기보유특별공제_일반_연공제율"):     {"amount": None, "rate": 0.02},
+    ("양도소득세", "장기보유특별공제_일반_한도"):         {"amount": None, "rate": 0.30},
+    ("양도소득세", "장기보유특별공제_1주택_보유_연공제율"): {"amount": None, "rate": 0.04},
+    ("양도소득세", "장기보유특별공제_1주택_보유_한도"):     {"amount": None, "rate": 0.40},
+    ("양도소득세", "장기보유특별공제_1주택_거주_연공제율"): {"amount": None, "rate": 0.04},
+    ("양도소득세", "장기보유특별공제_1주택_거주_한도"):     {"amount": None, "rate": 0.40},
+    ("양도소득세", "다주택중과_2주택"):                  {"amount": None, "rate": 0.20},
+    ("양도소득세", "다주택중과_3주택이상"):               {"amount": None, "rate": 0.30},
+    ("양도소득세", "지방소득세_비율"):                   {"amount": None, "rate": 0.10},
     ("가산세", "무신고가산세_일반"):   {"amount": None, "rate": 0.20},
     ("가산세", "무신고가산세_부정"):   {"amount": None, "rate": 0.40},
     ("가산세", "과소신고가산세_일반"): {"amount": None, "rate": 0.10},
@@ -212,7 +217,7 @@ async def test_inheritance_debts_subtracted():
 async def test_capital_gains_long_term_10y():
     """양도 12억 - 취득 7억 - 경비 0.5억 = 차익 4.5억, 10년 보유(20% 공제).
     4.5억 - 0.9억 - 기본공제 250만 = 과세표준 3억 5,750만 → 40% 구간.
-    3억5,750만 × 0.4 - 2,594만 = 1억1,706만 + 지방소득세 10% = 1억2,876.6만."""
+    3억5,750만 × 0.4 - 2,594만 = 1억1,706만. 지방소득세 1,170.6만은 별도 단계로만 표시한다."""
     with _patch_repository(capital_gains):
         r = await capital_gains.calculate(
             transfer_price=1200000000, acquisition_price=700000000,
@@ -220,32 +225,33 @@ async def test_capital_gains_long_term_10y():
         )
     assert r.taxable_income == 357500000
     assert r.calculated_tax == 117060000
-    assert r.final_tax == 128766000
+    assert r.final_tax == 117060000
+    steps = {s.label: s.amount for s in r.steps}
+    assert steps["양도소득세와 지방소득세 합계"] == 128766000
 
 
 @pytest.mark.asyncio
 async def test_capital_gains_short_term_70pct():
-    """1년 미만 보유는 70% 단일세율 (장기보유공제 없음).
-    차익 1억 - 기본공제 250만 = 9,750만 × 0.7 = 6,825만 + 지방소득세 682.5만 = 7,507.5만."""
+    """1년 미만 보유 주택은 70% 단일세율 (장기보유공제 없음).
+    차익 1억 - 기본공제 250만 = 9,750만 × 0.7 = 6,825만."""
     with _patch_repository(capital_gains):
         r = await capital_gains.calculate(
             transfer_price=500000000, acquisition_price=400000000, holding_years=0,
         )
     assert r.taxable_income == 97500000
     assert r.calculated_tax == 68250000
-    assert r.final_tax == 75075000
+    assert r.final_tax == 68250000
 
 
 @pytest.mark.asyncio
-async def test_capital_gains_one_home_15y_gets_30pct():
-    """15년 보유 1주택자는 30% 장기보유특별공제."""
+async def test_capital_gains_one_home_within_threshold_is_exempt():
+    """2년 이상 보유한 1세대 1주택을 12억원 이하로 양도하면 비과세(소득세법 제89조)."""
     with _patch_repository(capital_gains):
         r = await capital_gains.calculate(
             transfer_price=1000000000, acquisition_price=600000000,
             holding_years=15, is_one_home=True,
         )
-    # 차익 4억 - 30%(1.2억) - 250만 = 2억 7,750만
-    assert r.taxable_income == 277500000
+    assert r.taxable_income == 0 and r.final_tax == 0
 
 
 @pytest.mark.asyncio

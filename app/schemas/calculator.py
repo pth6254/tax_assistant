@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 from pydantic import BaseModel, Field
 
 NonNegativeInt = Annotated[int, Field(ge=0, strict=True)]
@@ -50,12 +50,17 @@ class FinancialIncomeTaxRequest(BaseModel):
 
 
 class CapitalGainsRequest(BaseModel):
-    transfer_price: NonNegativeInt
-    acquisition_price: NonNegativeInt
-    expenses: NonNegativeInt = 0
-    holding_years: NonNegativeInt = 0
-    asset_type: str = "부동산"
-    is_one_home: bool = False
+    """국내 등기 부동산 1건의 양도. 기간은 만 연수(1년 6개월이면 1)."""
+    transfer_price: NonNegativeInt = Field(description="양도가액(실지거래가액)")
+    acquisition_price: NonNegativeInt = Field(description="취득가액(실지거래가액)")
+    expenses: NonNegativeInt = Field(0, description="필요경비(취득세·중개수수료·자본적지출 등)")
+    holding_years: NonNegativeInt = Field(0, description="보유기간(만 연수)")
+    asset_type: Literal["주택", "토지·건물"] = "주택"
+    is_one_home: bool = Field(False, description="양도일 현재 1세대 1주택인지")
+    residence_years: NonNegativeInt = Field(0, description="보유기간 중 거주기간(만 연수)")
+    acquired_in_adjusted_area: bool = Field(False, description="취득 당시 조정대상지역 주택인지")
+    multi_home_surcharge: Literal["없음", "2주택", "3주택이상"] = Field(
+        "없음", description="조정대상지역 다주택 중과 대상 구분(제104조 제7항)")
 
 
 class InheritanceRequest(BaseModel):

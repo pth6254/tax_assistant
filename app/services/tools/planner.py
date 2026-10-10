@@ -14,7 +14,7 @@ from app.services.law.coverage_service import NATIONAL_TAX_LAWS
 from app.services.tools.registry import TOOL_SCHEMAS
 from app.services.tools.executor import ToolRun, execute_tool
 from app.services.tools.policy import DOCUMENT_INTENT, CALC_TAX, ALIASES, check_proposal, has_lookup_intent
-from app.services.tools.policy import financial_income_scope
+from app.services.tools.policy import capital_gains_scope, financial_income_scope
 
 logger = logging.getLogger(__name__)
 _AMOUNT_RE = re.compile(r"(?:\d[\d,.]*|[일이삼사오육칠팔구십백천]+)\s*(?:억|천만|백만|천|만|원)")
@@ -103,6 +103,10 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
         if result is not None:
             return result
         return ToolRun("formula_calculation", "planned", "공식 근거를 확인한 산식으로 참고 계산을 준비합니다.")
+    if (has_calculation_intent(query) or calculation_followup) and capital_gains_scope(query, history):
+        result = await capital_gains_calculation(query, history, on_event)
+        if result is not None:
+            return result
     if on_event:
         on_event({"type": "tool", "id": "primary", "tool": "none", "status": "selecting"})
     try:
@@ -190,6 +194,34 @@ async def financial_calculation(query, history, on_event=None):
     run.context = "\n".join(["계산에 쓴 가정:", *[f"- {item}" for item in stated.assumptions], "", run.context]) \
         if stated.assumptions else run.context
     result = ToolRun("financial_income_tax", "ok", "", run)
+    _emit_result(result, stated.params, on_event)
+    return result
+
+
+async def capital_gains_calculation(query, history, on_event=None):
+    """양도소득세 계산기 결과, a request for the facts it must not assume, or None for the model path."""
+    from app.services.calculator.capital_gains_inputs import MissingInputs, stated_capital_gains_inputs
+    from app.services.calculator.engine import run_calculation
+    from app.services.calculator.errors import CalculationError
+    stated = stated_capital_gains_inputs(query, history)
+    if stated is None:
+        return None
+    if isinstance(stated, MissingInputs):
+        # Exemption and the deduction table turn on these facts; guessing them would decide the tax.
+        result = ToolRun("capital_gains", "needs_input",
+                         "양도소득세를 계산하려면 다음 사실을 알려주세요: " + ", ".join(stated.labels) + ".",
+                         error_code="calculation_inputs_required")
+        _emit_result(result, {}, on_event)
+        return result
+    try:
+        if on_event:
+            on_event({"type": "tool", "id": "primary", "tool": "capital_gains", "status": "running"})
+        run = await run_calculation("capital_gains", stated.params)
+    except (CalculationError, ValueError, KeyError, TypeError) as exc:
+        logger.info("Capital gains calculator not used (%s)", type(exc).__name__)
+        return None
+    run.context = "\n".join(["계산에 쓴 가정:", *[f"- {item}" for item in stated.assumptions], "", run.context])
+    result = ToolRun("capital_gains", "ok", "", run)
     _emit_result(result, stated.params, on_event)
     return result
 

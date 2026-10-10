@@ -3,6 +3,8 @@ import { TOOL_TO_TAB, TABS, FORMS, buildFormFromParams, QUESTION_BUILDERS } from
 import ResultCard from './ResultCard'
 import Notice from '../ui/Notice'
 import Icon from '../ui/Icon'
+const CAPITAL_ASSETS = FORMS.capital.fields.find(f => f.key === 'asset_type').options
+
 export default function CalculatorScreen({ initial, onInitialConsumed, onAskAboutResult }) {
   const [tab, setTab] = useState('income'), [form, setForm] = useState({ ...FORMS.income.defaults })
   const [result, setResult] = useState(null), [snapshot, setSnapshot] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState(null)
@@ -14,7 +16,7 @@ export default function CalculatorScreen({ initial, onInitialConsumed, onAskAbou
     const key = TOOL_TO_TAB[initial.tool]
     if (key) {
       invalidate(); setTab(key); setForm(buildFormFromParams(key, initial.params || {}))
-      if (key === 'capital' && initial.params?.asset_type && initial.params.asset_type !== '부동산') setError({ message: '현재 양도소득세는 부동산만 지원합니다. 조건을 다시 확인하세요.' })
+      if (key === 'capital' && initial.params?.asset_type && !CAPITAL_ASSETS.includes(initial.params.asset_type)) setError({ message: '현재 양도소득세는 주택·토지·건물만 지원합니다. 조건을 다시 확인하세요.' })
     }
     onInitialConsumed?.()
   }, [initial])
@@ -31,7 +33,7 @@ export default function CalculatorScreen({ initial, onInitialConsumed, onAskAbou
     if (Object.values(payload).some(v => typeof v === 'number' && (!Number.isSafeInteger(v) || v < 0))) {
       setError({ message: '금액은 원 단위로 환산 가능한 범위, 인원·기간은 0 이상의 정수로 입력해 주세요.' }); return
     }
-    if (tab === 'capital' && payload.asset_type !== '부동산') { setError({ message: '현재 부동산만 지원합니다.' }); return }
+    if (tab === 'capital' && !CAPITAL_ASSETS.includes(payload.asset_type)) { setError({ message: '현재 주택·토지·건물만 지원합니다.' }); return }
     setLoading(true)
     try {
       const data = await apiFn(payload)

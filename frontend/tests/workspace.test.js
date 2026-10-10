@@ -17,6 +17,6 @@ test('calculator prefills retain single-won precision and zero people', async ()
     const payload = FORMS.income.toPayload(form)
     assert.equal(payload.income, 123456789)
     assert.equal(payload.personal_deduction_count, 0)
-    assert.deepEqual(FORMS.capital.fields.find(f => f.key === 'asset_type').options, ['부동산'])
+    assert.deepEqual(FORMS.capital.fields.find(f => f.key === 'asset_type').options, ['주택', '토지·건물'])
   } finally { await server.close() }
 })

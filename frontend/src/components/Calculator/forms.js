@@ -66,18 +66,24 @@ const FORMS = {
       { key: 'transfer_price',    label: '양도가액',    unit: '만원', required: true },
       { key: 'acquisition_price', label: '취득가액',    unit: '만원', required: true },
       { key: 'expenses',          label: '필요경비',    unit: '만원', required: false, hint: '취득세·중개수수료 등' },
-      { key: 'holding_years',     label: '보유기간',    unit: '년',   required: false },
-      { key: 'asset_type',        label: '자산유형',    type: 'select', options: ['부동산'] },
-      { key: 'is_one_home',       label: '1세대 1주택', type: 'checkbox', hint: '구현된 장기보유 공제 조건에만 반영 · 비과세 자동 판정 아님' },
+      { key: 'holding_years',     label: '보유기간',    unit: '년',   required: false, hint: '만 연수(1년 6개월이면 1)' },
+      { key: 'asset_type',        label: '자산유형',    type: 'select', options: ['주택', '토지·건물'], hint: '비사업용 토지·분양권·주식은 계산하지 않음' },
+      { key: 'is_one_home',       label: '1세대 1주택', type: 'checkbox', hint: '양도일 현재 세대가 이 주택 하나만 보유' },
+      { key: 'residence_years',   label: '거주기간',    unit: '년',   required: false, hint: '보유기간 중 거주한 만 연수' },
+      { key: 'acquired_in_adjusted_area', label: '취득 당시 조정대상지역', type: 'checkbox', hint: '1주택 비과세에 2년 거주 요건이 붙음' },
+      { key: 'multi_home_surcharge', label: '다주택 중과', type: 'select', options: ['없음', '2주택', '3주택이상'], hint: '조정대상지역 중과 대상일 때만 선택' },
     ],
-    defaults: { asset_type: '부동산' },
+    defaults: { asset_type: '주택', multi_home_surcharge: '없음' },
     toPayload: (f) => ({
       transfer_price:    toWon(f.transfer_price),
       acquisition_price: toWon(f.acquisition_price),
       expenses:          toWon(f.expenses),
       holding_years:     toInt(f.holding_years),
-      asset_type:        f.asset_type || '부동산',
+      asset_type:        f.asset_type || '주택',
       is_one_home:       !!f.is_one_home,
+      residence_years:   toInt(f.residence_years),
+      acquired_in_adjusted_area: !!f.acquired_in_adjusted_area,
+      multi_home_surcharge: f.multi_home_surcharge || '없음',
     }),
   },
   inheritance: {
@@ -179,7 +185,8 @@ const QUESTION_BUILDERS = {
     `이자 ${f.interest_income || 0}만원, 비영업대금 이익 ${f.non_business_interest || 0}만원, 배당 ${Number(f.dividend_gross_up || 0) + Number(f.dividend_other || 0)}만원, ` +
     `다른 종합소득 ${f.other_income || 0}만원 기준으로 계산한 금융소득 종합과세 결정세액이 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인해주세요.`,
   capital: (f, r) =>
-    `양도가액 ${f.transfer_price || 0}만원, 취득가액 ${f.acquisition_price || 0}만원, 보유기간 ${f.holding_years || 0}년 기준으로 ` +
+    `${f.asset_type || '주택'} 양도가액 ${f.transfer_price || 0}만원, 취득가액 ${f.acquisition_price || 0}만원, 보유기간 ${f.holding_years || 0}년` +
+    `${f.is_one_home ? `, 1세대 1주택, 거주기간 ${f.residence_years || 0}년` : ''} 기준으로 ` +
     `계산한 양도소득세가 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인하고, 추가로 절세 방법이 있으면 알려주세요.`,
   inheritance: (f, r) =>
     `상속재산 ${f.estate_value || 0}만원, 배우자 상속액 ${f.spouse_inheritance || 0}만원, 자녀 ${f.children_count || 0}명 기준으로 ` +

@@ -40,8 +40,11 @@ class CaseFactsPatch(StrictCaseModel):
     acquisition_price: int | None = Field(default=None, ge=0, strict=True)
     expenses: int | None = Field(default=None, ge=0, strict=True)
     holding_years: int | None = Field(default=None, ge=0, strict=True)
-    asset_type: Literal['부동산'] | None = None
+    asset_type: Literal['주택', '토지·건물'] | None = None
     is_one_home: bool | None = None
+    residence_years: int | None = Field(default=None, ge=0, strict=True)
+    acquired_in_adjusted_area: bool | None = None
+    multi_home_surcharge: Literal['없음', '2주택', '3주택이상'] | None = None
     estate_value: int | None = Field(default=None, ge=0, strict=True)
     debts: int | None = Field(default=None, ge=0, strict=True)
     spouse_inheritance: int | None = Field(default=None, ge=0, strict=True)

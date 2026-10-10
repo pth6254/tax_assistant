@@ -1,0 +1,147 @@
+{
+  "source": {
+    "note": "Only figures printed by the National Tax Service are recorded; inputs are the case facts, periods are completed years from the printed dates. Amounts in won.",
+    "documents": {
+      "filing-2023": {
+        "title": "주요서식 작성요령/사례(양도소득세) — (예정신고) 작성 사례 1·3·7·8 (2023년 귀속)",
+        "publisher": "국세청",
+        "url": "https://www.nts.go.kr/nts/na/ntt/selectNttList.do?mi=2320&bbsId=30017",
+        "retrieved": "2026-10-10"
+      },
+      "high-price-page": {
+        "title": "1세대 1주택 고가주택의 양도소득금액 계산",
+        "publisher": "국세청",
+        "url": "https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?mi=12271&cntntsId=8799",
+        "retrieved": "2026-10-10"
+      },
+      "guide-2026": {
+        "title": "2026 세금절약가이드 Ⅱ, 양도소득세 알뜰정보 24 (보유기간별 세부담 비교표, p.60~63)",
+        "publisher": "국세청",
+        "url": "https://www.nts.go.kr/nts/na/ntt/selectNttList.do?mi=40298&bbsId=50696",
+        "retrieved": "2026-10-10"
+      }
+    }
+  },
+  "parameters": {
+    "brackets_2023": {
+      "source": "2026 세금절약가이드 Ⅱ p.63 <소득세법 기본세율> 2023년",
+      "bands": [
+        {"upper": 14000000, "rate": "0.06", "progressive_deduction": 0},
+        {"upper": 50000000, "rate": "0.15", "progressive_deduction": 1260000},
+        {"upper": 88000000, "rate": "0.24", "progressive_deduction": 5760000},
+        {"upper": 150000000, "rate": "0.35", "progressive_deduction": 15440000},
+        {"upper": 300000000, "rate": "0.38", "progressive_deduction": 19940000},
+        {"upper": 500000000, "rate": "0.40", "progressive_deduction": 25940000},
+        {"upper": 1000000000, "rate": "0.42", "progressive_deduction": 35940000},
+        {"upper": null, "rate": "0.45", "progressive_deduction": 65940000}
+      ]
+    },
+    "brackets_2021": {
+      "source": "2026 세금절약가이드 Ⅱ p.63 <소득세법 기본세율> 2021~2022년",
+      "bands": [
+        {"upper": 12000000, "rate": "0.06", "progressive_deduction": 0},
+        {"upper": 46000000, "rate": "0.15", "progressive_deduction": 1080000},
+        {"upper": 88000000, "rate": "0.24", "progressive_deduction": 5220000},
+        {"upper": 150000000, "rate": "0.35", "progressive_deduction": 14900000},
+        {"upper": 300000000, "rate": "0.38", "progressive_deduction": 19400000},
+        {"upper": 500000000, "rate": "0.40", "progressive_deduction": 25400000},
+        {"upper": 1000000000, "rate": "0.42", "progressive_deduction": 35400000},
+        {"upper": null, "rate": "0.45", "progressive_deduction": 65400000}
+      ]
+    },
+    "statutory": {
+      "basic_deduction": 2500000,
+      "high_price_threshold": 1200000000,
+      "short_rates": {"주택/0": "0.70", "주택/1": "0.60", "토지·건물/0": "0.50", "토지·건물/1": "0.40"},
+      "general_rate": "0.02", "general_cap": "0.30",
+      "home_holding_rate": "0.04", "home_holding_cap": "0.40",
+      "home_residence_rate": "0.04", "home_residence_cap": "0.40",
+      "surcharges": {"2주택": "0.20", "3주택이상": "0.30"},
+      "local_tax_ratio": "0.10"
+    }
+  },
+  "cases": [
+    {
+      "id": "nts-filing-2023-1-land",
+      "document": "filing-2023",
+      "facts": "토지 600㎡, 취득 2015-12-05, 양도 2023-01-15, 양도 3억, 취득 1억5천만, 취득세 등 100만·자본적지출 2,500만·양도비 50만, 비사업용 토지 아님",
+      "brackets": "brackets_2023",
+      "inputs": {"transfer_price": 300000000, "acquisition_price": 150000000, "expenses": 26500000,
+                 "holding_years": 7, "asset_type": "토지·건물"},
+      "expected": {"gain": 123500000, "long_term_deduction": 17290000, "income": 106210000,
+                   "taxable": 103710000, "calculated_tax": 20858500}
+    },
+    {
+      "id": "nts-filing-2023-3-high-price-home",
+      "document": "filing-2023",
+      "facts": "1세대 1주택 고가주택, 취득 2015-07-05, 양도 2023-02-15, 거주 5년 이상 6년 미만, 양도 15억, 취득 4억2천만+취득세 등 980만+매입부대비용 200만, 자본적지출 750만·양도비 970만",
+      "brackets": "brackets_2023",
+      "inputs": {"transfer_price": 1500000000, "acquisition_price": 431800000, "expenses": 17200000,
+                 "holding_years": 7, "asset_type": "주택", "is_one_home": true, "residence_years": 5},
+      "expected": {"gain": 1051000000, "taxable_gain": 210200000, "long_term_deduction": 100896000,
+                   "income": 109304000, "taxable": 106804000, "calculated_tax": 21941400}
+    },
+    {
+      "id": "nts-filing-2023-7-multi-home-grace",
+      "document": "filing-2023",
+      "facts": "조정대상지역 주택, 양도 주택 외 3주택 보유, 취득 2017-05-01, 양도 2023-02-15, 양도 5억, 취득 2억, 양도비 500만. 2년 이상 보유 주택을 2022-05-10 이후 양도해 중과 한시 배제·장기보유특별공제 적용",
+      "brackets": "brackets_2023",
+      "inputs": {"transfer_price": 500000000, "acquisition_price": 200000000, "expenses": 5000000,
+                 "holding_years": 5, "asset_type": "주택"},
+      "expected": {"gain": 295000000, "long_term_deduction": 29500000, "income": 265500000,
+                   "taxable": 263000000, "calculated_tax": 80000000}
+    },
+    {
+      "id": "nts-filing-2023-8-multi-home-short",
+      "document": "filing-2023",
+      "facts": "조정대상지역 주택, 양도 주택 외 3주택 보유, 취득 2021-05-01, 양도 2023-02-15(2년 미만이라 중과 배제 대상 아님), 양도 5억, 취득 2억, 양도비 500만",
+      "brackets": "brackets_2023",
+      "inputs": {"transfer_price": 500000000, "acquisition_price": 200000000, "expenses": 5000000,
+                 "holding_years": 1, "asset_type": "주택", "multi_home_surcharge": "3주택이상"},
+      "expected": {"gain": 295000000, "long_term_deduction": 0, "income": 295000000,
+                   "taxable": 292500000, "calculated_tax": 178960000}
+    },
+    {
+      "id": "nts-page-high-price-2022",
+      "document": "high-price-page",
+      "facts": "1세대 1주택 고가주택, 취득 2006-05-07, 양도 2022-01-03, 보유기간 중 10년 이상 거주, 양도 15억, 취득 8억, 기타 필요경비 3천만",
+      "brackets": "brackets_2021",
+      "inputs": {"transfer_price": 1500000000, "acquisition_price": 800000000, "expenses": 30000000,
+                 "holding_years": 15, "asset_type": "주택", "is_one_home": true, "residence_years": 10},
+      "expected": {"gain": 670000000, "taxable_gain": 134000000, "long_term_deduction": 107200000,
+                   "income": 26800000}
+    },
+    {
+      "id": "nts-guide-2026-house-1y",
+      "document": "guide-2026",
+      "facts": "소득금액 1억, 주택, 1년 이상 2년 미만 보유, 2021-06-01 이후 양도 (표의 천원 단위를 원으로 환산)",
+      "brackets": "brackets_2021",
+      "inputs": {"transfer_price": 100000000, "acquisition_price": 0, "holding_years": 1, "asset_type": "주택"},
+      "expected": {"taxable": 97500000, "calculated_tax": 58500000}
+    },
+    {
+      "id": "nts-guide-2026-land-1y",
+      "document": "guide-2026",
+      "facts": "소득금액 1억, 주택 외 부동산(비사업용 토지 아님), 1년 이상 2년 미만 보유",
+      "brackets": "brackets_2021",
+      "inputs": {"transfer_price": 100000000, "acquisition_price": 0, "holding_years": 1, "asset_type": "토지·건물"},
+      "expected": {"taxable": 97500000, "calculated_tax": 39000000}
+    },
+    {
+      "id": "nts-guide-2026-house-under-1y",
+      "document": "guide-2026",
+      "facts": "소득금액 1억, 주택, 1년 미만 보유, 2021-06-01 이후 양도",
+      "brackets": "brackets_2021",
+      "inputs": {"transfer_price": 100000000, "acquisition_price": 0, "holding_years": 0, "asset_type": "주택"},
+      "expected": {"taxable": 97500000, "calculated_tax": 68250000}
+    },
+    {
+      "id": "nts-guide-2026-land-under-1y",
+      "document": "guide-2026",
+      "facts": "소득금액 1억, 주택 외 부동산(비사업용 토지 아님), 1년 미만 보유",
+      "brackets": "brackets_2021",
+      "inputs": {"transfer_price": 100000000, "acquisition_price": 0, "holding_years": 0, "asset_type": "토지·건물"},
+      "expected": {"taxable": 97500000, "calculated_tax": 48750000}
+    }
+  ]
+}
