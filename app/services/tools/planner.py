@@ -14,7 +14,7 @@ from app.services.law.coverage_service import NATIONAL_TAX_LAWS
 from app.services.tools.registry import TOOL_SCHEMAS
 from app.services.tools.executor import ToolRun, execute_tool
 from app.services.tools.policy import DOCUMENT_INTENT, CALC_TAX, ALIASES, check_proposal, has_lookup_intent
-from app.services.tools.policy import capital_gains_scope, financial_income_scope, income_tax_scope
+from app.services.tools.policy import capital_gains_scope, financial_income_scope, gift_scope, income_tax_scope
 
 logger = logging.getLogger(__name__)
 _AMOUNT_RE = re.compile(r"(?:\d[\d,.]*|[일이삼사오육칠팔구십백천]+)\s*(?:억|천만|백만|천|만|원)")
@@ -108,6 +108,10 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
         result = await capital_gains_calculation(query, history, on_event)
         if result is not None:
             return result
+    if (has_calculation_intent(query) or calculation_followup) and gift_scope(query, history):
+        result = await gift_calculation(query, history, on_event)
+        if result is not None:
+            return result
     if on_event:
         on_event({"type": "tool", "id": "primary", "tool": "none", "status": "selecting"})
     try:
@@ -174,63 +178,59 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
     return result
 
 
-async def income_calculation(query, history, on_event=None):
-    """종합소득세 계산기 결과, a request for the facts it must not assume, or None for another path."""
+async def _stated_calculation(tool, title, stated, on_event):
+    """Run a calculator on inputs read from the question; None when it cannot be used.
+
+    `stated` is a reader's StatedInputs, its MissingInputs (facts that decide the tax and are
+    asked, never guessed), or None (a case the reader leaves to another path).
+    """
     from app.services.calculator.engine import run_calculation
     from app.services.calculator.errors import CalculationError
-    from app.services.calculator.income_tax_inputs import MissingInputs, stated_income_tax_inputs
-    from app.services.calculator.repository import get_deduction
-    try:
-        row = await get_deduction("소득세", "기본공제")
-        stated = stated_income_tax_inputs(query, history, basic_deduction=int(row["amount"]))
-        if stated is None:
-            return None
-        if isinstance(stated, MissingInputs):
-            # Which deduction and credit apply turns on these facts; guessing them would decide the tax.
-            result = ToolRun("income_tax", "needs_input",
-                             "종합소득세를 계산하려면 다음 사실을 알려주세요: " + ", ".join(stated.labels) + ".",
-                             error_code="calculation_inputs_required")
-            _emit_result(result, {}, on_event)
-            return result
-        if on_event:
-            on_event({"type": "tool", "id": "primary", "tool": "income_tax", "status": "running"})
-        run = await run_calculation("income_tax", stated.params)
-    except (CalculationError, ValueError, KeyError, TypeError) as exc:
-        logger.info("Income tax calculator not used (%s)", type(exc).__name__)
-        return None
-    # Assumptions lead the result: they change the amounts as much as the inputs do.
-    run.context = "\n".join(["계산에 쓴 가정:", *[f"- {item}" for item in stated.assumptions], "", run.context])
-    result = ToolRun("income_tax", "ok", "", run)
-    _emit_result(result, stated.params, on_event)
-    return result
-
-
-async def capital_gains_calculation(query, history, on_event=None):
-    """양도소득세 계산기 결과, a request for the facts it must not assume, or None for the model path."""
-    from app.services.calculator.capital_gains_inputs import MissingInputs, stated_capital_gains_inputs
-    from app.services.calculator.engine import run_calculation
-    from app.services.calculator.errors import CalculationError
-    stated = stated_capital_gains_inputs(query, history)
     if stated is None:
         return None
-    if isinstance(stated, MissingInputs):
-        # Exemption and the deduction table turn on these facts; guessing them would decide the tax.
-        result = ToolRun("capital_gains", "needs_input",
-                         "양도소득세를 계산하려면 다음 사실을 알려주세요: " + ", ".join(stated.labels) + ".",
+    if hasattr(stated, "labels"):
+        result = ToolRun(tool, "needs_input", f"{title}를 계산하려면 다음 사실을 알려주세요: " + ", ".join(stated.labels) + ".",
                          error_code="calculation_inputs_required")
         _emit_result(result, {}, on_event)
         return result
     try:
         if on_event:
-            on_event({"type": "tool", "id": "primary", "tool": "capital_gains", "status": "running"})
-        run = await run_calculation("capital_gains", stated.params)
+            on_event({"type": "tool", "id": "primary", "tool": tool, "status": "running"})
+        run = await run_calculation(tool, stated.params)
     except (CalculationError, ValueError, KeyError, TypeError) as exc:
-        logger.info("Capital gains calculator not used (%s)", type(exc).__name__)
+        logger.info("%s calculator not used (%s)", tool, type(exc).__name__)
         return None
+    # Assumptions lead the result: they change the amounts as much as the inputs do.
     run.context = "\n".join(["계산에 쓴 가정:", *[f"- {item}" for item in stated.assumptions], "", run.context])
-    result = ToolRun("capital_gains", "ok", "", run)
+    result = ToolRun(tool, "ok", "", run)
     _emit_result(result, stated.params, on_event)
     return result
+
+
+async def income_calculation(query, history, on_event=None):
+    """종합소득세 계산기 결과, a request for the facts it must not assume, or None for another path."""
+    from app.services.calculator.errors import CalculationError
+    from app.services.calculator.income_tax_inputs import stated_income_tax_inputs
+    from app.services.calculator.repository import get_deduction
+    try:
+        row = await get_deduction("소득세", "기본공제")
+    except CalculationError as exc:
+        logger.info("Income tax calculator not used (%s)", exc.code)
+        return None
+    stated = stated_income_tax_inputs(query, history, basic_deduction=int(row["amount"]))
+    return await _stated_calculation("income_tax", "종합소득세", stated, on_event)
+
+
+async def capital_gains_calculation(query, history, on_event=None):
+    """양도소득세 계산기 결과, a request for the facts it must not assume, or None for the model path."""
+    from app.services.calculator.capital_gains_inputs import stated_capital_gains_inputs
+    return await _stated_calculation("capital_gains", "양도소득세", stated_capital_gains_inputs(query, history), on_event)
+
+
+async def gift_calculation(query, history, on_event=None):
+    """증여세 계산기 결과, a request for the facts it must not assume, or None for the model path."""
+    from app.services.calculator.gift_inputs import stated_gift_inputs
+    return await _stated_calculation("gift", "증여세", stated_gift_inputs(query, history), on_event)
 
 
 def _emit_result(result, params, callback):

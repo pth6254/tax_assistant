@@ -104,17 +104,32 @@ const FORMS = {
   gift: {
     apiFn: calcGiftTax,
     fields: [
-      { key: 'gift_amount',     label: '증여재산가액',       unit: '만원', required: true },
-      { key: 'relation',        label: '증여자와의 관계',     type: 'select', options: ['직계존비속', '배우자', '기타친족', '기타'] },
-      { key: 'is_minor',        label: '수증자 미성년자',     type: 'checkbox' },
-      { key: 'prior_gifts_10y', label: '10년 내 사전증여액', unit: '만원', required: false, hint: '동일인으로부터' },
+      { key: 'gift_amount',         label: '증여재산가액',        unit: '만원', required: true, hint: '시가 등 평가액' },
+      { key: 'relation',            label: '증여자와의 관계',      type: 'select', options: ['직계존비속', '배우자', '기타친족', '기타'] },
+      { key: 'is_minor',            label: '수증자 미성년자',      type: 'checkbox', hint: '직계존속에게 받으면 공제 2천만원' },
+      { key: 'generation_skipping', label: '세대생략(조부모→손자녀)', type: 'checkbox', hint: '부모가 생존하면 30% 할증' },
+      { key: 'marriage_birth',      label: '혼인·출산 공제 대상',    type: 'checkbox', hint: '혼인신고 전후 2년·출생 후 2년 이내, 2024년 이후 증여' },
+      { key: 'debts',               label: '인수 채무(부담부증여)',  unit: '만원', required: false, hint: '전세·임대보증금, 담보대출' },
+      { key: 'prior_gifts_10y',     label: '10년 내 동일인 증여액', unit: '만원', required: false, hint: '부모는 두 분을 한 사람으로 봄' },
+      { key: 'prior_gift_taxable',  label: '이전 증여 과세표준',     unit: '만원', required: false, hint: '모르면 비워 두면 추정' },
+      { key: 'prior_gift_tax',      label: '이전 증여 산출세액',     unit: '만원', required: false, hint: '모르면 비워 두면 추정' },
+      { key: 'deduction_used_10y',  label: '이미 쓴 증여재산공제',   unit: '만원', required: false, hint: '합산하지 않은 다른 증여에 쓴 같은 관계 공제' },
+      { key: 'filed_on_time',       label: '기한 내 신고',          type: 'checkbox', hint: '신고세액공제 3%' },
     ],
-    defaults: { relation: '기타' },
+    defaults: { relation: '직계존비속', filed_on_time: true },
     toPayload: (f) => ({
-      gift_amount:     toWon(f.gift_amount),
-      relation:        f.relation || '기타',
-      is_minor:        !!f.is_minor,
-      prior_gifts_10y: toWon(f.prior_gifts_10y),
+      gift_amount:         toWon(f.gift_amount),
+      relation:            f.relation || '직계존비속',
+      is_minor:            f.relation === '직계존비속' && !!f.is_minor,
+      prior_gifts_10y:     toWon(f.prior_gifts_10y),
+      debts:               toWon(f.debts),
+      prior_gift_tax:      toWon(f.prior_gift_tax),
+      prior_gift_taxable:  toWon(f.prior_gift_taxable),
+      deduction_used_10y:  toWon(f.deduction_used_10y),
+      marriage_birth:      f.relation === '직계존비속' && !!f.marriage_birth,
+      marriage_birth_used: 0,
+      generation_skipping: f.relation === '직계존비속' && !!f.generation_skipping,
+      filed_on_time:       f.filed_on_time !== false,
     }),
   },
   vat: {
@@ -197,7 +212,9 @@ const QUESTION_BUILDERS = {
     `상속재산 ${f.estate_value || 0}만원, 배우자 상속액 ${f.spouse_inheritance || 0}만원, 자녀 ${f.children_count || 0}명 기준으로 ` +
     `계산한 상속세가 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인하고, 추가로 공제받을 수 있는 항목이 있으면 알려주세요.`,
   gift: (f, r) =>
-    `증여재산 ${f.gift_amount || 0}만원을 ${f.relation || '기타'} 관계에서 증여받는 경우로 ` +
+    `증여재산 ${f.gift_amount || 0}만원을 ${f.relation || '직계존비속'} 관계에서 증여받는 경우` +
+    `${Number(f.debts || 0) > 0 ? `(인수 채무 ${f.debts}만원)` : ''}${Number(f.prior_gifts_10y || 0) > 0 ? `, 10년 내 동일인 증여 ${f.prior_gifts_10y}만원 합산` : ''}` +
+    `${f.relation === '직계존비속' && f.generation_skipping ? ', 세대생략 할증' : ''}${f.relation === '직계존비속' && f.marriage_birth ? ', 혼인·출산 공제' : ''}로 ` +
     `계산한 증여세가 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인하고, 추가로 절세 방법이 있으면 알려주세요.`,
   vat: (f, r) =>
     `매출 ${f.sales || 0}만원, 매입 ${f.purchases || 0}만원${f.is_simplified ? ` (간이과세자, ${f.business_type} 업종)` : ' (일반과세자)'} 기준으로 ` +

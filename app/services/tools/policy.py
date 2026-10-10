@@ -72,6 +72,20 @@ def capital_gains_scope(query, history=None):
     return bool(CAPITAL_GAINS.search(previous)) and not OTHER_TAX.search(previous)
 
 
+GIFT = re.compile(r"증여")
+NOT_GIFT = re.compile(r"상속|양도|종합소득세|부가세|부가가치세|가산세|법인세")
+
+
+def gift_scope(query, history=None):
+    """A gift is being calculated in this turn, or the previous one for a follow-up."""
+    if NOT_GIFT.search(query):
+        return False
+    if GIFT.search(query):
+        return True
+    previous = next((m.get("content", "") for m in reversed(history or []) if m.get("role") == "user"), "")
+    return bool(GIFT.search(previous)) and not NOT_GIFT.search(previous)
+
+
 ALIASES = {
     "income": "연소득|소득|총수입|수입", "expense": "필요경비|경비", "personal_deduction_count": "공제인원|공제 인원|기본공제 인원",
     "other_deductions": "기타공제|기타 공제", "transfer_price": "양도가액|양도 가액|매도가|매도금액",
@@ -79,7 +93,9 @@ ALIASES = {
     "holding_years": "보유기간|보유 기간", "residence_years": "거주기간|거주 기간", "estate_value": "상속재산|상속 재산|유산",
     "debts": "채무|부채", "spouse_inheritance": "배우자 상속액|배우자 상속",
     "children_count": "자녀 수|자녀수|자녀", "gift_amount": "증여액|증여금액|증여 금액|증여",
-    "prior_gifts_10y": "사전증여|사전 증여|10년 이내 증여", "sales": "매출액|매출",
+    "prior_gifts_10y": "사전증여|사전 증여|10년 이내 증여", "prior_gift_tax": "이전 증여 산출세액|사전증여 산출세액",
+    "prior_gift_taxable": "이전 증여 과세표준|사전증여 과세표준", "deduction_used_10y": "이미 쓴 증여재산공제|사용한 증여재산공제",
+    "marriage_birth_used": "이미 받은 혼인공제|이미 받은 혼인·출산공제", "sales": "매출액|매출",
     "purchases": "매입액|매입", "exempt_sales": "면세매출|면세 매출",
     "unpaid_tax": "미납세액|미납 세액|미납세금", "days_late": "지연일수|지연 일수",
     "interest_income": "이자소득|이자 소득|예금이자|예금 이자|이자",
@@ -99,6 +115,9 @@ BOOL_TEXT = {
     "is_one_home": {True: "1세대 1주택", False: "다주택"},
     "acquired_in_adjusted_area": {True: "조정대상지역에서 취득", False: "비조정"},
     "is_minor": {True: "미성년", False: "성년"},
+    "marriage_birth": {True: "혼인·출산 공제 대상", False: "혼인·출산 공제 대상 아님"},
+    "generation_skipping": {True: "세대생략", False: "자녀에게 직접"},
+    "filed_on_time": {True: "기한 내 신고", False: "기한 후 신고"},
     "is_negligent": {True: "부정행위 있음", False: "부정행위 없음"},
     # "원천징수" alone is also inside "원천징수되지 않은"; the two forms must not overlap.
     "withheld": {True: "원천징수된", False: "원천징수되지"},

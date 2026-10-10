@@ -44,7 +44,9 @@ export default function CalculatorScreen({ initial, onInitialConsumed, onAskAbou
   const fields = FORMS[tab].fields
   const hasFinancial = ['interest_income', 'non_business_interest', 'dividend_gross_up', 'dividend_other'].some(k => Number(form[k] || 0) > 0)
   const visible = fields.filter(f => !(f.key === 'business_type' && !form.is_simplified) && !(f.key === 'days_late' && form.penalty_type !== '납부지연') && !(f.key === 'is_negligent' && form.penalty_type === '납부지연')
-    && !(f.key === 'withheld' && !hasFinancial) && !(f.key === 'sincere_business' && (Number(form.wage_income || 0) > 0 || !(Number(form.income || 0) > 0))))
+    && !(f.key === 'withheld' && !hasFinancial)
+    && !(['is_minor', 'generation_skipping', 'marriage_birth'].includes(f.key) && form.relation && form.relation !== '직계존비속')
+    && !(['prior_gift_taxable', 'prior_gift_tax'].includes(f.key) && !(Number(form.prior_gifts_10y || 0) > 0)) && !(f.key === 'sincere_business' && (Number(form.wage_income || 0) > 0 || !(Number(form.income || 0) > 0))))
   return <main className="workspace-page">
     <header className="page-header"><div><p className="eyebrow">CALCULATION WORKSPACE</p><h1>세금 계산기</h1></div><span className="small muted">참고용 · 세율 및 적용 조건 확인 필요</span></header>
     <div className="page-scroll">

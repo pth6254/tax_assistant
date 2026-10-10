@@ -64,14 +64,15 @@ def test_matching_hash_does_not_approve_missing_statutory_items():
 
 
 def test_calculation_needs_labelled_inputs_including_defaults():
-    query = '증여세 계산. 증여액 5억 5000만원, 관계 기타, 성년, 사전증여 0원'
-    gift = {'gift_amount': 500000000, 'relation': '기타', 'is_minor': False, 'prior_gifts_10y': 0}
+    query = '가산세 계산. 미납세액 5억 5000만원, 무신고, 부정행위 없음, 지연일수 0일'
+    penalty = {'unpaid_tax': 500000000, 'penalty_type': '무신고', 'is_negligent': False, 'days_late': 0}
     # Compound Korean numeral is deliberately not silently interpreted.
-    assert not check_proposal('gift', gift, query, [], calculation_intent=True)[0]
+    assert not check_proposal('penalty_tax', penalty, query, [], calculation_intent=True)[0]
     query = query.replace('5억 5000만원', '5000만원')
-    gift['gift_amount'] = 50000000
-    assert check_proposal('gift', gift, query, [], calculation_intent=True)[0]
-    assert not check_proposal('gift', {'gift_amount': 50000000}, '증여 5000만원 계산', [], calculation_intent=True)[0]
+    penalty['unpaid_tax'] = 50000000
+    assert check_proposal('penalty_tax', penalty, query, [], calculation_intent=True)[0]
+    assert not check_proposal('penalty_tax', {'unpaid_tax': 50000000}, '가산세 미납세액 5000만원 계산', [],
+                              calculation_intent=True)[0]
     assert input_proof('sales', 50000000, ['매입 5000만원']) is None
     assert input_proof('income', 50000000, ['소득 5000만원', '소득 6000만원']) is None
     assert input_proof('income', 5, ['소득 5년']) is None

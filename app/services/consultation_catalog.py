@@ -65,15 +65,24 @@ CASE_KINDS = {
     'gift': {
         'label': '증여세', 'date_label': '증여일·자료 조회 기준일',
         'questions': (
-            ('gift_amount', '증여재산가액은 얼마인가요?', 'amount', None),
+            ('gift_amount', '증여재산가액(시가 등 평가액)은 얼마인가요?', 'amount', None),
             ('relation', '증여자와의 관계는 무엇인가요?', 'choice', ('배우자', '직계존비속', '기타친족', '기타')),
             ('is_minor', '수증자가 미성년자인가요?', 'boolean', None),
-            ('prior_gifts_10y', '같은 증여자에게서 10년 내 받은 증여액은 얼마인가요?', 'amount', None),
+            ('generation_skipping', '조부모가 손자녀에게 주는 등 자녀가 아닌 직계비속에게 주는 증여인가요? (부모가 사망했다면 아니요)', 'boolean', None),
+            ('marriage_birth', '혼인신고일 전후 2년 또는 자녀 출생·입양일부터 2년 이내에 직계존속에게 받는 증여인가요?', 'boolean', None),
+            ('debts', '수증자가 인수하는 채무(전세·임대보증금, 담보대출)는 얼마인가요? 없다면 0원을 입력해 주세요.', 'amount', None),
+            ('prior_gifts_10y', '같은 증여자(부모는 두 분을 한 사람으로 봄)에게서 10년 내 받은 증여액은 얼마인가요?', 'amount', None),
+            ('prior_gift_taxable', '그 이전 증여의 신고 과세표준은 얼마인가요? 모르면 0원을 입력하면 추정합니다.', 'amount', None),
+            ('prior_gift_tax', '그 이전 증여의 산출세액은 얼마인가요? 모르면 0원을 입력하면 추정합니다.', 'amount', None),
+            ('deduction_used_10y', '합산하지 않은 다른 증여(예: 조부모 증여)에 10년 내 이미 쓴 같은 관계의 증여재산공제는 얼마인가요? 없다면 0원을 입력해 주세요.', 'amount', None),
+            ('filed_on_time', '증여일이 속하는 달의 말일부터 3개월 안에 신고하나요?', 'boolean', None),
         ),
         'documents': (
             ('gift_proof', '증여재산 자료', '증여 계약·재산 평가 자료', None),
             ('family_proof', '관계 확인 자료', '증여자와 수증자의 관계 자료', None),
-            ('prior_gift_proof', '과거 증여 자료', '10년 내 증여 내역', 'prior_gifts_10y'),
+            ('prior_gift_proof', '과거 증여 자료', '10년 내 증여 내역·신고서', 'prior_gifts_10y'),
+            ('debt_proof', '인수 채무 자료', '임대차계약서·대출 자료', 'debts'),
+            ('marriage_proof', '혼인·출산 자료', '혼인관계증명서·출생증명서', 'marriage_birth'),
         ),
     },
     'vat': {

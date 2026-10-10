@@ -21,13 +21,21 @@ CALCULATORS = {
 INACTIVE_DEFAULTS = {'is_minor': False, 'business_type': '소매업',
                      'is_negligent': False, 'days_late': 0,
                      'is_one_home': False, 'residence_years': 0, 'acquired_in_adjusted_area': False,
-                     'multi_home_surcharge': '없음', 'expense': 0, 'sincere_business': False, 'withheld': True}
+                     'multi_home_surcharge': '없음', 'expense': 0, 'sincere_business': False, 'withheld': True,
+                     'generation_skipping': False, 'marriage_birth': False, 'prior_gift_taxable': 0, 'prior_gift_tax': 0}
 
 
 def _active_question_specs(kind, facts):
     questions = case_kind(kind)['questions']
-    if kind == 'gift' and facts.get('relation') != '직계존비속':
-        return tuple(q for q in questions if q[0] != 'is_minor')
+    if kind == 'gift':
+        # Minor, generation-skipping and marriage questions only apply to lineal relatives; the
+        # earlier gift's tax figures only when an earlier gift is added.
+        skip = set()
+        if facts.get('relation') != '직계존비속':
+            skip |= {'is_minor', 'generation_skipping', 'marriage_birth'}
+        if facts.get('prior_gifts_10y') == 0:
+            skip |= {'prior_gift_taxable', 'prior_gift_tax'}
+        return tuple(q for q in questions if q[0] not in skip)
     if kind == 'vat' and facts.get('is_simplified') is not True:
         return tuple(q for q in questions if q[0] != 'business_type')
     if kind == 'capital_gains':

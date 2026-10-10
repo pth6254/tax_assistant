@@ -30,6 +30,7 @@
 | 참고 계산 | [formula_workflow.py](app/services/calculator/formula_workflow.py) |
 | 종합소득세(금융소득 포함) 계산기·채팅 입력 해석 | [income_tax.py](app/services/calculator/income_tax.py), [financial_income_tax.py](app/services/calculator/financial_income_tax.py), [income_tax_inputs.py](app/services/calculator/income_tax_inputs.py) |
 | 양도소득세 계산기·채팅 입력 해석 | [capital_gains.py](app/services/calculator/capital_gains.py), [capital_gains_inputs.py](app/services/calculator/capital_gains_inputs.py) |
+| 증여세 계산기·채팅 입력 해석 | [gift_tax.py](app/services/calculator/gift_tax.py), [gift_inputs.py](app/services/calculator/gift_inputs.py) |
 | 답변·근거 표시 | [answerSections.js](frontend/src/components/Chat/answerSections.js), [VerificationPanel.jsx](frontend/src/components/Chat/VerificationPanel.jsx) |
 | 자동 카드·실제 관측·Judge | [auto_cards.py](evaluation/auto_cards.py), [auto_pipeline.py](evaluation/auto_pipeline.py), [auto_cli.py](evaluation/auto_cli.py) |
 | 차단 집계·검사 가치 측정 | [block_report.py](evaluation/block_report.py), [filter_value.py](evaluation/filter_value.py) |

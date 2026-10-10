@@ -1,0 +1,70 @@
+{
+  "source": {
+    "filing_cases": {
+      "title": "국세청 주요서식 작성요령/사례(증여세) — 증여세 신고서 작성 사례 01~05(2021년 2월 15일 증여)",
+      "url": "https://www.nts.go.kr/nts/na/ntt/selectNttList.do?mi=6770&bbsId=30024",
+      "retrieved": "2026-10-10",
+      "note": "HWP 첨부파일의 '증여세 계산' 표에 인쇄된 금액만 옮겼다. 사례 06(영농자녀 감면)은 계산기 범위 밖이라 제외했다. 증여재산 평가(시가·보충적 평가)는 범위 밖이라 사례가 정한 증여재산가액을 입력으로 쓴다."
+    },
+    "guide": {
+      "title": "국세청 「2026 세금절약가이드 Ⅱ」 증여세 알뜰정보 — 일반증여 세액표(164쪽), 혼인공제 사례(165쪽)",
+      "url": "https://www.nts.go.kr/nts/na/ntt/selectNttList.do?mi=40298&bbsId=50696",
+      "retrieved": "2026-10-10"
+    },
+    "brackets": "증여세 세율(제56조, 제26조 준용)은 2000년 이후 10%·20%·30%·40%·50%(1억·5억·10억·30억 구간)로 같다. 신고세액공제는 2019년 이후 3%."
+  },
+  "cases": [
+    {
+      "id": "filing-01-spouse",
+      "title": "사례01 배우자로부터 아파트를 증여받은 경우",
+      "inputs": {"gift_amount": 800000000, "relation": "배우자"},
+      "expected": {"deduction": 600000000, "taxable": 200000000, "calculated_tax": 30000000, "filing_credit": 900000, "decided_tax": 29100000}
+    },
+    {
+      "id": "filing-02-deduction-used-by-grandfather",
+      "title": "사례02 조부로부터 증여받은 후 부로부터 증여받는 경우",
+      "inputs": {"gift_amount": 40000000, "relation": "직계존비속", "deduction_used_10y": 20000000},
+      "inputs_note": "2013년 조부 증여(미성년, 공제 2천만원 사용)는 다른 사람의 증여라 합산하지 않고, 직계존속 공제 5천만원 중 남은 3천만원만 공제한다.",
+      "expected": {"deduction": 30000000, "taxable": 10000000, "calculated_tax": 1000000, "filing_credit": 30000, "decided_tax": 970000}
+    },
+    {
+      "id": "filing-03-prior-gift-from-mother",
+      "title": "사례03 모로부터 증여받은 후 부로부터 증여받는 경우(기납부세액공제)",
+      "inputs": {"gift_amount": 200000000, "relation": "직계존비속", "prior_gifts_10y": 100000000, "prior_gift_tax": 7000000, "prior_gift_taxable": 70000000},
+      "inputs_note": "직계존속의 배우자는 동일인으로 보아 2013년 모친 증여 1억원을 가산한다. 당시 신고 과세표준 7천만원·산출세액 700만원.",
+      "expected": {"base": 300000000, "taxable": 250000000, "calculated_tax": 40000000, "paid_credit": 7000000, "filing_credit": 990000, "decided_tax": 32010000}
+    },
+    {
+      "id": "filing-04-father-same-day",
+      "title": "사례04 동일자에 부와 조부로부터 각각 증여받는 경우 — 부",
+      "inputs": {"gift_amount": 28000000, "relation": "직계존비속", "deduction_used_10y": 30000000},
+      "inputs_note": "같은 날 두 직계존속에게 받으면 공제 5천만원을 과세가액 비율(28:42)로 나눈다. 조부 몫 3천만원을 이미 쓴 공제로 넣어 부의 몫 2천만원을 재현한다.",
+      "expected": {"deduction": 20000000, "taxable": 8000000, "calculated_tax": 800000, "filing_credit": 24000, "decided_tax": 776000}
+    },
+    {
+      "id": "filing-04-grandfather-same-day",
+      "title": "사례04 동일자에 부와 조부로부터 각각 증여받는 경우 — 조부(세대생략 할증)",
+      "inputs": {"gift_amount": 42000000, "relation": "직계존비속", "deduction_used_10y": 20000000, "generation_skipping": true},
+      "expected": {"deduction": 30000000, "taxable": 12000000, "calculated_tax": 1200000, "surcharge": 360000, "filing_credit": 46800, "decided_tax": 1513200}
+    },
+    {
+      "id": "filing-05-leased-shop-with-debt",
+      "title": "사례05 임대차계약이 체결된 상가를 증여받은 경우(부담부증여)",
+      "inputs": {"gift_amount": 700000000, "relation": "직계존비속", "debts": 300000000},
+      "inputs_note": "증여재산가액 7억원(담보 채권액), 수증자가 인수한 임대보증금 채무 3억원.",
+      "expected": {"base": 400000000, "taxable": 350000000, "calculated_tax": 60000000, "filing_credit": 1800000, "decided_tax": 58200000}
+    },
+    {
+      "id": "guide-ordinary-gift",
+      "title": "2026 세금절약가이드 Ⅱ 164쪽: 시가 5억원 아파트를 아들에게 일반증여",
+      "inputs": {"gift_amount": 500000000, "relation": "직계존비속"},
+      "expected": {"taxable": 450000000, "calculated_tax": 80000000, "filing_credit": 2400000, "decided_tax": 77600000}
+    },
+    {
+      "id": "guide-marriage-deduction",
+      "title": "2026 세금절약가이드 Ⅱ 165쪽: 결혼을 앞두고 어머니에게서 현금 1억 5천만원(2024년)",
+      "inputs": {"gift_amount": 150000000, "relation": "직계존비속", "marriage_birth": true},
+      "expected": {"taxable": 0, "decided_tax": 0}
+    }
+  ]
+}

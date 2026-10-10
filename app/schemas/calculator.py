@@ -85,10 +85,22 @@ class InheritanceRequest(BaseModel):
 
 
 class GiftTaxRequest(BaseModel):
-    gift_amount: NonNegativeInt
-    relation: str = "기타"
-    is_minor: bool = False
-    prior_gifts_10y: NonNegativeInt = 0
+    """증여 1건의 증여세. 증여자 기준으로 관계를 고르고, 금액은 원 단위."""
+    gift_amount: NonNegativeInt = Field(description="증여재산가액(시가 등 평가액)")
+    relation: Literal["배우자", "직계존비속", "기타친족", "기타"] = Field(
+        "기타", description="증여자와의 관계(직계존비속: 부모·조부모↔자녀·손자녀)")
+    is_minor: bool = Field(False, description="수증자가 미성년자인지(직계존속에게 받으면 공제 2천만원)")
+    prior_gifts_10y: NonNegativeInt = Field(
+        0, description="같은 증여자(직계존속이면 그 배우자 포함)에게서 10년 내 받아 합산할 증여재산가액")
+    debts: NonNegativeInt = Field(0, description="수증자가 인수한 증여재산 담보 채무(부담부증여)")
+    prior_gift_tax: NonNegativeInt = Field(0, description="합산한 이전 증여의 산출세액(0이면 현행 기준으로 추정)")
+    prior_gift_taxable: NonNegativeInt = Field(0, description="합산한 이전 증여의 과세표준(0이면 현행 기준으로 추정)")
+    deduction_used_10y: NonNegativeInt = Field(
+        0, description="합산하지 않은 다른 증여에 10년 내 이미 쓴 같은 관계의 증여재산공제")
+    marriage_birth: bool = Field(False, description="직계존속에게 혼인신고일 전후 2년·자녀 출생일부터 2년 이내 받은 증여인지")
+    marriage_birth_used: NonNegativeInt = Field(0, description="이미 받은 혼인·출산 증여재산공제(합계 1억원 한도)")
+    generation_skipping: bool = Field(False, description="부모가 살아 있는 손자녀 등 자녀가 아닌 직계비속에게 증여(할증)")
+    filed_on_time: bool = Field(True, description="신고기한(증여일이 속하는 달 말일부터 3개월) 내 신고")
 
 
 class VatRequest(BaseModel):

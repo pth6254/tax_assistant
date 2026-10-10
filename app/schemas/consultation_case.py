@@ -62,6 +62,12 @@ class CaseFactsPatch(StrictCaseModel):
     relation: Literal['배우자', '직계존비속', '기타친족', '기타'] | None = None
     is_minor: bool | None = None
     prior_gifts_10y: int | None = Field(default=None, ge=0, strict=True)
+    generation_skipping: bool | None = None
+    marriage_birth: bool | None = None
+    prior_gift_taxable: int | None = Field(default=None, ge=0, strict=True)
+    prior_gift_tax: int | None = Field(default=None, ge=0, strict=True)
+    deduction_used_10y: int | None = Field(default=None, ge=0, strict=True)
+    filed_on_time: bool | None = None
     sales: int | None = Field(default=None, ge=0, strict=True)
     purchases: int | None = Field(default=None, ge=0, strict=True)
     exempt_sales: int | None = Field(default=None, ge=0, strict=True)

@@ -138,6 +138,9 @@ def test_non_income_case_date_and_choices_are_validated():
 def test_conditional_questions_only_ask_relevant_calculator_inputs():
     assert 'is_minor' not in {q['key'] for q in cases._questions({'relation': '배우자'}, 'gift')}
     assert 'is_minor' in {q['key'] for q in cases._questions({'relation': '직계존비속'}, 'gift')}
+    spouse = {q['key'] for q in cases._questions({'relation': '배우자', 'prior_gifts_10y': 0}, 'gift')}
+    assert not spouse & {'generation_skipping', 'marriage_birth', 'prior_gift_tax', 'prior_gift_taxable'}
+    assert 'prior_gift_tax' in {q['key'] for q in cases._questions({'prior_gifts_10y': 10}, 'gift')}
     assert 'business_type' not in {q['key'] for q in cases._questions({'is_simplified': False}, 'vat')}
     assert 'business_type' in {q['key'] for q in cases._questions({'is_simplified': True}, 'vat')}
     assert 'days_late' in {q['key'] for q in cases._questions({'penalty_type': '납부지연'}, 'penalty_tax')}

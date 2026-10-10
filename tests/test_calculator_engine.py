@@ -106,19 +106,19 @@ async def test_run_calculation_full_flow():
     with (
         patch(
             "app.services.tools.planner.select_tool",
-            AsyncMock(return_value=("gift", {"gift_amount": 50000000})),
+            AsyncMock(return_value=("penalty_tax", {"unpaid_tax": 5000000})),
         ),
         patch(
-            "app.services.calculator.engine.gift_tax.calculate",
+            "app.services.calculator.engine.penalty_tax.calculate",
             AsyncMock(return_value=_dummy_result()),
         ) as mock_calc,
     ):
-        run = await run_calculation_for_query("증여액 5천만원, 관계 기타, 성년, 사전증여 0원이면 증여세 얼마야?")
+        run = await run_calculation_for_query("미납세액 500만원, 무신고, 부정행위 없음, 지연일수 0일이면 가산세 얼마야?")
     assert run is not None
     assert "소득세법 제55조" in run.context
-    assert run.tool == "gift"
-    assert run.params == {"gift_amount": 50000000, "relation": "기타", "is_minor": False, "prior_gifts_10y": 0}
-    mock_calc.assert_awaited_once_with(gift_amount=50000000, relation="기타", is_minor=False, prior_gifts_10y=0)
+    assert run.tool == "penalty_tax"
+    assert run.params == {"unpaid_tax": 5000000, "penalty_type": "무신고", "is_negligent": False, "days_late": 0}
+    mock_calc.assert_awaited_once_with(unpaid_tax=5000000, penalty_type="무신고", is_negligent=False, days_late=0)
 
 
 @pytest.mark.asyncio
