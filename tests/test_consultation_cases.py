@@ -148,3 +148,6 @@ def test_conditional_questions_only_ask_relevant_calculator_inputs():
     assert 'business_type' in {q['key'] for q in cases._questions({'is_simplified': True}, 'vat')}
     assert 'days_late' in {q['key'] for q in cases._questions({'penalty_type': '납부지연'}, 'penalty_tax')}
     assert 'is_negligent' not in {q['key'] for q in cases._questions({'penalty_type': '납부지연'}, 'penalty_tax')}
+    assert 'filed_within_months' in {q['key'] for q in cases._questions({'penalty_type': '무신고'}, 'penalty_tax')}
+    assert 'revenue' not in {q['key'] for q in cases._questions({'penalty_type': '과소신고'}, 'penalty_tax')}
+    assert 'zero_rated_sales' not in {q['key'] for q in cases._questions({'is_simplified': True}, 'vat')}

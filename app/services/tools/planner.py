@@ -15,7 +15,7 @@ from app.services.tools.registry import TOOL_SCHEMAS
 from app.services.tools.executor import ToolRun, execute_tool
 from app.services.tools.policy import DOCUMENT_INTENT, CALC_TAX, ALIASES, check_proposal, has_lookup_intent
 from app.services.tools.policy import (capital_gains_scope, financial_income_scope, gift_scope, income_tax_scope,
-                                       inheritance_scope)
+                                       inheritance_scope, penalty_scope, vat_scope)
 
 logger = logging.getLogger(__name__)
 _AMOUNT_RE = re.compile(r"(?:\d[\d,.]*|[일이삼사오육칠팔구십백천]+)\s*(?:억|천만|백만|천|만|원)")
@@ -115,6 +115,14 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
             return result
     if (has_calculation_intent(query) or calculation_followup) and inheritance_scope(query, history):
         result = await inheritance_calculation(query, history, on_event)
+        if result is not None:
+            return result
+    if (has_calculation_intent(query) or calculation_followup) and vat_scope(query, history):
+        result = await vat_calculation(query, history, on_event)
+        if result is not None:
+            return result
+    if (has_calculation_intent(query) or calculation_followup) and penalty_scope(query, history):
+        result = await penalty_calculation(query, history, on_event)
         if result is not None:
             return result
     if on_event:
@@ -242,6 +250,18 @@ async def inheritance_calculation(query, history, on_event=None):
     """상속세 계산기 결과, a request for the facts it must not assume, or None for the model path."""
     from app.services.calculator.inheritance_inputs import stated_inheritance_inputs
     return await _stated_calculation("inheritance", "상속세", stated_inheritance_inputs(query, history), on_event)
+
+
+async def vat_calculation(query, history, on_event=None):
+    """부가가치세 계산기 결과, a request for the facts it must not assume, or None for the model path."""
+    from app.services.calculator.vat_inputs import stated_vat_inputs
+    return await _stated_calculation("vat", "부가가치세", stated_vat_inputs(query, history), on_event)
+
+
+async def penalty_calculation(query, history, on_event=None):
+    """가산세 계산기 결과, a request for the facts it must not assume, or None for the model path."""
+    from app.services.calculator.penalty_inputs import stated_penalty_inputs
+    return await _stated_calculation("penalty_tax", "가산세", stated_penalty_inputs(query, history), on_event)
 
 
 def _emit_result(result, params, callback):

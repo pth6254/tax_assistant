@@ -81,7 +81,14 @@ class CaseFactsPatch(StrictCaseModel):
     purchases: int | None = Field(default=None, ge=0, strict=True)
     exempt_sales: int | None = Field(default=None, ge=0, strict=True)
     is_simplified: bool | None = None
-    business_type: Literal['소매업', '음식점업', '제조업', '숙박업', '건설업', '서비스업', '부동산임대업'] | None = None
+    business_type: Literal['소매업', '음식점업', '제조업', '농업·임업·어업', '숙박업', '건설업', '운수·창고업', '정보통신업', '부동산임대업', '서비스업'] | None = None
+    zero_rated_sales: int | None = Field(default=None, ge=0, strict=True)
+    non_deductible_purchases: int | None = Field(default=None, ge=0, strict=True)
+    card_sales: int | None = Field(default=None, ge=0, strict=True)
+    card_credit_eligible: bool | None = None
+    e_filing: bool | None = None
+    filed_within_months: int | None = Field(default=None, ge=0, strict=True)
+    revenue: int | None = Field(default=None, ge=0, strict=True)
     unpaid_tax: int | None = Field(default=None, ge=0, strict=True)
     penalty_type: Literal['무신고', '과소신고', '납부지연'] | None = None
     is_negligent: bool | None = None

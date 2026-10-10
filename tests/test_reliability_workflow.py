@@ -64,8 +64,9 @@ def test_matching_hash_does_not_approve_missing_statutory_items():
 
 
 def test_calculation_needs_labelled_inputs_including_defaults():
-    query = '가산세 계산. 미납세액 5억 5000만원, 무신고, 부정행위 없음, 지연일수 0일'
-    penalty = {'unpaid_tax': 500000000, 'penalty_type': '무신고', 'is_negligent': False, 'days_late': 0}
+    query = '가산세 계산. 미납세액 5억 5000만원, 무신고, 부정행위 없음, 지연일수 0일, 기한 후 신고 0개월, 수입금액 0원'
+    penalty = {'unpaid_tax': 500000000, 'penalty_type': '무신고', 'is_negligent': False, 'days_late': 0,
+               'filed_within_months': 0, 'revenue': 0}
     # Compound Korean numeral is deliberately not silently interpreted.
     assert not check_proposal('penalty_tax', penalty, query, [], calculation_intent=True)[0]
     query = query.replace('5억 5000만원', '5000만원')

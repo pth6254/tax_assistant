@@ -123,15 +123,35 @@ class GiftTaxRequest(BaseModel):
 
 
 class VatRequest(BaseModel):
-    sales: NonNegativeInt
-    purchases: NonNegativeInt = 0
-    exempt_sales: NonNegativeInt = 0
-    is_simplified: bool = False
-    business_type: str = "소매업"
+    """과세기간 1회 신고분 부가가치세. 일반과세자는 공급가액, 간이과세자는 공급대가(부가가치세 포함)로 입력."""
+    sales: NonNegativeInt = Field(description="총매출(과세·영세율·면세 포함). 간이과세자는 공급대가")
+    purchases: NonNegativeInt = Field(
+        0, description="세금계산서·사업용 신용카드 등으로 받은 매입(일반: 공급가액, 간이: 공급대가)")
+    exempt_sales: NonNegativeInt = Field(0, description="면세 공급가액(공통매입 안분 기준)")
+    is_simplified: bool = Field(False, description="간이과세자인지")
+    business_type: Literal["소매업", "음식점업", "제조업", "농업·임업·어업", "숙박업", "건설업", "운수·창고업",
+                           "정보통신업", "부동산임대업", "서비스업"] = Field(
+        "소매업", description="간이과세자 업종(부가가치율 15~40%)")
+    zero_rated_sales: NonNegativeInt = Field(0, description="영세율 공급가액(수출 등)")
+    common_purchases: NonNegativeInt = Field(0, description="과세·면세 공통매입 공급가액(면세비율만큼 불공제)")
+    non_deductible_purchases: NonNegativeInt = Field(
+        0, description="매입 중 공제받지 못하는 금액(비영업용 승용차·면세사업 관련 등)")
+    deemed_purchases: NonNegativeInt = Field(0, description="음식점 개인사업자의 면세농산물 매입가액(의제매입세액)")
+    card_sales: NonNegativeInt = Field(0, description="신용카드·현금영수증 발행 매출(공급대가)")
+    card_credit_eligible: bool = Field(
+        True, description="신용카드 발행세액공제 대상(법인·직전연도 공급가액 10억원 초과 개인은 아님)")
+    card_credit_used: NonNegativeInt = Field(0, description="같은 해 이전 신고에서 받은 신용카드 발행세액공제")
+    e_filing: bool = Field(False, description="확정신고를 전자신고하는 개인사업자(전자신고세액공제 1만원)")
+    prepaid_tax: NonNegativeInt = Field(0, description="예정고지(부과)세액·예정신고 미환급세액")
 
 
 class PenaltyTaxRequest(BaseModel):
-    unpaid_tax: NonNegativeInt
-    penalty_type: str = "무신고"       # 무신고 | 과소신고 | 납부지연
-    is_negligent: bool = False        # 부정행위(사기·기타 부정한 방법) 여부 — 무신고/과소신고에만 적용
-    days_late: NonNegativeInt = 0                # 납부지연에만 적용
+    """국세 신고·납부 가산세. 무신고·과소신고는 신고 가산세와 납부지연가산세를 함께 계산한다."""
+    unpaid_tax: NonNegativeInt = Field(description="신고하지 않았거나 덜 신고·납부한 세액")
+    penalty_type: Literal["무신고", "과소신고", "납부지연"] = Field(
+        "무신고", description="무신고 | 과소신고 | 납부지연(기한 내 신고했지만 덜 냄)")
+    is_negligent: bool = Field(False, description="부정행위(사기·그 밖의 부정한 행위)로 인한 무신고·과소신고인지")
+    days_late: NonNegativeInt = Field(0, description="법정납부기한 다음 날부터 납부일(또는 고지일)까지 일수")
+    filed_within_months: NonNegativeInt = Field(
+        0, description="법정신고기한이 지난 뒤 기한 후 신고·수정신고한 개월 수(0이면 스스로 신고하지 않음)")
+    revenue: NonNegativeInt = Field(0, description="복식부기의무자·법인의 수입금액(입력하면 수입금액 기준 하한 적용)")

@@ -23,7 +23,8 @@ INACTIVE_DEFAULTS = {'is_minor': False, 'business_type': '소매업',
                      'is_one_home': False, 'residence_years': 0, 'acquired_in_adjusted_area': False,
                      'multi_home_surcharge': '없음', 'expense': 0, 'sincere_business': False, 'withheld': True,
                      'generation_skipping': False, 'marriage_birth': False, 'prior_gift_taxable': 0, 'prior_gift_tax': 0,
-                     'spouse_inheritance': 0, 'parents_count': 0, 'prior_gifts_taxable': 0}
+                     'spouse_inheritance': 0, 'parents_count': 0, 'prior_gifts_taxable': 0,
+                     'zero_rated_sales': 0, 'non_deductible_purchases': 0, 'filed_within_months': 0, 'revenue': 0}
 
 
 def _active_question_specs(kind, facts):
@@ -47,8 +48,6 @@ def _active_question_specs(kind, facts):
         if facts.get('prior_gifts_10y') == 0:
             skip |= {'prior_gift_taxable', 'prior_gift_tax'}
         return tuple(q for q in questions if q[0] not in skip)
-    if kind == 'vat' and facts.get('is_simplified') is not True:
-        return tuple(q for q in questions if q[0] != 'business_type')
     if kind == 'capital_gains':
         # Only a house has the one-home exemption, the residence table and the surcharge;
         # a one-home household is never surcharged, and residence only matters to one home.
@@ -72,9 +71,22 @@ def _active_question_specs(kind, facts):
         if facts.get('interest_income') == 0 and facts.get('dividend_gross_up') == 0:
             skip.add('withheld')
         return tuple(q for q in questions if q[0] not in skip)
+    if kind == 'vat':
+        # The industry only sets a 간이과세자's rate; 영세율·면세 and 공제 불공제 lines only apply to 일반과세자.
+        skip = set()
+        if facts.get('is_simplified') is True:
+            skip |= {'zero_rated_sales', 'exempt_sales', 'non_deductible_purchases'}
+        if facts.get('is_simplified') is not True:
+            skip.add('business_type')
+        return tuple(q for q in questions if q[0] not in skip)
     if kind == 'penalty_tax':
-        skip = 'is_negligent' if facts.get('penalty_type') == '납부지연' else 'days_late'
-        return tuple(q for q in questions if q[0] != skip)
+        # 납부지연 only has the daily penalty; the revenue floor only applies to 무신고.
+        skip = set()
+        if facts.get('penalty_type') == '납부지연':
+            skip |= {'is_negligent', 'filed_within_months', 'revenue'}
+        elif facts.get('penalty_type') == '과소신고':
+            skip.add('revenue')
+        return tuple(q for q in questions if q[0] not in skip)
     return questions
 
 
@@ -99,7 +111,7 @@ def _answered(value, options):
 
 def _questions(facts, kind='income_tax'):
     return [{'key': key, 'question': question, 'type': field_type,
-             'unit': '원' if field_type == 'amount' else '명' if key in {'personal_deduction_count', 'children_count', 'parents_count', 'elderly_count'} else '년' if key in {'holding_years', 'residence_years', 'minor_years', 'disabled_years'} else '일' if key == 'days_late' else None,
+             'unit': '원' if field_type == 'amount' else '명' if key in {'personal_deduction_count', 'children_count', 'parents_count', 'elderly_count'} else '년' if key in {'holding_years', 'residence_years', 'minor_years', 'disabled_years'} else '개월' if key == 'filed_within_months' else '일' if key == 'days_late' else None,
              'options': list(options) if options else None,
              'answered': _answered(facts.get(key), options), 'value': facts.get(key)}
             for key, question, field_type, options in _active_question_specs(kind, facts)]

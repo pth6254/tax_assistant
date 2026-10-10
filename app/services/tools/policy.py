@@ -100,6 +100,29 @@ def inheritance_scope(query, history=None):
     return bool(INHERITANCE.search(previous)) and not NOT_INHERITANCE.search(previous)
 
 
+VAT = re.compile(r"부가세|부가가치세|VAT", re.I)
+PENALTY = re.compile(r"가산세")
+
+
+def _scoped(pattern, excluded, query, history):
+    if excluded and excluded.search(query):
+        return False
+    if pattern.search(query):
+        return True
+    previous = next((m.get("content", "") for m in reversed(history or []) if m.get("role") == "user"), "")
+    return bool(pattern.search(previous)) and not (excluded and excluded.search(previous))
+
+
+def vat_scope(query, history=None):
+    """A VAT amount is being calculated in this turn, or the previous one for a follow-up."""
+    return _scoped(VAT, PENALTY, query, history)
+
+
+def penalty_scope(query, history=None):
+    """A penalty tax is being calculated in this turn, or the previous one for a follow-up."""
+    return _scoped(PENALTY, None, query, history)
+
+
 ALIASES = {
     "income": "연소득|소득|총수입|수입", "expense": "필요경비|경비", "personal_deduction_count": "공제인원|공제 인원|기본공제 인원",
     "other_deductions": "기타공제|기타 공제", "transfer_price": "양도가액|양도 가액|매도가|매도금액",
@@ -117,6 +140,10 @@ ALIASES = {
     "marriage_birth_used": "이미 받은 혼인공제|이미 받은 혼인·출산공제", "sales": "매출액|매출",
     "purchases": "매입액|매입", "exempt_sales": "면세매출|면세 매출",
     "unpaid_tax": "미납세액|미납 세액|미납세금", "days_late": "지연일수|지연 일수",
+    "filed_within_months": "기한 후 신고|수정신고", "revenue": "수입금액",
+    "zero_rated_sales": "영세율 매출|영세율매출", "common_purchases": "공통매입", "non_deductible_purchases": "불공제 매입",
+    "deemed_purchases": "면세농산물", "card_sales": "카드매출|카드 매출", "card_credit_used": "이미 받은 카드공제",
+    "prepaid_tax": "기납부세액|기납부 세액|중간예납세액|예정고지세액|예정고지",
     "interest_income": "이자소득|이자 소득|예금이자|예금 이자|이자",
     "non_business_interest": "비영업대금의 이익|비영업대금이익|비영업대금",
     "dividend_gross_up": "배당가산 대상 배당|내국법인 배당|배당소득|배당",
@@ -137,6 +164,8 @@ BOOL_TEXT = {
     "marriage_birth": {True: "혼인·출산 공제 대상", False: "혼인·출산 공제 대상 아님"},
     "generation_skipping": {True: "세대생략", False: "자녀에게 직접"},
     "has_spouse": {True: "배우자 있음", False: "배우자 없음"},
+    "card_credit_eligible": {True: "카드공제 대상", False: "카드공제 대상 아님"},
+    "e_filing": {True: "전자신고", False: "서면신고"},
     "skipped_generation_minor": {True: "손자녀 미성년", False: "손자녀 성년"},
     "filed_on_time": {True: "기한 내 신고", False: "기한 후 신고"},
     "is_negligent": {True: "부정행위 있음", False: "부정행위 없음"},

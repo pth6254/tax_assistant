@@ -169,37 +169,59 @@ const FORMS = {
   vat: {
     apiFn: calcVat,
     fields: [
-      { key: 'sales',         label: '매출액',        unit: '만원', required: true },
-      { key: 'purchases',     label: '매입액',        unit: '만원', required: false },
-      { key: 'exempt_sales',  label: '영세율·면세 매출', unit: '만원', required: false, hint: '과세매출에서 제외' },
       { key: 'is_simplified', label: '간이과세자',      type: 'checkbox' },
       { key: 'business_type', label: '업종',           type: 'select',
-        options: ['소매업', '음식점업', '제조업', '숙박업', '건설업', '서비스업', '부동산임대업'],
-        hint: '간이과세자만 해당' },
+        options: ['소매업', '음식점업', '제조업', '농업·임업·어업', '숙박업', '건설업', '운수·창고업', '정보통신업', '부동산임대업', '서비스업'],
+        hint: '간이과세자 부가가치율 15~40%' },
+      { key: 'sales',         label: '총매출',          unit: '만원', required: true, hint: '일반: 공급가액(부가세 제외) · 간이: 공급대가(부가세 포함)' },
+      { key: 'zero_rated_sales', label: '영세율 매출',   unit: '만원', required: false, hint: '수출 등' },
+      { key: 'exempt_sales',  label: '면세 매출',        unit: '만원', required: false, hint: '공통매입 안분 기준' },
+      { key: 'purchases',     label: '공제받는 매입',    unit: '만원', required: false, hint: '세금계산서·사업용 카드 매입' },
+      { key: 'non_deductible_purchases', label: '그중 불공제 매입', unit: '만원', required: false, hint: '비영업용 승용차·접대비 등' },
+      { key: 'common_purchases', label: '과세·면세 공통매입', unit: '만원', required: false, hint: '면세 매출 비율만큼 불공제' },
+      { key: 'deemed_purchases', label: '면세농산물 매입',  unit: '만원', required: false, hint: '음식점 개인사업자 의제매입세액' },
+      { key: 'card_sales',    label: '카드·현금영수증 매출', unit: '만원', required: false, hint: '발행세액공제 1.3%(연 1천만원)' },
+      { key: 'card_credit_eligible', label: '카드 발행공제 대상', type: 'checkbox', hint: '법인·직전연도 공급가액 10억 초과 개인은 해제' },
+      { key: 'card_credit_used', label: '올해 이미 받은 카드공제', unit: '만원', required: false },
+      { key: 'prepaid_tax',   label: '예정고지·미환급세액', unit: '만원', required: false },
+      { key: 'e_filing',      label: '전자신고(1만원 공제)', type: 'checkbox' },
     ],
-    defaults: { business_type: '소매업' },
+    defaults: { business_type: '소매업', card_credit_eligible: true },
     toPayload: (f) => ({
       sales:         toWon(f.sales),
       purchases:     toWon(f.purchases),
-      exempt_sales:  toWon(f.exempt_sales),
+      exempt_sales:  f.is_simplified ? 0 : toWon(f.exempt_sales),
       is_simplified: !!f.is_simplified,
       business_type: f.business_type || '소매업',
+      zero_rated_sales: f.is_simplified ? 0 : toWon(f.zero_rated_sales),
+      common_purchases: f.is_simplified ? 0 : toWon(f.common_purchases),
+      non_deductible_purchases: f.is_simplified ? 0 : toWon(f.non_deductible_purchases),
+      deemed_purchases: f.is_simplified ? 0 : toWon(f.deemed_purchases),
+      card_sales:    toWon(f.card_sales),
+      card_credit_eligible: f.card_credit_eligible !== false,
+      card_credit_used: toWon(f.card_credit_used),
+      e_filing:      !!f.e_filing,
+      prepaid_tax:   toWon(f.prepaid_tax),
     }),
   },
   penalty: {
     apiFn: calcPenaltyTax,
     fields: [
       { key: 'unpaid_tax',    label: '무신고·과소신고·미납 세액', unit: '만원', required: true },
-      { key: 'penalty_type',  label: '가산세 종류', type: 'select', options: ['무신고', '과소신고', '납부지연'] },
+      { key: 'penalty_type',  label: '경우', type: 'select', options: ['무신고', '과소신고', '납부지연'], hint: '무신고·과소신고는 납부지연가산세도 함께 계산' },
       { key: 'is_negligent',  label: '부정행위(사기·기타 부정한 방법)', type: 'checkbox', hint: '무신고·과소신고만 해당' },
-      { key: 'days_late',     label: '연체일수', unit: '일', required: false, hint: '납부지연만 해당' },
+      { key: 'filed_within_months', label: '기한 후 신고·수정신고 시점', unit: '개월', required: false, hint: '법정신고기한 후 몇 개월 안에 스스로 신고(감면)' },
+      { key: 'days_late',     label: '납부지연 일수', unit: '일', required: false, hint: '법정납부기한 다음 날부터 납부일까지' },
+      { key: 'revenue',       label: '수입금액(복식부기의무자·법인)', unit: '만원', required: false, hint: '무신고 시 수입금액 1만분의 7 하한' },
     ],
     defaults: { penalty_type: '무신고' },
     toPayload: (f) => ({
       unpaid_tax:   toWon(f.unpaid_tax),
       penalty_type: f.penalty_type || '무신고',
-      is_negligent: !!f.is_negligent,
+      is_negligent: f.penalty_type !== '납부지연' && !!f.is_negligent,
       days_late:    toInt(f.days_late),
+      filed_within_months: f.penalty_type === '납부지연' ? 0 : toInt(f.filed_within_months),
+      revenue:      f.penalty_type === '납부지연' ? 0 : toWon(f.revenue),
     }),
   },
 }
@@ -255,7 +277,8 @@ const QUESTION_BUILDERS = {
     `매출 ${f.sales || 0}만원, 매입 ${f.purchases || 0}만원${f.is_simplified ? ` (간이과세자, ${f.business_type} 업종)` : ' (일반과세자)'} 기준으로 ` +
     `계산한 부가가치세 ${r.final_tax < 0 ? '환급세액' : '납부세액'}이 ${fmtWon(Math.abs(r.final_tax))}로 나왔습니다. 이 계산이 맞는지 확인해주세요.`,
   penalty: (f, r) =>
-    `${f.penalty_type || '무신고'} 세액 ${f.unpaid_tax || 0}만원${f.penalty_type === '납부지연' ? ` (연체 ${f.days_late || 0}일)` : (f.is_negligent ? ' (부정행위)' : '')} 기준으로 ` +
+    `${f.penalty_type || '무신고'} 세액 ${f.unpaid_tax || 0}만원${f.is_negligent && f.penalty_type !== '납부지연' ? ' (부정행위)' : ''}, 납부지연 ${f.days_late || 0}일` +
+    `${Number(f.filed_within_months || 0) > 0 && f.penalty_type !== '납부지연' ? `, 기한 후 ${f.filed_within_months}개월 안에 스스로 신고` : ''} 기준으로 ` +
     `계산한 가산세 포함 납부할 총액이 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인해주세요.`,
 }
 

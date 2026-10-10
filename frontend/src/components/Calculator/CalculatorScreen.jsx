@@ -43,7 +43,8 @@ export default function CalculatorScreen({ initial, onInitialConsumed, onAskAbou
   }
   const fields = FORMS[tab].fields
   const hasFinancial = ['interest_income', 'non_business_interest', 'dividend_gross_up', 'dividend_other'].some(k => Number(form[k] || 0) > 0)
-  const visible = fields.filter(f => !(f.key === 'business_type' && !form.is_simplified) && !(f.key === 'days_late' && form.penalty_type !== '납부지연') && !(f.key === 'is_negligent' && form.penalty_type === '납부지연')
+  const visible = fields.filter(f => !(f.key === 'business_type' && !form.is_simplified) && !(['is_negligent', 'filed_within_months', 'revenue'].includes(f.key) && form.penalty_type === '납부지연')
+    && !(['zero_rated_sales', 'exempt_sales', 'non_deductible_purchases', 'common_purchases', 'deemed_purchases'].includes(f.key) && form.is_simplified)
     && !(f.key === 'withheld' && !hasFinancial)
     && !(['is_minor', 'generation_skipping', 'marriage_birth'].includes(f.key) && form.relation && form.relation !== '직계존비속')
     && !(['prior_gift_taxable', 'prior_gift_tax'].includes(f.key) && tab === 'gift' && !(Number(form.prior_gifts_10y || 0) > 0))

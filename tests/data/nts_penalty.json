@@ -1,0 +1,23 @@
+{
+  "source": {
+    "guide": {
+      "title": "국세청 「2026 세금절약가이드 Ⅱ」 증여세 알뜰정보15(184~185쪽): 증여세 1천만원을 신고·납부하지 않아 1년 뒤 고지된 경우",
+      "url": "https://www.nts.go.kr/nts/na/ntt/selectNttList.do?mi=40298&bbsId=50696",
+      "retrieved": "2026-10-10"
+    },
+    "filing_case": {
+      "title": "국세청 종합소득세 신고서 작성사례 7(추계-기준경비율, 복식부기의무자)의 무신고가산세",
+      "url": "https://www.nts.go.kr/nts/na/ntt/selectNttList.do?mi=2241&bbsId=3066",
+      "retrieved": "2026-10-10",
+      "note": "무신고납부세액이 0원(산출세액 75만원 - 세액공제 62만원 - 중간예납 60만원)이라 수입금액 1억 2천만원 x 1만분의 7 = 84,000원이 무신고가산세다(인쇄된 계산식 max(120,000,000 x 0.07%, 0 x 20%))."
+    }
+  },
+  "cases": [
+    {"id": "guide-gift-not-filed-one-year", "title": "증여세 1천만원 무신고, 365일 뒤 납부",
+     "inputs": {"unpaid_tax": 10000000, "penalty_type": "무신고", "days_late": 365},
+     "expected": {"filing": 2000000, "late": 803000, "penalty": 2803000, "total": 12803000}},
+    {"id": "filing-7-revenue-floor", "title": "복식부기의무자 무신고, 무신고납부세액 0원, 수입금액 1억 2천만원",
+     "inputs": {"unpaid_tax": 0, "penalty_type": "무신고", "revenue": 120000000},
+     "expected": {"filing": 84000, "penalty": 84000}}
+  ]
+}

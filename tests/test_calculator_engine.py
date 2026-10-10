@@ -117,8 +117,10 @@ async def test_run_calculation_full_flow():
     assert run is not None
     assert "소득세법 제55조" in run.context
     assert run.tool == "penalty_tax"
-    assert run.params == {"unpaid_tax": 5000000, "penalty_type": "무신고", "is_negligent": False, "days_late": 0}
-    mock_calc.assert_awaited_once_with(unpaid_tax=5000000, penalty_type="무신고", is_negligent=False, days_late=0)
+    assert run.params == {"unpaid_tax": 5000000, "penalty_type": "무신고", "is_negligent": False, "days_late": 0,
+                          "filed_within_months": 0, "revenue": 0}
+    mock_calc.assert_awaited_once_with(unpaid_tax=5000000, penalty_type="무신고", is_negligent=False, days_late=0,
+                                       filed_within_months=0, revenue=0)
 
 
 @pytest.mark.asyncio
@@ -178,9 +180,11 @@ async def test_run_calculation_routes_to_vat():
         run = await run_calculation_for_query("매출 1억 매입 6천만원, 면세 매출 0원, 일반과세 소매업 부가세 얼마 내야해?")
     assert run is not None
     assert run.tool == "vat"
+    # The deterministic reader answers first; unstated facts take their stated defaults.
     mock_calc.assert_awaited_once_with(
-        sales=100000000, purchases=60000000, exempt_sales=0,
-        is_simplified=False, business_type="소매업",
+        sales=100000000, purchases=60000000, exempt_sales=0, is_simplified=False, business_type="소매업",
+        zero_rated_sales=0, common_purchases=0, non_deductible_purchases=0, deemed_purchases=0, card_sales=0,
+        card_credit_eligible=True, card_credit_used=0, e_filing=False, prepaid_tax=0,
     )
 
 
@@ -208,5 +212,5 @@ async def test_run_calculation_routes_to_penalty_tax():
     assert run is not None
     assert run.tool == "penalty_tax"
     mock_calc.assert_awaited_once_with(
-        unpaid_tax=10000000, penalty_type="무신고", is_negligent=False, days_late=0,
+        unpaid_tax=10000000, penalty_type="무신고", is_negligent=False, days_late=0, filed_within_months=0, revenue=0,
     )
