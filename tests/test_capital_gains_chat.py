@@ -25,7 +25,8 @@ def test_a_spoken_sale_is_read_into_calculator_inputs():
     assert isinstance(stated, StatedInputs)
     assert stated.params == {'transfer_price': 1_500_000_000, 'acquisition_price': 1_000_000_000, 'expenses': 0,
                              'holding_years': 7, 'asset_type': '주택', 'is_one_home': True, 'residence_years': 5,
-                             'acquired_in_adjusted_area': False, 'multi_home_surcharge': '없음'}
+                             'acquired_in_adjusted_area': False, 'multi_home_surcharge': '없음',
+                             'non_business_land': False, 'unregistered': False}
     assert any('필요경비' in a for a in stated.assumptions)
 
 
@@ -50,15 +51,43 @@ def test_facts_that_decide_the_tax_are_asked_not_assumed(query, label):
 
 
 @pytest.mark.parametrize('query', [
-    '2주택인데 10억에 산 아파트를 15억에 팔면 양도세 얼마야?',      # surcharge judgement is not modelled
-    '분양권을 3억에 사서 4억에 팔면 양도세 얼마야?',
-    '비사업용 토지를 1억에 사서 3억에 팔면 양도세 얼마야?',
-    '주식을 1억에 사서 2억에 팔면 양도세 얼마야?',
+    '비트코인을 1천만원에 사서 5천만원에 팔면 세금 얼마?',            # 가상자산은 양도소득이 아님
     '양도소득세 얼마야?',                                          # no sale price at all
     '아파트와 토지를 10억에 사서 15억에 팔면 양도세 얼마야?',      # two kinds of property
+    '해외 아파트를 5억에 사서 8억에 팔면 양도세 얼마야?',
 ])
 def test_unmodelled_or_unreadable_sales_take_the_ordinary_path(query):
     assert stated_capital_gains_inputs(query) is None
+
+
+@pytest.mark.parametrize('query, expected', [
+    ('2주택인데 비조정지역 아파트를 5억에 사서 8억에 팔면 양도세 얼마? 6년 보유', {'asset_type': '주택', 'multi_home_surcharge': '없음'}),
+    ('3주택인데 조정대상지역 아파트를 5억에 사서 8억에 팔면 양도세 얼마? 6년 보유, 중과 대상이야', {'multi_home_surcharge': '3주택이상'}),
+    ('분양권을 1억 6천만원에 사서 2억 4천만원에 팔면 양도세 얼마야? 2년 보유', {'asset_type': '분양권'}),
+    ('재개발 입주권을 2억에 사서 4억에 팔면 양도세 얼마? 3년 보유', {'asset_type': '조합원입주권', 'pre_approval_gain': 0}),
+    ('비사업용 토지를 5천만원에 사서 2억 5천만원에 팔면 양도세 얼마? 1년 보유', {'non_business_land': True}),
+    ('골프회원권을 1억에 사서 2억에 팔면 양도세 얼마?', {'asset_type': '기타자산'}),
+    ('해외주식을 5천만원에 사서 1억에 팔면 양도세 얼마?', {'asset_type': '주식', 'stock_market': '국외'}),
+    ('비상장 주식 대주주인데 5억에 사서 10억에 팔면 양도세 얼마? 10년 보유', {'stock_market': '국내비상장', 'major_shareholder': True}),
+    ('상장주식 소액주주인데 1억에 사서 1억 5천만원에 팔면 양도세 얼마?', {'stock_market': '국내상장', 'major_shareholder': False}),
+    ('파생상품 3천만원에 사서 6천만원에 팔면 양도세 얼마?', {'asset_type': '파생상품'}),
+])
+def test_other_assets_are_read(query, expected):
+    stated = stated_capital_gains_inputs(query)
+    assert isinstance(stated, StatedInputs), stated
+    assert {k: stated.params.get(k, 0) for k in expected} == expected
+
+
+@pytest.mark.parametrize('query, label', [
+    ('2주택인데 5억에 산 아파트를 8억에 팔면 양도세 얼마? 6년 보유', '조정대상지역'),
+    ('2주택인데 조정대상지역 아파트를 5억에 사서 8억에 팔면 양도세 얼마? 6년 보유', '중과 대상'),
+    ('상장주식을 1억에 사서 1억 5천만원에 팔면 양도세 얼마?', '대주주'),
+    ('주식을 1억에 사서 2억에 팔면 양도세 얼마야?', '해외주식'),
+    ('원조합원인데 재개발 입주권을 2억에 사서 4억에 팔면 양도세 얼마? 6년 보유', '관리처분계획인가 전'),
+])
+def test_facts_that_set_the_rate_are_asked(query, label):
+    stated = stated_capital_gains_inputs(query)
+    assert isinstance(stated, MissingInputs) and any(label in item for item in stated.labels), stated
 
 
 def test_a_previous_turn_completes_the_facts():
@@ -93,5 +122,5 @@ async def test_chat_asks_for_missing_facts_without_calling_the_model(monkeypatch
 async def test_unmodelled_sale_goes_to_tool_selection(monkeypatch):
     select = AsyncMock(return_value=None)
     monkeypatch.setattr(planner, 'select_tool', select)
-    await planner.run_tools_for_query('2주택인데 10억에 산 아파트를 15억에 팔면 양도세 얼마야?', user_id=str(uuid4()))
+    await planner.run_tools_for_query('해외 아파트를 5억에 사서 8억에 팔면 양도세 얼마야?', user_id=str(uuid4()))
     select.assert_awaited_once()

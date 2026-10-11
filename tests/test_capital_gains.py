@@ -30,7 +30,10 @@ def params(brackets="brackets_2023"):
         high_price_threshold=p["high_price_threshold"], general_rate=d("general_rate"), general_cap=d("general_cap"),
         home_holding_rate=d("home_holding_rate"), home_holding_cap=d("home_holding_cap"),
         home_residence_rate=d("home_residence_rate"), home_residence_cap=d("home_residence_cap"),
-        surcharges={k: Decimal(v) for k, v in p["surcharges"].items()}, local_tax_ratio=d("local_tax_ratio"))
+        surcharges={k: Decimal(v) for k, v in p["surcharges"].items()}, local_tax_ratio=d("local_tax_ratio"),
+        extra_rates={k: Decimal(v) for k, v in p["extra_rates"].items()},
+        progressive_major=[{"bracket_from": a, "rate": Decimal(r), "progressive_deduction": c}
+                           for a, r, c in p["progressive_major"]])
 
 
 def step(result, prefix):
@@ -114,7 +117,7 @@ def test_a_loss_has_no_tax():
     (dict(holding_years=3, asset_type="토지·건물", is_one_home=True), "invalid_input"),
     (dict(holding_years=3, is_one_home=True, multi_home_surcharge="2주택"), "invalid_input"),
     (dict(holding_years=3, asset_type="토지·건물", multi_home_surcharge="2주택"), "invalid_input"),
-    (dict(holding_years=3, asset_type="분양권"), "unsupported_condition"),
+    (dict(holding_years=3, asset_type="가상자산"), "unsupported_condition"),
 ])
 def test_inconsistent_inputs_are_rejected(inputs, code):
     with pytest.raises(CalculationError) as error:
@@ -140,3 +143,74 @@ def test_consultation_case_asks_only_the_facts_that_apply():
     # A choice stored before the asset types were split is asked again, not reused.
     legacy = {q['key']: q['answered'] for q in _questions({'asset_type': '부동산'}, 'capital_gains')}
     assert legacy['asset_type'] is False
+
+
+def test_presale_right_held_under_a_year_pays_seventy_percent_without_deduction():
+    result = run(transfer_price=400_000_000, acquisition_price=300_000_000, holding_years=0, asset_type="분양권")
+    assert step(result, "장기보유특별공제") == 0 and result.calculated_tax == 97_500_000 * 7 // 10
+
+
+def test_membership_right_deducts_only_the_gain_before_approval():
+    result = run(transfer_price=900_000_000, acquisition_price=400_000_000, holding_years=8,
+                 asset_type="조합원입주권", pre_approval_gain=300_000_000, pre_approval_years=6)
+    assert step(result, "장기보유특별공제") == 36_000_000          # 3억 x 12%(6년)
+    successor = run(transfer_price=900_000_000, acquisition_price=400_000_000, holding_years=3, asset_type="조합원입주권")
+    assert step(successor, "장기보유특별공제") == 0
+
+
+def test_non_business_land_adds_ten_points_and_keeps_the_deduction():
+    plain = run(transfer_price=500_000_000, acquisition_price=200_000_000, holding_years=6, asset_type="토지·건물")
+    land = run(transfer_price=500_000_000, acquisition_price=200_000_000, holding_years=6, asset_type="토지·건물",
+               non_business_land=True)
+    assert step(land, "장기보유특별공제") == step(plain, "장기보유특별공제") == 36_000_000
+    assert land.calculated_tax == plain.calculated_tax + step(land, "과세표준") // 10
+
+
+def test_unregistered_transfer_pays_seventy_percent_without_any_deduction():
+    result = run(transfer_price=300_000_000, acquisition_price=100_000_000, holding_years=10, asset_type="토지·건물",
+                 unregistered=True)
+    assert step(result, "장기보유특별공제") == 0 and step(result, "양도소득 기본공제") == 0
+    assert result.calculated_tax == 140_000_000
+
+
+def test_membership_and_other_assets_use_basic_rates_only():
+    result = run(transfer_price=200_000_000, acquisition_price=100_000_000, holding_years=0, asset_type="기타자산")
+    assert step(result, "장기보유특별공제") == 0
+    assert result.calculated_tax == cg.apply_progressive_tax(97_500_000, params().brackets)[0]
+
+
+@pytest.mark.parametrize("inputs, tax", [
+    (dict(stock_market="국외"), 9_500_000),                                   # (5천만 - 250만) x 20%
+    (dict(stock_market="국외", sme=True), 4_750_000),
+    (dict(stock_market="국내비상장"), 9_500_000),
+    (dict(stock_market="국내비상장", sme=True), 4_750_000),
+    (dict(stock_market="국내상장", major_shareholder=True), 9_500_000),
+    (dict(stock_market="국내상장", major_shareholder=True, holding_years=0), 14_250_000),
+    (dict(stock_market="국내상장"), 0),                                       # 소액주주 장내 양도: 과세 대상 아님
+])
+def test_stock_rates_follow_market_size_and_holder(inputs, tax):
+    result = run(transfer_price=150_000_000, acquisition_price=100_000_000, asset_type="주식",
+                 holding_years=inputs.pop("holding_years", 3), **inputs)
+    assert result.calculated_tax == tax
+
+
+def test_derivatives_and_trust_rights():
+    assert run(transfer_price=60_000_000, acquisition_price=30_000_000, asset_type="파생상품").calculated_tax == 2_750_000
+    trust = run(transfer_price=1_000_000_000, acquisition_price=500_000_000, asset_type="신탁수익권")
+    assert trust.calculated_tax == 497_500_000 * 25 // 100 - 15_000_000
+
+
+def test_losses_in_the_same_group_are_offset_first():
+    result = run(transfer_price=150_000_000, acquisition_price=100_000_000, asset_type="주식", stock_market="국외",
+                 same_group_loss=20_000_000)
+    assert step(result, "같은 그룹") == 20_000_000 and result.calculated_tax == 5_500_000
+
+
+@pytest.mark.parametrize("inputs", [dict(asset_type="주택", non_business_land=True),
+                                    dict(asset_type="분양권", is_one_home=True),
+                                    dict(asset_type="주식", unregistered=True),
+                                    dict(asset_type="토지·건물", pre_approval_gain=1)])
+def test_flags_that_do_not_fit_the_asset_are_rejected(inputs):
+    with pytest.raises(CalculationError) as error:
+        run(transfer_price=500_000_000, holding_years=3, **inputs)
+    assert error.value.code == "invalid_input"

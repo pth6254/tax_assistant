@@ -59,7 +59,11 @@ class CaseFactsPatch(StrictCaseModel):
     acquisition_price: int | None = Field(default=None, ge=0, strict=True)
     expenses: int | None = Field(default=None, ge=0, strict=True)
     holding_years: int | None = Field(default=None, ge=0, strict=True)
-    asset_type: Literal['주택', '토지·건물'] | None = None
+    asset_type: Literal['주택', '토지·건물', '분양권', '조합원입주권', '기타자산', '주식', '파생상품', '신탁수익권'] | None = None
+    non_business_land: bool | None = None
+    stock_market: Literal['국내상장', '국내비상장', '국외'] | None = None
+    major_shareholder: bool | None = None
+    sme: bool | None = None
     is_one_home: bool | None = None
     residence_years: int | None = Field(default=None, ge=0, strict=True)
     acquired_in_adjusted_area: bool | None = None

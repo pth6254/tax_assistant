@@ -26,7 +26,8 @@ INACTIVE_DEFAULTS = {'is_minor': False, 'business_type': '소매업',
                      'spouse_inheritance': 0, 'parents_count': 0, 'prior_gifts_taxable': 0,
                      'zero_rated_sales': 0, 'non_deductible_purchases': 0, 'filed_within_months': 0, 'revenue': 0,
                      'pension_age': 0, 'misc_expense_rule': '실제', 'registered_rental': False, 'rental_expenses': 0,
-                     'daily_work_days': 0}
+                     'daily_work_days': 0,
+                     'non_business_land': False, 'stock_market': '국내비상장', 'major_shareholder': False, 'sme': False}
 
 
 def _active_question_specs(kind, facts):
@@ -53,7 +54,8 @@ def _active_question_specs(kind, facts):
     if kind == 'capital_gains':
         # Only a house has the one-home exemption, the residence table and the surcharge;
         # a one-home household is never surcharged, and residence only matters to one home.
-        if facts.get('asset_type') != '주택':
+        asset = facts.get('asset_type')
+        if asset != '주택':
             skip = {'is_one_home', 'residence_years', 'acquired_in_adjusted_area', 'multi_home_surcharge'}
         elif facts.get('is_one_home') is True:
             skip = {'multi_home_surcharge'}
@@ -61,6 +63,10 @@ def _active_question_specs(kind, facts):
             skip = {'residence_years', 'acquired_in_adjusted_area'}
         else:
             skip = set()
+        if asset != '토지·건물':
+            skip.add('non_business_land')
+        if asset != '주식':
+            skip |= {'stock_market', 'major_shareholder', 'sme'}
         return tuple(q for q in questions if q[0] not in skip)
     if kind == 'income_tax':
         # Expenses and the 성실사업자 credit belong to business income; a wage earner's standard

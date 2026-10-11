@@ -89,12 +89,21 @@ class CapitalGainsRequest(BaseModel):
     acquisition_price: NonNegativeInt = Field(description="취득가액(실지거래가액)")
     expenses: NonNegativeInt = Field(0, description="필요경비(취득세·중개수수료·자본적지출 등)")
     holding_years: NonNegativeInt = Field(0, description="보유기간(만 연수)")
-    asset_type: Literal["주택", "토지·건물"] = "주택"
+    asset_type: Literal["주택", "토지·건물", "분양권", "조합원입주권", "기타자산", "주식", "파생상품", "신탁수익권"] = Field(
+        "주택", description="양도 자산(기타자산: 회원권·특정주식·영업권 등)")
     is_one_home: bool = Field(False, description="양도일 현재 1세대 1주택인지")
     residence_years: NonNegativeInt = Field(0, description="보유기간 중 거주기간(만 연수)")
     acquired_in_adjusted_area: bool = Field(False, description="취득 당시 조정대상지역 주택인지")
     multi_home_surcharge: Literal["없음", "2주택", "3주택이상"] = Field(
         "없음", description="조정대상지역 다주택 중과 대상 구분(제104조 제7항)")
+    non_business_land: bool = Field(False, description="비사업용 토지(기본세율 + 10%p)")
+    unregistered: bool = Field(False, description="미등기 양도(70%, 공제 없음)")
+    pre_approval_gain: NonNegativeInt = Field(0, description="조합원입주권: 관리처분계획인가 전 양도차익(원조합원)")
+    pre_approval_years: NonNegativeInt = Field(0, description="조합원입주권: 기존 주택 취득일부터 관리처분계획인가일까지 연수")
+    stock_market: Literal["국내상장", "국내비상장", "국외"] = Field("국내비상장", description="주식 구분")
+    major_shareholder: bool = Field(False, description="대주주(상장 1%·코스닥 2% 또는 50억원, 비상장 4% 또는 10억원 등)")
+    sme: bool = Field(False, description="중소기업 주식")
+    same_group_loss: NonNegativeInt = Field(0, description="같은 그룹 다른 자산의 같은 해 양도차손(통산)")
 
 
 class InheritanceRequest(BaseModel):

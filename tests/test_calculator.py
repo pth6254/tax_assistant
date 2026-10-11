@@ -54,6 +54,9 @@ _BRACKETS[("소득세", "퇴직_환산급여공제")] = [
     {"bracket_from": lower, "bracket_to": None, "rate": rate, "progressive_deduction": constant}
     for lower, rate, constant in ((0, 1.0, 0), (8000000, 0.6, -3200000), (70000000, 0.55, -6700000),
                                   (100000000, 0.45, -16700000), (300000000, 0.35, -46700000))]
+_BRACKETS[("양도소득세", "주식_대주주")] = [
+    {"bracket_from": 0, "bracket_to": None, "rate": 0.20, "progressive_deduction": 0},
+    {"bracket_from": 300000000, "bracket_to": None, "rate": 0.25, "progressive_deduction": 15000000}]
 _BRACKETS[("부가가치세", "default")] = [{"bracket_from": 0, "bracket_to": None, "rate": 0.10, "progressive_deduction": 0}]
 
 _DEDUCTIONS: dict[tuple[str, str], dict] = {
@@ -144,6 +147,16 @@ _DEDUCTIONS: dict[tuple[str, str], dict] = {
         [1, "0.90"], [3, "0.75"], [6, "0.50"], [12, "0.30"], [18, "0.20"], [24, "0.10"]]}},
     ("가산세", "기한후신고_감면"):      {"amount": None, "rate": None, "condition": {"bands": [
         [1, "0.50"], [3, "0.30"], [6, "0.20"]]}},
+    ("양도소득세", "분양권_1년미만"): {"amount": None, "rate": 0.7},
+    ("양도소득세", "분양권"): {"amount": None, "rate": 0.6},
+    ("양도소득세", "미등기"): {"amount": None, "rate": 0.7},
+    ("양도소득세", "비사업용토지_가산율"): {"amount": None, "rate": 0.1},
+    ("양도소득세", "주식_대주주_단기_비중소"): {"amount": None, "rate": 0.3},
+    ("양도소득세", "주식_소액_중소"): {"amount": None, "rate": 0.1},
+    ("양도소득세", "주식_소액_비중소"): {"amount": None, "rate": 0.2},
+    ("양도소득세", "주식_국외_중소"): {"amount": None, "rate": 0.1},
+    ("양도소득세", "주식_국외"): {"amount": None, "rate": 0.2},
+    ("양도소득세", "파생상품_탄력세율"): {"amount": None, "rate": 0.1},
     ("가산세", "무신고가산세_일반"):   {"amount": None, "rate": 0.20},
     ("가산세", "무신고가산세_부정"):   {"amount": None, "rate": 0.40},
     ("가산세", "과소신고가산세_일반"): {"amount": None, "rate": 0.10},

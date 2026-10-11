@@ -46,6 +46,11 @@ export default function CalculatorScreen({ initial, onInitialConsumed, onAskAbou
   const visible = fields.filter(f => !(f.key === 'business_type' && !form.is_simplified) && !(['is_negligent', 'filed_within_months', 'revenue'].includes(f.key) && form.penalty_type === '납부지연')
     && !(['zero_rated_sales', 'exempt_sales', 'non_deductible_purchases', 'common_purchases', 'deemed_purchases'].includes(f.key) && form.is_simplified)
     && !(f.key === 'withheld' && !hasFinancial)
+    && !(['is_one_home', 'residence_years', 'acquired_in_adjusted_area', 'multi_home_surcharge'].includes(f.key) && tab === 'capital' && (form.asset_type || '주택') !== '주택')
+    && !(f.key === 'non_business_land' && form.asset_type !== '토지·건물')
+    && !(f.key === 'unregistered' && ['주식', '파생상품', '신탁수익권'].includes(form.asset_type))
+    && !(['pre_approval_gain', 'pre_approval_years'].includes(f.key) && form.asset_type !== '조합원입주권')
+    && !(['stock_market', 'major_shareholder', 'sme'].includes(f.key) && form.asset_type !== '주식')
     && !(['simple_rate', 'simple_excess_rate'].includes(f.key) && tab === 'income' && (form.business_method || '장부') === '장부')
     && !(['standard_rate', 'major_expenses', 'double_entry'].includes(f.key) && tab === 'income' && form.business_method !== '기준경비율')
     && !(f.key === 'expense' && tab === 'income' && (form.business_method || '장부') !== '장부')
@@ -65,7 +70,7 @@ export default function CalculatorScreen({ initial, onInitialConsumed, onAskAbou
       <div className="calculator-layout">
         <form className="calculation-form" ref={formElement} onSubmit={submit} noValidate>
           <div className="section-heading"><h2>계산 조건</h2><span className="unit-label">금액 입력: 만원</span></div>
-          {tab === 'capital' && <p className="small muted">부동산만 지원합니다. 주식·기타 자산과 비과세 판정은 지원하지 않습니다.</p>}
+          {tab === 'capital' && <p className="small muted">자산 1건 기준입니다. 1세대 1주택·중과·대주주 여부는 입력값을 따릅니다.</p>}
           {visible.map((field, i) => <div className="field" key={field.key}>
             {field.type === 'checkbox' ? <label className="checkbox-field"><input type="checkbox" checked={!!form[field.key]} onChange={e => change(field.key, e.target.checked)} />{field.label}{field.hint && <span className="field-hint">{field.hint}</span>}</label>
               : <><label htmlFor={'calc-' + field.key}>{field.label}{field.required && <span className="required"> *</span>}</label>
