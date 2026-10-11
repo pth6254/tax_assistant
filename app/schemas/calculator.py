@@ -165,6 +165,13 @@ class VatRequest(BaseModel):
     prepaid_tax: NonNegativeInt = Field(0, description="예정고지(부과)세액·예정신고 미환급세액")
 
 
+class RetirementTaxRequest(BaseModel):
+    """퇴직소득세(2020년 이후 퇴직). 근속연수는 1년 미만을 1년으로 올린 정산근속연수."""
+    retirement_pay: NonNegativeInt = Field(description="과세대상 퇴직급여(퇴직금·퇴직연금 일시금, 비과세 제외)")
+    service_years: Annotated[int, Field(ge=1, strict=True)] = Field(description="정산근속연수(1년 미만은 1년)")
+    prepaid_tax: NonNegativeInt = Field(0, description="이미 원천징수된 퇴직소득세")
+
+
 class PenaltyTaxRequest(BaseModel):
     """국세 신고·납부 가산세. 무신고·과소신고는 신고 가산세와 납부지연가산세를 함께 계산한다."""
     unpaid_tax: NonNegativeInt = Field(description="신고하지 않았거나 덜 신고·납부한 세액")

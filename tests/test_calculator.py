@@ -50,6 +50,10 @@ _BRACKETS[("소득세", "연금소득공제")] = [
     {"bracket_from": lower, "bracket_to": None, "rate": rate, "progressive_deduction": constant}
     for lower, rate, constant in ((0, 1.0, 0), (3500000, 0.4, -2100000), (7000000, 0.2, -3500000),
                                   (14000000, 0.1, -4900000))]
+_BRACKETS[("소득세", "퇴직_환산급여공제")] = [
+    {"bracket_from": lower, "bracket_to": None, "rate": rate, "progressive_deduction": constant}
+    for lower, rate, constant in ((0, 1.0, 0), (8000000, 0.6, -3200000), (70000000, 0.55, -6700000),
+                                  (100000000, 0.45, -16700000), (300000000, 0.35, -46700000))]
 _BRACKETS[("부가가치세", "default")] = [{"bracket_from": 0, "bracket_to": None, "rate": 0.10, "progressive_deduction": 0}]
 
 _DEDUCTIONS: dict[tuple[str, str], dict] = {
@@ -79,6 +83,9 @@ _DEDUCTIONS: dict[tuple[str, str], dict] = {
     ("소득세", "일용근로_원천징수율"):         {"amount": None, "rate": 0.06},
     ("소득세", "일용근로_세액공제율"):         {"amount": None, "rate": 0.55},
     ("소득세", "소액부징수"):                  {"amount": 1000, "rate": None},
+    ("소득세", "퇴직소득_근속연수공제"):      {"amount": None, "rate": None, "condition": {"tiers": [
+        [5, 0, 1000000, 0], [10, 5000000, 2000000, 5], [20, 15000000, 2500000, 10], [None, 40000000, 3000000, 20]]}},
+    ("소득세", "퇴직소득_지방소득세_비율"):    {"amount": None, "rate": 0.10},
     ("소득세", "이자소득등종합과세기준금액"):     {"amount": 20000000,  "rate": None},
     ("소득세", "금융소득원천징수율"):             {"amount": None, "rate": 0.14},
     ("소득세", "비영업대금이익원천징수율"):       {"amount": None, "rate": 0.25},

@@ -9,10 +9,11 @@ from app.schemas.calculator import (
     IncomeTaxRequest,
     InheritanceRequest,
     PenaltyTaxRequest,
+    RetirementTaxRequest,
     VatRequest,
 )
 from app.services.calculator import (capital_gains, financial_income_tax, gift_tax, income_tax, inheritance,
-                                     penalty_tax, vat)
+                                     penalty_tax, retirement, vat)
 
 CALCULATORS = {
     "income_tax":    (IncomeTaxRequest,    income_tax),
@@ -22,6 +23,7 @@ CALCULATORS = {
     "gift":          (GiftTaxRequest,      gift_tax),
     "vat":           (VatRequest,          vat),
     "penalty_tax":   (PenaltyTaxRequest,   penalty_tax),
+    "retirement":    (RetirementTaxRequest, retirement),
 }
 
 @dataclass

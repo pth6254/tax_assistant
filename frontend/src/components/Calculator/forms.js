@@ -1,4 +1,4 @@
-import { calcIncomeTax, calcCapitalGains, calcInheritance, calcGiftTax, calcVat, calcPenaltyTax } from '../../api/calculatorApi.js'
+import { calcIncomeTax, calcCapitalGains, calcInheritance, calcGiftTax, calcVat, calcPenaltyTax, calcRetirement } from '../../api/calculatorApi.js'
 
 // 챗봇 계산기 엔진(app/services/calculator/engine.py _TOOLS)의 도구명 → 화면 탭 키
 const TOOL_TO_TAB = {
@@ -9,6 +9,7 @@ const TOOL_TO_TAB = {
   gift:          'gift',
   vat:           'vat',
   penalty_tax:   'penalty',
+  retirement:    'retirement',
 }
 
 const TABS = [
@@ -17,6 +18,7 @@ const TABS = [
   { key: 'inheritance', label: '상속세',    icon: '📜' },
   { key: 'gift',        label: '증여세',    icon: '🎁' },
   { key: 'vat',         label: '부가가치세', icon: '🧾' },
+  { key: 'retirement',  label: '퇴직소득세', icon: '🧳' },
   { key: 'penalty',     label: '가산세',    icon: '⏰' },
 ]
 
@@ -238,6 +240,20 @@ const FORMS = {
       prepaid_tax:   toWon(f.prepaid_tax),
     }),
   },
+  retirement: {
+    apiFn: calcRetirement,
+    fields: [
+      { key: 'retirement_pay', label: '퇴직급여',     unit: '만원', required: true, hint: '퇴직금·퇴직연금 일시금(비과세 제외)' },
+      { key: 'service_years',  label: '근속연수',     unit: '년',   required: true, hint: '1년 미만은 1년으로 올림 · 중간정산 시 중복기간 제외' },
+      { key: 'prepaid_tax',    label: '원천징수된 세액', unit: '만원', required: false },
+    ],
+    defaults: {},
+    toPayload: (f) => ({
+      retirement_pay: toWon(f.retirement_pay),
+      service_years:  toInt(f.service_years, 1),
+      prepaid_tax:    toWon(f.prepaid_tax),
+    }),
+  },
   penalty: {
     apiFn: calcPenaltyTax,
     fields: [
@@ -311,6 +327,9 @@ const QUESTION_BUILDERS = {
   vat: (f, r) =>
     `매출 ${f.sales || 0}만원, 매입 ${f.purchases || 0}만원${f.is_simplified ? ` (간이과세자, ${f.business_type} 업종)` : ' (일반과세자)'} 기준으로 ` +
     `계산한 부가가치세 ${r.final_tax < 0 ? '환급세액' : '납부세액'}이 ${fmtWon(Math.abs(r.final_tax))}로 나왔습니다. 이 계산이 맞는지 확인해주세요.`,
+  retirement: (f, r) =>
+    `퇴직급여 ${f.retirement_pay || 0}만원, 근속 ${f.service_years || 0}년 기준으로 계산한 퇴직소득세가 ${fmtWon(r.final_tax)}로 나왔습니다. ` +
+    `이 계산이 맞는지 확인하고, 연금계좌로 받는 경우와 비교해 주세요.`,
   penalty: (f, r) =>
     `${f.penalty_type || '무신고'} 세액 ${f.unpaid_tax || 0}만원${f.is_negligent && f.penalty_type !== '납부지연' ? ' (부정행위)' : ''}, 납부지연 ${f.days_late || 0}일` +
     `${Number(f.filed_within_months || 0) > 0 && f.penalty_type !== '납부지연' ? `, 기한 후 ${f.filed_within_months}개월 안에 스스로 신고` : ''} 기준으로 ` +

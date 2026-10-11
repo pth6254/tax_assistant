@@ -1,0 +1,14 @@
+{
+  "source": {
+    "title": "국세청 「퇴직소득」 안내(국세신고안내 > 개인신고안내 > 퇴직소득) 계산 사례: 홍길동, 근속연수 20년, 퇴직급여 1억원",
+    "url": "https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?mi=6444&cntntsId=7880",
+    "retrieved": "2026-10-11",
+    "note": "페이지의 천원 단위 계산표를 원으로 옮겼다. 현행 근속연수공제표(2023년 이후 퇴직)와 2024년 이후 기본세율을 쓴다."
+  },
+  "cases": [
+    {"id": "nts-hong-20-years", "title": "근속 20년, 퇴직급여 1억원",
+     "inputs": {"retirement_pay": 100000000, "service_years": 20},
+     "expected": {"service": 40000000, "converted": 36000000, "converted_deduction": 24800000, "taxable": 11200000,
+                  "converted_tax": 672000, "calculated_tax": 1120000}}
+  ]
+}

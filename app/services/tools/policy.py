@@ -28,7 +28,7 @@ def has_lookup_intent(query):
 CALC_TAX = {
     "income_tax": r"소득|수입", "capital_gains": r"양도|매도", "inheritance": r"상속|유산",
     "gift": r"증여", "vat": r"부가세|부가가치세|매출|매입|VAT", "penalty_tax": r"가산세",
-    "financial_income_tax": r"금융소득|이자|배당",
+    "financial_income_tax": r"금융소득|이자|배당", "retirement": r"퇴직",
 }
 FINANCIAL_INCOME = re.compile(r"금융\s*(?:소득|종합)|이자\s*소득|배당\s*소득")
 
@@ -100,6 +100,14 @@ def inheritance_scope(query, history=None):
     return bool(INHERITANCE.search(previous)) and not NOT_INHERITANCE.search(previous)
 
 
+RETIREMENT = re.compile(r"퇴직금|퇴직급여|퇴직소득|퇴직\s*수당|퇴직연금\s*일시금")
+
+
+def retirement_scope(query, history=None):
+    """A retirement payment is being calculated in this turn, or the previous one for a follow-up."""
+    return _scoped(RETIREMENT, re.compile(r"가산세|양도|증여|상속"), query, history)
+
+
 VAT = re.compile(r"부가세|부가가치세|VAT", re.I)
 PENALTY = re.compile(r"가산세")
 
@@ -141,6 +149,7 @@ ALIASES = {
     "purchases": "매입액|매입", "exempt_sales": "면세매출|면세 매출",
     "unpaid_tax": "미납세액|미납 세액|미납세금", "days_late": "지연일수|지연 일수",
     "filed_within_months": "기한 후 신고|수정신고", "revenue": "수입금액",
+    "retirement_pay": "퇴직금|퇴직급여|퇴직소득", "service_years": "근속연수|근속 연수|근속기간",
     "zero_rated_sales": "영세율 매출|영세율매출", "common_purchases": "공통매입", "non_deductible_purchases": "불공제 매입",
     "deemed_purchases": "면세농산물", "card_sales": "카드매출|카드 매출", "card_credit_used": "이미 받은 카드공제",
     "prepaid_tax": "기납부세액|기납부 세액|중간예납세액|예정고지세액|예정고지",
@@ -209,7 +218,7 @@ def input_proof(field, value, texts):
                 unit = hit['unit']
                 expected_unit = {"holding_years": "년", "residence_years": "년", "days_late": "일", "children_count": "명",
                                  "personal_deduction_count": "명", "parents_count": "명", "elderly_count": "명",
-                                 "minor_years": "년", "disabled_years": "년"}.get(field)
+                                 "minor_years": "년", "disabled_years": "년", "service_years": "년"}.get(field)
                 if expected_unit and unit not in {None, expected_unit}:
                     return None
                 if not expected_unit and (unit in {"명", "년", "일"} or unit is None and Decimal(hit['number'].replace(',', '')) != 0):

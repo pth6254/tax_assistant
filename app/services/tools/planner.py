@@ -15,7 +15,7 @@ from app.services.tools.registry import TOOL_SCHEMAS
 from app.services.tools.executor import ToolRun, execute_tool
 from app.services.tools.policy import DOCUMENT_INTENT, CALC_TAX, ALIASES, check_proposal, has_lookup_intent
 from app.services.tools.policy import (capital_gains_scope, financial_income_scope, gift_scope, income_tax_scope,
-                                       inheritance_scope, penalty_scope, vat_scope)
+                                       inheritance_scope, penalty_scope, retirement_scope, vat_scope)
 
 logger = logging.getLogger(__name__)
 _AMOUNT_RE = re.compile(r"(?:\d[\d,.]*|[일이삼사오육칠팔구십백천]+)\s*(?:억|천만|백만|천|만|원)")
@@ -69,7 +69,7 @@ async def select_tool(query: str, history: list[dict] | None = None) -> tuple[st
     prompt = chat_prompt(
         "세무 보조 도구를 최대 하나 선택하고 JSON만 출력하세요. "
         "원문 조회는 law_lookup, 내 업로드 문서 검색은 document_search. "
-        "세액 계산은 income_tax(근로·사업·기타·연금·이자·배당 소득의 종합소득세, 금융소득 종합과세 포함), capital_gains(양도소득세), inheritance(상속세), "
+        "세액 계산은 retirement(퇴직소득세), income_tax(근로·사업·기타·연금·이자·배당 소득의 종합소득세, 금융소득 종합과세 포함), capital_gains(양도소득세), inheritance(상속세), "
         "gift(증여세), vat(부가가치세), penalty_tax(가산세)를 사용하세요. "
         "위 계산기의 지원 대상 밖인 세액 계산은 formula_calculation을 선택하고 params는 빈 객체로 두세요. "
         "일반 설명이나 기존 계산기의 단순 입력 부족을 formula_calculation으로 보내지 마세요. "
@@ -97,6 +97,11 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
     calculation_followup = is_calculation_followup(query, history)
     if not has_tool_intent(query) and not calculation_followup:
         return None
+    if (has_calculation_intent(query) or calculation_followup) and retirement_scope(query, history):
+        # 퇴직소득은 종합소득과 따로 과세하므로 종합소득세 해석보다 먼저 본다.
+        result = await retirement_calculation(query, history, on_event)
+        if result is not None:
+            return result
     if (has_calculation_intent(query) or calculation_followup) and income_tax_scope(query, history):
         # The deterministic calculator answers when the amounts can be read; for financial
         # income the model's free-form formula is the fallback, not the first choice.
@@ -262,6 +267,12 @@ async def penalty_calculation(query, history, on_event=None):
     """가산세 계산기 결과, a request for the facts it must not assume, or None for the model path."""
     from app.services.calculator.penalty_inputs import stated_penalty_inputs
     return await _stated_calculation("penalty_tax", "가산세", stated_penalty_inputs(query, history), on_event)
+
+
+async def retirement_calculation(query, history, on_event=None):
+    """퇴직소득세 계산기 결과, a request for the facts it must not assume, or None for the model path."""
+    from app.services.calculator.retirement_inputs import stated_retirement_inputs
+    return await _stated_calculation("retirement", "퇴직소득세", stated_retirement_inputs(query, history), on_event)
 
 
 def _emit_result(result, params, callback):
