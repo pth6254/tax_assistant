@@ -119,8 +119,9 @@ async def test_chat_asks_for_missing_facts_without_calling_the_model(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_unmodelled_sale_goes_to_tool_selection(monkeypatch):
+async def test_unmodelled_sale_goes_to_the_reference_formula_without_a_selection(monkeypatch):
     select = AsyncMock(return_value=None)
     monkeypatch.setattr(planner, 'select_tool', select)
-    await planner.run_tools_for_query('해외 아파트를 5억에 사서 8억에 팔면 양도세 얼마야?', user_id=str(uuid4()))
-    select.assert_awaited_once()
+    result = await planner.run_tools_for_query('해외 아파트를 5억에 사서 8억에 팔면 양도세 얼마야?', user_id=str(uuid4()))
+    assert result.tool == 'formula_calculation'
+    select.assert_not_awaited()

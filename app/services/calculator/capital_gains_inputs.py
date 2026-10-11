@@ -45,6 +45,12 @@ NOT_MAJOR = re.compile(r"대주주\s*(?:가|는|이)?\s*아니|소액\s*주주|�
 SME = re.compile(r"중소기업|중소\s*기업")
 DERIVATIVE = re.compile(r"파생|선물|옵션|CFD", re.I)
 LOSS = r"손실|양도차손"
+# "1세대 1주택이 아니야" names the rule only to deny it.
+NOT_ONE_HOME = re.compile(r"(?:1\s*세대\s*)?1\s*주택(?:자)?\s*(?:이|은|는|가|에)?\s*(?:아니|아닌|아닙|해당\s*(?:안|하지\s*않|되지\s*않|없))|"
+                          r"1\s*세대\s*1\s*주택(?:이|은|는)?\s*(?:안\s*돼|못)")
+# 같은 해 먼저 양도한 자산이 있으면 기본공제는 이미 쓰였고 제104조 제5항의 비교과세를 한다.
+PRIOR_SALE = re.compile(r"(?:이미|먼저|앞서)[^.\n]{0,20}?(?:팔았|팔고|양도했|양도하고|양도한|매도했|매도하고|처분했)|"
+                        r"같은\s*해[^.\n]{0,20}?(?:팔|양도|매도)|올해\s*(?:두|2|세|3)\s*(?:번째|건)")
 ONE_HOME = re.compile(r"1\s*세대\s*1\s*주택|(?<![\d가-힣])1\s*주택|일주택|(?:집|주택|아파트)\s*(?:한|1)\s*채|한\s*채(?:만|뿐)?")
 NOT_LIVED = re.compile(r"(?:거주|실거주|살)(?:하지|지|은|는)?\s*(?:않|안\s*(?:했|함|하))|거주\s*(?:안|없)|전세\s*(?:주|줬|놓)|임대\s*(?:줬|주고|놓)")
 LIVED_THROUGHOUT = re.compile(r"(?:계속|쭉|내내|줄곧|보유\s*기간\s*(?:동안|내내))\s*(?:거주|살)")
@@ -85,7 +91,7 @@ def _amount(label, verb, texts):
 
 
 def _holding_years(text):
-    patterns = [r"보유\s*기간\s*(?:은|는|이|:)?\s*" + YEARS,
+    patterns = [r"보유\s*(?:기간\s*)?(?:은|는|이|:)?\s*" + YEARS,
                 YEARS + r"\s*(?:\d+\s*개월\s*)?(?:동안\s*|간\s*)?(?:보유|가지고|갖고|소유)",
                 YEARS + r"\s*전에?\s*(?:샀|사서|산|구입|구매|취득|매수|분양)"]
     months = [r"(\d+)\s*개월\s*(?:동안\s*|간\s*)?(?:보유|가지고|갖고|소유)", r"(\d+)\s*개월\s*전에?\s*(?:샀|사서|산|구입|취득|매수)"]
@@ -102,7 +108,7 @@ def _residence_years(text, holding):
         return 0
     if LIVED_THROUGHOUT.search(text) and holding is not None:
         return holding
-    patterns = [r"거주\s*기간\s*(?:은|는|이|:)?\s*" + YEARS,
+    patterns = [r"(?<!비)거주\s*(?:기간\s*)?(?:은|는|이|:)?\s*" + YEARS,
                 YEARS + r"\s*(?:\d+\s*개월\s*)?(?:동안\s*|간\s*)?(?:거주|실거주|살았|살고|살다)"]
     values = {int(m.group(1)) for p in patterns for m in re.finditer(p, text)}
     if len(values) > 1:
@@ -160,6 +166,37 @@ def stated_capital_gains_inputs(query, history=None):
         if acquisition is None:
             return MissingInputs(["취득가액(산 금액)"])
         return _securities(text, transfer, acquisition, expenses, holding)
+    prior = _prior_sale(texts)
+    result = _real_estate(text, transfer, acquisition, expenses, holding, residence)
+    if prior is None or result is None:
+        return result
+    if hasattr(prior, "labels") or hasattr(result, "labels"):
+        return MissingInputs([*getattr(result, "labels", []), *getattr(prior, "labels", [])])
+    result.params.update(prior)
+    result.assumptions.append(f"같은 해 먼저 양도한 자산(과세표준 {prior['prior_same_year_taxable']:,}원, 산출세액 "
+                              f"{prior['prior_same_year_tax']:,}원)과 합산 비교과세했고, 기본공제는 먼저 양도한 자산에서 받은 것으로 "
+                              "보았습니다(제104조 제5항).")
+    return result
+
+
+def _prior_sale(texts):
+    """None (no earlier sale this year), the earlier sale's figures, or MissingInputs asking for them."""
+    text = "\n".join(texts)
+    if not PRIOR_SALE.search(text):
+        return None
+    try:
+        taxable = next((v for v in (stated_amount(r"과세표준", t) for t in reversed(texts)) if v is not None), None)
+        tax = next((v for v in (stated_amount(r"산출세액", t) for t in reversed(texts)) if v is not None), None)
+    except ValueError:
+        return MissingInputs(["같은 해 먼저 양도한 자산의 양도소득 과세표준과 산출세액"])
+    if taxable is None or tax is None:
+        return MissingInputs(["같은 해 먼저 양도한 부동산 등의 양도소득 과세표준과 산출세액(합산 비교과세에 쓰고, "
+                              "기본공제 250만원은 먼저 양도한 자산에서 받은 것으로 봄)"])
+    return {"prior_same_year_taxable": taxable, "prior_same_year_tax": tax}
+
+
+def _real_estate(text, transfer, acquisition, expenses, holding, residence):
+    """부동산·권리: 주택, 토지·건물, 분양권, 조합원입주권, 기타자산."""
     special = ("분양권" if PRESALE.search(text) else "조합원입주권" if MEMBERSHIP_RIGHT.search(text)
                else "기타자산" if OTHER_ASSET.search(text) else None)
     if special:
@@ -167,7 +204,7 @@ def stated_capital_gains_inputs(query, history=None):
     house, land = bool(HOUSE.search(text)), bool(LAND.search(text))
     if house and land:
         return None
-    if house and MULTI_HOME.search(text):
+    if house and (MULTI_HOME.search(text) or NOT_ONE_HOME.search(text)):
         return _multi_home(text, transfer, acquisition, expenses, holding)
     missing = []
     if acquisition is None:
@@ -176,7 +213,7 @@ def stated_capital_gains_inputs(query, history=None):
         missing.append("보유기간")
     if not (house or land):
         missing.append("양도한 자산 종류(주택 또는 토지·건물)")
-    one_home = bool(ONE_HOME.search(text))
+    one_home = bool(ONE_HOME.search(text)) and not NOT_ONE_HOME.search(text)
     if house and not one_home:
         missing.append("1세대 1주택 여부(양도일 현재 세대가 가진 주택 수)")
     if house and one_home and (holding is None or holding >= 2):

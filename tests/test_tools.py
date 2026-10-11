@@ -51,13 +51,31 @@ def test_year_is_not_an_amount_but_missing_input_calculation_is_routed():
 
 
 @pytest.mark.asyncio
-async def test_amount_followup_after_calculation_still_uses_tool(monkeypatch):
+async def test_amount_followup_replaces_the_previous_amount(monkeypatch):
     select = AsyncMock(return_value=None)
     monkeypatch.setattr(planner, "select_tool", select)
-    await planner.run_tools_for_query("그럼 6000만원이면?", user_id=UID, history=[
-        {"role": "user", "content": "소득 5000만원 종합소득세 계산해줘"},
+    asked = []
+
+    async def calculation(query, history, on_event=None, facts_query=None):
+        asked.append(query)
+
+    monkeypatch.setattr(planner, "tax_calculation", calculation)
+    await planner.run_tools_for_query("그럼 7천만원이면?", user_id=UID, history=[
+        {"role": "user", "content": "연봉 5천만원이면 소득세 얼마야?"}, {"role": "assistant", "content": "..."},
     ])
-    select.assert_awaited_once()
+    assert asked[0] == "연봉 7천만원이면 소득세 얼마야?"
+    select.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_amount_followup_asks_which_of_several_amounts_changes(monkeypatch):
+    select = AsyncMock(return_value=None)
+    monkeypatch.setattr(planner, "select_tool", select)
+    result = await planner.run_tools_for_query("그럼 2억이면?", user_id=UID, history=[
+        {"role": "user", "content": "매출 1억원, 매입 6천만원이면 부가세 얼마야?"},
+    ])
+    assert result.status == "needs_input" and "매출 1억원" in result.context and "매입 6천만원" in result.context
+    select.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -34,7 +34,7 @@ DEPENDANTS = re.compile(r"부양가족(?:은|는|이|가|:)?\s*(\d+)\s*명")
 UNSUPPORTED = re.compile(
     FINANCIAL_UNSUPPORTED.pattern + r"|퇴직금|퇴직소득|양도|증여|상속|법인세|법인소득|월급|월\s*급여|"
     r"공동사업|감면|가산세|의료비|교육비|보험료|기부금|자녀세액|연금계좌\s*세액|신용카드|중소기업|매월|월\s*소득|"
-    r"복권|당첨|로또|보증금|간주임대료|전세|상가\s*임대|종교인")
+    r"복권|당첨|로또|상가\s*임대|사무실\s*임대|점포")
 PUBLIC_PENSION = r"국민연금|공무원연금|군인연금|사학연금|공적연금"
 PRIVATE_PENSION = r"연금저축|IRP|개인형\s*퇴직연금|퇴직연금|사적연금|개인연금"
 DEEMED_60 = r"강연료|강의료|원고료|인세|자문료|심사료|출연료|번역료"
@@ -48,6 +48,12 @@ MAJOR = r"주요경비"
 DAILY_WAGE = r"일당|일급"
 DAYS = re.compile(r"(\d+)\s*일\s*(?:동안|간|일했|일하|근무|일을)")
 AGE = re.compile(r"(?<!\d)(\d{2})\s*(?:세|살)")
+DEPOSIT = r"(?:임대\s*)?보증금(?:\s*합계|\s*총액)?|전세\s*보증금"
+DEPOSIT_WORDS = re.compile(r"보증금|간주임대료|전세")
+HOUSE_COUNT = re.compile(r"(?<!\d)(\d+)\s*(?:채|주택(?!\s*임대)|가구)|(한|두|세|네|다섯)\s*채")
+KOREAN_COUNT = {"한": 1, "두": 2, "세": 3, "네": 4, "다섯": 5}
+RELIGIOUS = r"종교인\s*소득|종교인"
+RELIGIOUS_AS_WAGE = re.compile(r"근로소득으로\s*(?:신고|원천징수|받|처리)")
 SINCERE = re.compile(r"(?<![가-힣])성실사업자(?!\s*(?:가|는|이)?\s*아니)")
 
 
@@ -118,8 +124,16 @@ def stated_income_tax_inputs(query, history=None, *, basic_deduction):
         fee = _near(DEEMED_60, texts)
         rental, rental_expense = _near(RENTAL, texts), _near(RENTAL_EXPENSE, texts)
         major, daily = _latest(MAJOR, texts), _near(DAILY_WAGE, texts)
+        deposits, religious = _near(DEPOSIT, texts), _near(RELIGIOUS, texts)
     except ValueError:
         return None
+    if DEPOSIT_WORDS.search(text) and deposits is None:
+        return None   # 보증금이 말해졌지만 금액을 읽지 못함: 추측하지 않는다.
+    if re.search(r"종교인", text) and religious is None:
+        return None
+    houses = None
+    if deposits is not None and (m := HOUSE_COUNT.search(text)):
+        houses = int(m.group(1)) if m.group(1) else KOREAN_COUNT[m.group(2)]
     simple_rate, excess_rate = _rate_of(SIMPLE_RATE, text), _rate_of(EXCESS_RATE, text)
     standard_rate = _rate_of(STANDARD_RATE, text)
     method = "기준경비율" if re.search(r"기준경비율", text) else "단순경비율" if re.search(r"단순경비율", text) else "장부"
@@ -146,7 +160,7 @@ def stated_income_tax_inputs(query, history=None, *, basic_deduction):
     if prepaid is not None and financial and re.search(r"원천징수세액", text):
         return None
     stated_kinds = [wage, revenue, business_amount, other, *gross_only.values(), wage_amount, public_pension,
-                    private_pension, fee, rental, daily]
+                    private_pension, fee, rental, daily, deposits, religious]
     if not financial and all(v is None for v in stated_kinds):
         # A bare "소득 5천만원" does not say which deduction and credit apply.
         return MissingInputs(["소득의 종류(근로소득 총급여액, 사업소득 수입금액과 필요경비, 기타·연금소득금액, 이자·배당)"]) \
@@ -159,6 +173,9 @@ def stated_income_tax_inputs(query, history=None, *, basic_deduction):
         missing.append("기준경비율 계산에 필요한 업종의 기준경비율·단순경비율과 주요경비(매입·임차료·인건비) 금액")
     if method != "장부" and revenue is None:
         missing.append("사업 총수입금액")
+    if deposits is not None and houses is None:
+        missing.append("임대하는 주택 수(40㎡ 이하·기준시가 2억원 이하 소형주택 제외, 간주임대료는 3주택 이상 또는 "
+                       "2주택·보증금 12억원 초과일 때만)")
     if daily is not None and days is None:
         missing.append("일용근로 일한 날수")
     if gross_only.get("연금소득") is not None and other is None:
@@ -189,7 +206,9 @@ def stated_income_tax_inputs(query, history=None, *, basic_deduction):
               "misc_income": fee or 0, "misc_expense_rule": "60%" if fee else "실제", "misc_expenses": 0,
               "rental_income": rental or 0, "rental_expenses": rental_expense or 0,
               "registered_rental": bool(REGISTERED.search(text)), "daily_wage": daily or 0,
-              "daily_work_days": days or 0}
+              "daily_work_days": days or 0, "rental_deposits": deposits or 0, "rental_house_count": houses or 0,
+              "religious_income": religious or 0,
+              "religious_as_wage": bool(religious) and bool(RELIGIOUS_AS_WAGE.search(text))}
     if method != "장부":
         params["expense"] = 0
     params.update(financial)
@@ -204,14 +223,21 @@ def stated_income_tax_inputs(query, history=None, *, basic_deduction):
     if rental:
         assumptions.append("주택임대 총수입금액이 2천만원 이하면 분리과세(14%)와 종합과세 중 적은 쪽을 골랐습니다"
                            + ("." if rental_expense is not None else "(임대 필요경비를 말하지 않아 종합과세 쪽은 0원으로 비교)."))
+    if deposits:
+        assumptions.append(f"보증금 합계 {deposits:,}원을 1년 내내 받은 것으로 보고 임대 주택은 {houses}채(소형주택 제외)로 "
+                           "보았습니다. 보증금 운용으로 생긴 이자·배당은 없다고 보았습니다.")
+    if religious:
+        assumptions.append("종교인소득은 비과세 소득(학자금·식사대 등)을 뺀 금액으로 보았고, "
+                           + ("근로소득으로 신고해 총급여에 더했습니다." if params["religious_as_wage"] else
+                              "기타소득으로 신고해 필요경비 표(80~20%)를 적용했습니다. 근로소득으로 신고할 수도 있습니다."))
     if daily:
         assumptions.append("일용근로소득은 매일 지급받아 원천징수로 과세가 끝나는 것으로 보았습니다.")
     if wage is not None and re.search(r"연봉|(?<!총)급여", text):
         assumptions.append("연봉(급여)은 비과세소득을 뺀 총급여액으로 보았습니다.")
     if business_amount is not None:
         assumptions.append("사업소득금액은 필요경비를 이미 뺀 금액으로 보았습니다.")
-    unnamed = [name for name, present in (("근로소득", wage or daily), ("사업소득", revenue or business_amount or rental),
-                                           ("기타·연금소득", other or fee or public_pension or private_pension),
+    unnamed = [name for name, present in (("근로소득", wage or daily), ("사업소득", revenue or business_amount or rental or deposits),
+                                           ("기타·연금소득", other or fee or public_pension or private_pension or religious),
                                            ("금융소득", financial or None))
                if not present]
     if unnamed:

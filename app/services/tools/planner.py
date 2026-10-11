@@ -24,8 +24,24 @@ _AMOUNT_RE = re.compile(r"(?:\d[\d,.]*|[일이삼사오육칠팔구십백천]+)\
 _CALC_ACTION = re.compile(r"(?:계산|산출)(?:을|를)?\s*(?:해\s*(?:줘|주세요|봐)|해주세요|해라|하라|하시오|부탁|좀|[.!?]*$)")
 _TAX_AMOUNT_QUESTION = re.compile(
     r"(?:세금|세액|납부액|환급액|소득세|양도세|상속세|증여세|부가세|부가가치세|가산세)"
-    r"(?:은|는|이|가|을|를)?\s*얼마(?:나)?\s*(?:야|예요|인가|인지|입니까|나와|나오|내|납부|부과|되|정도|[?!]*$)"
+    r"(?:은|는|이|가|을|를|까지)?"
+    # "가산세 포함 얼마야", "가산세까지 합치면 얼마야": the total is still the asked amount.
+    r"(?:\s*(?:포함(?:해서|하면|한|해)?|합쳐서|합치면|합하면|더해서|더하면|모두|전부|다\s*해서|총))*"
+    r"\s*얼마(?:나)?\s*(?:야|예요|인가|인지|입니까|나와|나오|내|납부|부과|되|정도|[?!]*$)"
 )
+# Facts each calculator needs, asked in Korean when the question cannot be read into its inputs.
+CALCULATOR_FACTS = {
+    "income_tax": ("종합소득세", "소득 종류별 금액(근로소득 총급여, 사업소득 수입금액과 필요경비, 이자·배당, 주택임대 수입·보증금과 "
+                              "주택 수, 종교인소득 등)과 기본공제 인원"),
+    "retirement": ("퇴직소득세", "퇴직급여 금액과 근속연수(연금계좌로 옮기면 그 금액)"),
+    "capital_gains": ("양도소득세", "양도가액, 취득가액, 보유기간, 자산 종류(주택이면 1세대 1주택 여부와 거주기간, 다주택이면 "
+                                 "조정대상지역 여부)"),
+    "gift": ("증여세", "증여액, 주는 사람과의 관계(직계존속이면 받는 사람이 미성년자인지), 10년 이내 같은 사람에게 받은 증여"),
+    "inheritance": ("상속세", "상속재산 가액, 채무·장례비용, 배우자 유무와 배우자 상속액, 자녀 수"),
+    "vat": ("부가가치세", "일반과세자인지 간이과세자인지(간이과세자면 업종), 매출액, 매입액"),
+    "penalty_tax": ("가산세", "본세 금액, 무신고·과소신고·납부지연 중 무엇인지, 법정기한을 넘긴 기간"),
+}
+FOLLOWUP_AMOUNT = re.compile(r"(?:\d[\d,.]*\s*(?:억|천만|백만|천|만)\s*)+원?|\d[\d,]*\s*원")
 
 def has_calculation_intent(query: str) -> bool:
     """Explicit calculation requests may lack inputs; a year alone is not money."""
@@ -102,18 +118,35 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
     if not has_tool_intent(query) and not calculation_followup:
         return None
     if has_calculation_intent(query) or calculation_followup:
-        result = await tax_calculation(query, history, on_event)
+        calc_query = query
+        if calculation_followup and not re.search(r"소득|수입|매출|매입|경비|증여액", query):
+            calc_query = followup_question(query, history)
+            if isinstance(calc_query, ToolRun):
+                _emit_result(calc_query, {}, on_event)
+                return calc_query
+        result = await tax_calculation(calc_query, history, on_event)
         if result is not None:
             return result
-        if penalty_scope(query, history):
+        if penalty_scope(calc_query, history):
             # 본세를 말한 가산세 질문은 가산세만 계산한다. 본세 대신 세목 계산 사실을 말했으면
             # '가산세'를 뺀 질문으로 그 세목 계산기를 실행하고 가산세를 옵션으로 붙인다.
-            result = await penalty_calculation(query, history, on_event)
+            result = await penalty_calculation(calc_query, history, on_event)
             if result is not None:
                 return result
-            result = await tax_calculation(PENALTY_WORD.sub("", query), history, on_event, facts_query=query)
+            result = await tax_calculation(PENALTY_WORD.sub("", calc_query), history, on_event, facts_query=calc_query)
             if result is not None:
                 return result
+        # The six calculators have readers; a model proposal for them is rejected by the input
+        # proofs anyway, so no selection is paid for. Amounts the reader could not use mean a case
+        # the calculator does not model (국외 자산, 창업자금 특례 …): the sourced reference formula
+        # answers it. Without amounts the calculator's facts are asked.
+        tool = calculator_in_scope(calc_query, history)
+        if tool is not None and _AMOUNT_RE.search(calc_query):
+            return ToolRun("formula_calculation", "planned", "공식 근거를 확인한 산식으로 참고 계산을 준비합니다.")
+        if tool is not None:
+            result = ask_calculator_facts(tool)
+            _emit_result(result, {}, on_event)
+            return result
     if on_event:
         on_event({"type": "tool", "id": "primary", "tool": "none", "status": "selecting"})
     try:
@@ -141,9 +174,11 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
             if has_calculation_intent(query) or calculation_followup:
                 matches = [tool for tool, pattern in CALC_TAX.items() if re.search(pattern, query, re.I)]
                 tool = matches[0] if len(matches) == 1 else "none"
-                fields = [ALIASES.get(key, key).split("|")[0] for key in TOOL_SCHEMAS[tool].model_fields] if tool != "none" else []
-                message = ("세액 계산에 사용할 값을 확인해 주세요: " + ", ".join(fields) + "."
-                           if fields else "계산할 세목과 계산에 사용할 금액·조건을 알려주세요.")
+                if tool in CALCULATOR_FACTS:
+                    result = ask_calculator_facts(tool)
+                    _emit_result(result, {}, on_event)
+                    return result
+                message = "계산할 세목과 계산에 사용할 금액·조건을 알려주세요."
             else:
                 tool, message = "law_lookup", "원문을 조회할 법령명과 조·항·호 번호를 알려주세요."
             result = ToolRun(tool, "needs_input", message, error_code="calculation_inputs_required" if has_calculation_intent(query) or calculation_followup else "lookup_target_required")
@@ -178,6 +213,43 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
     result = await execute_tool(*selection, user_id=user_id)
     _emit_result(result, selection[1], on_event)
     return result
+
+
+def followup_question(query, history):
+    """"그럼 7천만원이면?": the previous question with its one amount replaced, or a ToolRun asking which amount."""
+    previous = next((m.get("content", "") for m in reversed(history or []) if m.get("role") == "user"), "")
+    new = FOLLOWUP_AMOUNT.search(query)
+    amounts = [m for m in FOLLOWUP_AMOUNT.finditer(previous) if m.group().strip()]
+    if new is None or not amounts:
+        return query
+    if len(amounts) > 1:
+        stated = ", ".join(f"{(previous[:m.start()].split() or [''])[-1]} {m.group().strip()}".strip() for m in amounts)
+        return ToolRun("none", "needs_input", f"이전 질문의 금액 가운데 어느 것을 {new.group().strip()}으로 바꿀지 알려주세요"
+                       f"({stated}). 예: '매출 {new.group().strip()}이면?'", error_code="calculation_inputs_required")
+    m = amounts[0]
+    old = m.group().rstrip()
+    return previous[:m.start()] + new.group().strip() + previous[m.start() + len(old):]
+
+
+def calculator_in_scope(query, history):
+    """The calculator a calculation question is about, by the same scopes tax_calculation uses."""
+    stripped = PENALTY_WORD.sub("", query)
+    for text in (query, stripped):
+        for scope, tool in ((retirement_scope, "retirement"), (income_tax_scope, "income_tax"),
+                            (virtual_asset_scope, "income_tax"), (capital_gains_scope, "capital_gains"),
+                            (gift_scope, "gift"), (inheritance_scope, "inheritance"), (vat_scope, "vat")):
+            if scope(text, history):
+                return tool
+    return "penalty_tax" if penalty_scope(query, history) else None
+
+
+def ask_calculator_facts(tool):
+    title, facts = CALCULATOR_FACTS[tool]
+    return ToolRun(tool, "needs_input",
+                   f"말씀하신 내용만으로는 {title} 계산기 입력을 확정하지 못했습니다. 다음 사실을 '항목 금액' 형태로 알려주세요: "
+                   f"{facts}. 감면·특례처럼 채팅에서 읽지 못하는 조건은 계산기 화면의 "
+                   + ("해당 세목 탭 가산세 옵션에서" if tool == "penalty_tax" else f"{title} 탭에서") + " 직접 입력할 수 있습니다.",
+                   error_code="calculation_inputs_required")
 
 
 async def tax_calculation(query, history, on_event=None, facts_query=None):

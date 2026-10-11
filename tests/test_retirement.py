@@ -91,9 +91,15 @@ def test_retirement_questions_are_read(query, expected):
     assert {k: stated.params[k] for k in expected} == expected
 
 
-def test_missing_years_are_asked_and_pension_accounts_are_left_alone():
+def test_missing_years_are_asked_and_pension_account_transfers_are_read():
     assert isinstance(stated_retirement_inputs("퇴직금 1억 받으면 세금 얼마야?"), MissingInputs)
-    assert stated_retirement_inputs("퇴직금 1억을 IRP로 옮겨 연금으로 받으면 세금 얼마야? 20년 근무") is None
+    whole = stated_retirement_inputs("퇴직금 1억을 IRP로 옮겨 연금으로 받으면 세금 얼마야? 20년 근무")
+    assert whole.params["pension_transfer"] == 100_000_000
+    part = stated_retirement_inputs("퇴직금 1억원 근속 20년인데 5천만원을 IRP로 이체하면 퇴직소득세 얼마야?")
+    assert (part.params["service_years"], part.params["pension_transfer"]) == (20, 50_000_000)
+    assert stated_retirement_inputs("퇴직금 1억원, 20년 근무")
+    unknown = stated_retirement_inputs("퇴직금 1억원 20년 근무했는데 일부를 연금계좌로 옮기면 세금 얼마야?")
+    assert isinstance(unknown, MissingInputs) and "연금계좌" in unknown.labels[0]
 
 
 @pytest.mark.asyncio

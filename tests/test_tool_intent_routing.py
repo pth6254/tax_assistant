@@ -87,22 +87,25 @@ async def test_none_cannot_turn_explicit_document_search_into_missing_input(monk
 
 @pytest.mark.asyncio
 async def test_real_missing_calculation_inputs_remain_blocked_with_specific_message(monkeypatch):
-    monkeypatch.setattr(planner, "select_tool", AsyncMock(return_value=None))
+    select = AsyncMock(return_value=None)
+    monkeypatch.setattr(planner, "select_tool", select)
     execute = AsyncMock()
     monkeypatch.setattr(planner, "execute_tool", execute)
     events = []
     result = await planner.run_tools_for_query("종합소득세 계산해줘", user_id=str(uuid4()), on_event=events.append)
     assert result.status == "needs_input" and result.tool == "income_tax"
-    assert "경비" in result.context
+    assert "경비" in result.context and "penalty_type" not in result.context
     assert "경비" in chat._failed_tool_answer(events)
     execute.assert_not_awaited()
+    select.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_selection_failure_is_not_reported_as_user_input_shortage(monkeypatch):
     monkeypatch.setattr(planner, "select_tool", AsyncMock(side_effect=ValueError("malformed JSON")))
     events = []
-    result = await planner.run_tools_for_query("종합소득세 계산해줘", user_id=str(uuid4()), on_event=events.append)
+    # A tax without a calculator still pays for a selection; the six calculators do not.
+    result = await planner.run_tools_for_query("취득세 계산해줘", user_id=str(uuid4()), on_event=events.append)
     assert result.status == "selection_error" and result.retryable
     assert "오류가 발생" in chat._failed_tool_answer(events)
     assert "필수 입력" not in chat._failed_tool_answer(events)

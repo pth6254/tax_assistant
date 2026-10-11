@@ -22,7 +22,9 @@ LATE_ONLY = re.compile(r"(?:신고는\s*했는데|신고만\s*하고)|납부(?:�
 NEGLIGENT = re.compile(r"부정|사기|이중\s*장부|허위|가공|차명|은닉")
 NOT_NEGLIGENT = re.compile(r"부정(?:행위)?\s*(?:은|는|이)?\s*(?:없|아니|안\s*했)\S*")
 DAYS = re.compile(r"(\d+)\s*일\s*(?:늦|지연|지나|지났|후|뒤|만에|동안|경과)|지연\s*일수\s*(?:는|:)?\s*(\d+)\s*일")
-MONTHS = re.compile(r"(\d+)\s*(?:개월|달)\s*(?:늦|지연|지나|지났|후|뒤|만에|이내|안에|동안)")
+# "한 달 안에": spoken numbers too.
+SPOKEN_MONTHS = {"한": 1, "두": 2, "세": 3, "석": 3, "네": 4, "넉": 4, "다섯": 5, "여섯": 6}
+MONTHS = re.compile(r"(\d+|(?<![가-힣])(?:한|두|세|석|네|넉|다섯|여섯))\s*(?:개월|달)\s*(?:늦|지연|지나|지났|후|뒤|만에|이내|안에|동안)")
 YEARS = re.compile(r"(\d+)\s*년\s*(?:늦|지연|지나|지났|후|뒤|만에|동안)")
 PENALTY_WORD = re.compile(r"가산세")
 REPORTED = r"신고한\s*세액|신고\s*세액|이미\s*낸\s*세(?:금|액)|납부한\s*세액|낸\s*세금"
@@ -112,7 +114,7 @@ def _penalty_facts(text):
         return MissingInputs(["무신고(신고하지 않음)인지, 과소신고(덜 신고)인지, 신고는 했고 납부만 늦었는지"])
     kind = kinds[0]
     days = int(m.group(1) or m.group(2)) if (m := DAYS.search(text)) else None
-    months = int(m.group(1)) if (m := MONTHS.search(text)) else None
+    months = (SPOKEN_MONTHS.get(m.group(1)) or int(m.group(1))) if (m := MONTHS.search(text)) else None
     if months is None and (m := YEARS.search(text)):
         months = int(m.group(1)) * 12
     if days is None and months is None:

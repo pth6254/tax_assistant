@@ -85,8 +85,9 @@ async def test_chat_asks_for_missing_facts_without_calling_the_model(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_unmodelled_gift_goes_to_tool_selection(monkeypatch):
+async def test_unmodelled_gift_goes_to_the_reference_formula_without_a_selection(monkeypatch):
     select = AsyncMock(return_value=None)
     monkeypatch.setattr(planner, 'select_tool', select)
-    await planner.run_tools_for_query('창업자금으로 아버지에게 5억 증여받으면 증여세 얼마?', user_id=str(uuid4()))
-    select.assert_awaited_once()
+    result = await planner.run_tools_for_query('창업자금으로 아버지에게 5억 증여받으면 증여세 얼마?', user_id=str(uuid4()))
+    assert result.tool == 'formula_calculation'
+    select.assert_not_awaited()
