@@ -14,6 +14,7 @@ from datetime import date
 from decimal import Decimal
 
 from app.schemas.calculator import CalculationResult, TaxBasis, TaxStep
+from app.services.calculator import penalty_tax
 from app.services.calculator.brackets import apply_progressive_tax, truncate_won
 from app.services.calculator.errors import CalculationError, require_value
 from app.services.calculator.repository import get_brackets, get_deduction
@@ -29,7 +30,7 @@ FINANCIAL, SURCHARGE, SURCHARGE_LARGE, FILING_CREDIT = "금융재산상속공제
 SCOPE_NOTES = (
     "상속재산가액은 평가된 금액(간주·추정상속재산 포함)을 입력받으며 재산 평가와 추정상속재산 계산은 하지 "
     "않았습니다. 동거주택·가업·영농 상속공제, 재해손실공제, 감정평가수수료, 외국납부세액공제, 단기재상속 "
-    "세액공제, 비거주자 상속과 가산세는 계산하지 않았습니다.",
+    "세액공제와 비거주자 상속은 계산하지 않았습니다.",
     "금액은 상속 전체에 대한 참고 계산이며 상속인별 납부세액 배분과 실제 신고세액은 확정하지 않습니다.",
 )
 
@@ -173,8 +174,10 @@ async def calculate(estate_value: int, debts: int = 0, spouse_inheritance: int =
                     parents_count: int = 0, minor_years: int = 0, elderly_count: int = 0, disabled_years: int = 0,
                     non_heir_bequests: int = 0, skipped_generation_assets: int = 0,
                     skipped_generation_minor: bool = False, filed_on_time: bool = True,
-                    as_of: date | None = None) -> CalculationResult:
+                    as_of: date | None = None, **penalty) -> CalculationResult:
     params = await load_parameters(as_of)
+    if penalty.get("penalty_type") == "무신고":
+        filed_on_time = False
     result = compute(
         params=params, estate_value=estate_value, debts=debts, funeral_expenses=funeral_expenses,
         memorial_expenses=memorial_expenses, financial_assets=financial_assets, prior_gifts=prior_gifts,
@@ -185,7 +188,7 @@ async def calculate(estate_value: int, debts: int = 0, spouse_inheritance: int =
         disabled_years=disabled_years, non_heir_bequests=non_heir_bequests,
         skipped_generation_assets=skipped_generation_assets, skipped_generation_minor=skipped_generation_minor,
         filed_on_time=filed_on_time)
-    return CalculationResult(
+    summary = CalculationResult(
         tax_type="상속세",
         steps=[TaxStep(label=label, amount=amount) for label, amount in result.steps],
         taxable_income=result.taxable_income, calculated_tax=result.calculated_tax, final_tax=result.decided_tax,
@@ -193,3 +196,8 @@ async def calculate(estate_value: int, debts: int = 0, spouse_inheritance: int =
         source_articles=list(params.sources),
         basis=TaxBasis(queried_on=(as_of or date.today()).isoformat(), effective_dates=list(params.effective_dates)),
         notes=[*result.notes, *SCOPE_NOTES])
+    if penalty.get("penalty_type") == "무신고":
+        summary.notes.insert(0, "무신고(기한 후 신고 포함)에는 신고세액공제가 없어 빼고 계산했습니다.")
+    elif penalty.get("penalty_type") == "과소신고" and filed_on_time:
+        summary.notes.insert(0, "과소신고한 부분에는 신고세액공제가 적용되지 않아, 실제 덜 낸 세액은 그 부분 산출세액의 3%만큼 더 클 수 있습니다.")
+    return await penalty_tax.attach(summary, result.decided_tax, as_of=as_of, **penalty)

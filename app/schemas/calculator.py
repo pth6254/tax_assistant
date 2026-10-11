@@ -32,7 +32,20 @@ class CalculationResult(BaseModel):
 
 # ── 요청 스키마 ──────────────────────────────────────────────────────
 
-class IncomeTaxRequest(BaseModel):
+class PenaltyOption(BaseModel):
+    """세목 계산기 공통 옵션: 기한을 넘긴 신고·납부의 가산세(국세기본법 제47조의2~제48조)."""
+    penalty_type: Literal["없음", "무신고", "과소신고", "납부지연"] = Field(
+        "없음", description="없음 | 무신고 | 과소신고 | 납부지연(기한 내 신고했지만 덜 냄)")
+    reported_tax: NonNegativeInt = Field(0, description="과소신고: 이미 신고한 세액, 납부지연: 이미 낸 세액")
+    is_negligent: bool = Field(False, description="부정행위(사기·그 밖의 부정한 행위)로 인한 무신고·과소신고인지")
+    days_late: NonNegativeInt = Field(0, description="법정납부기한 다음 날부터 납부일(또는 고지일)까지 일수")
+    filed_within_months: NonNegativeInt = Field(
+        0, description="법정신고기한이 지난 뒤 기한 후 신고·수정신고한 개월 수(0이면 스스로 신고하지 않음)")
+    penalty_revenue: NonNegativeInt = Field(
+        0, description="복식부기의무자·법인의 수입금액(입력하면 무신고가산세 수입금액 기준 하한 적용)")
+
+
+class IncomeTaxRequest(PenaltyOption):
     """종합소득세(금융소득 종합과세 포함). 금액은 연간 원 단위이고, 없는 소득은 0."""
     income: NonNegativeInt = Field(0, description="사업소득 총수입금액")
     expense: NonNegativeInt = Field(0, description="사업소득 필요경비")
@@ -70,6 +83,12 @@ class IncomeTaxRequest(BaseModel):
     registered_rental: bool = Field(False, description="등록임대주택(분리과세 필요경비 60%, 공제 400만원)")
     daily_wage: NonNegativeInt = Field(0, description="일용근로 일급(분리과세로 끝남)")
     daily_work_days: NonNegativeInt = Field(0, description="일용근로 일수")
+    virtual_transfer_price: NonNegativeInt = Field(
+        0, description="가상자산 양도가액(기타소득 분리과세, 2027년 양도분부터, 같은 해 전체를 총평균법으로 합친 금액)")
+    virtual_acquisition_price: NonNegativeInt = Field(0, description="가상자산 실제 취득가액")
+    virtual_expenses: NonNegativeInt = Field(0, description="가상자산 거래수수료 등 필요경비")
+    virtual_held_before_2027: bool = Field(False, description="가상자산을 2027년 1월 1일 전부터 보유(2026-12-31 시가와 비교)")
+    virtual_value_2026_end: NonNegativeInt = Field(0, description="가상자산의 2026년 12월 31일 당시 시가(보유분 전체)")
 
 
 class FinancialIncomeTaxRequest(BaseModel):
@@ -83,7 +102,7 @@ class FinancialIncomeTaxRequest(BaseModel):
     withheld: bool = Field(True, description="금융소득이 국내에서 원천징수되었는지")
 
 
-class CapitalGainsRequest(BaseModel):
+class CapitalGainsRequest(PenaltyOption):
     """국내 등기 부동산 1건의 양도. 기간은 만 연수(1년 6개월이면 1)."""
     transfer_price: NonNegativeInt = Field(description="양도가액(실지거래가액)")
     acquisition_price: NonNegativeInt = Field(description="취득가액(실지거래가액)")
@@ -106,7 +125,7 @@ class CapitalGainsRequest(BaseModel):
     same_group_loss: NonNegativeInt = Field(0, description="같은 그룹 다른 자산의 같은 해 양도차손(통산)")
 
 
-class InheritanceRequest(BaseModel):
+class InheritanceRequest(PenaltyOption):
     """거주자 사망에 따른 상속 전체의 상속세. 금액은 원 단위."""
     estate_value: NonNegativeInt = Field(description="상속재산가액(보험금·퇴직금 등 간주상속재산, 추정상속재산 포함)")
     debts: NonNegativeInt = Field(0, description="상속인이 승계한 채무와 공과금 합계")
@@ -132,7 +151,7 @@ class InheritanceRequest(BaseModel):
     filed_on_time: bool = Field(True, description="신고기한(상속개시일이 속하는 달 말일부터 6개월) 내 신고")
 
 
-class GiftTaxRequest(BaseModel):
+class GiftTaxRequest(PenaltyOption):
     """증여 1건의 증여세. 증여자 기준으로 관계를 고르고, 금액은 원 단위."""
     gift_amount: NonNegativeInt = Field(description="증여재산가액(시가 등 평가액)")
     relation: Literal["배우자", "직계존비속", "기타친족", "기타"] = Field(
@@ -151,7 +170,7 @@ class GiftTaxRequest(BaseModel):
     filed_on_time: bool = Field(True, description="신고기한(증여일이 속하는 달 말일부터 3개월) 내 신고")
 
 
-class VatRequest(BaseModel):
+class VatRequest(PenaltyOption):
     """과세기간 1회 신고분 부가가치세. 일반과세자는 공급가액, 간이과세자는 공급대가(부가가치세 포함)로 입력."""
     sales: NonNegativeInt = Field(description="총매출(과세·영세율·면세 포함). 간이과세자는 공급대가")
     purchases: NonNegativeInt = Field(
@@ -174,24 +193,15 @@ class VatRequest(BaseModel):
     prepaid_tax: NonNegativeInt = Field(0, description="예정고지(부과)세액·예정신고 미환급세액")
 
 
-class RetirementTaxRequest(BaseModel):
+class RetirementTaxRequest(PenaltyOption):
     """퇴직소득세(2020년 이후 퇴직). 근속연수는 1년 미만을 1년으로 올린 정산근속연수."""
     retirement_pay: NonNegativeInt = Field(description="과세대상 퇴직급여(퇴직금·퇴직연금 일시금, 비과세 제외)")
     service_years: Annotated[int, Field(ge=1, strict=True)] = Field(description="정산근속연수(1년 미만은 1년)")
     prepaid_tax: NonNegativeInt = Field(0, description="이미 원천징수된 퇴직소득세")
 
 
-class VirtualAssetRequest(BaseModel):
-    """가상자산 양도소득(기타소득 분리과세, 2027년 양도분부터). 같은 해 전체 손익을 총평균법으로 합친 금액."""
-    transfer_price: NonNegativeInt = Field(description="양도가액")
-    acquisition_price: NonNegativeInt = Field(description="실제 취득가액")
-    expenses: NonNegativeInt = Field(0, description="거래수수료 등 필요경비")
-    held_before_2027: bool = Field(False, description="2027년 1월 1일 전부터 보유(2026-12-31 시가와 비교)")
-    value_2026_end: NonNegativeInt = Field(0, description="2026년 12월 31일 당시 시가(보유분 전체)")
-
-
 class PenaltyTaxRequest(BaseModel):
-    """국세 신고·납부 가산세. 무신고·과소신고는 신고 가산세와 납부지연가산세를 함께 계산한다."""
+    """본세를 이미 아는 가산세 질문(채팅·상담용). 계산기 화면에서는 세목 계산기의 가산세 옵션으로 계산한다."""
     unpaid_tax: NonNegativeInt = Field(description="신고하지 않았거나 덜 신고·납부한 세액")
     penalty_type: Literal["무신고", "과소신고", "납부지연"] = Field(
         "무신고", description="무신고 | 과소신고 | 납부지연(기한 내 신고했지만 덜 냄)")

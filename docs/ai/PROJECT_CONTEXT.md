@@ -238,7 +238,7 @@ app/services/ai_pipeline.py
 
 app/services/tools/
   provider 중립 JSON 도구 선택, 허용 목록·인자 검증·시간 제한·서버 사용자 ID 주입
-  법령 원문 조회·사용자 문서 검색·전용 계산기 8종의 실행 계약
+  법령 원문 조회·사용자 문서 검색·전용 계산기 6종(가산세 옵션 포함)과 본세만 아는 가산세(`penalty_tax`)의 실행 계약
   단순 요청은 단일 도구, 복합 요청은 reliable_workflow가 쟁점별 도구를 제한된 예산으로 조정
   SSE tool 이벤트와 일반 응답 tools 배열로 UI 상태 전달, 최종 결과는 chat_logs.message JSON 저장
 

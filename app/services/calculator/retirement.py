@@ -10,6 +10,7 @@ from datetime import date
 from decimal import Decimal
 
 from app.schemas.calculator import CalculationResult, TaxBasis, TaxStep
+from app.services.calculator import penalty_tax
 from app.services.calculator.brackets import apply_progressive_tax, truncate_won
 from app.services.calculator.errors import CalculationError
 from app.services.calculator.repository import get_brackets, get_deduction
@@ -93,10 +94,10 @@ async def load_parameters(as_of: date | None = None) -> Parameters:
 
 
 async def calculate(retirement_pay: int, service_years: int, prepaid_tax: int = 0,
-                    as_of: date | None = None) -> CalculationResult:
+                    as_of: date | None = None, **penalty) -> CalculationResult:
     params = await load_parameters(as_of)
     result = compute(params=params, retirement_pay=retirement_pay, service_years=service_years, prepaid_tax=prepaid_tax)
-    return CalculationResult(
+    summary = CalculationResult(
         tax_type="퇴직소득세",
         steps=[TaxStep(label=label, amount=amount) for label, amount in result.steps],
         taxable_income=result.taxable_income, calculated_tax=result.calculated_tax, final_tax=result.decided_tax,
@@ -104,3 +105,4 @@ async def calculate(retirement_pay: int, service_years: int, prepaid_tax: int = 
         source_articles=list(params.sources),
         basis=TaxBasis(queried_on=(as_of or date.today()).isoformat(), effective_dates=list(params.effective_dates)),
         notes=[*result.notes, *SCOPE_NOTES])
+    return await penalty_tax.attach(summary, max(0, result.decided_tax - prepaid_tax), as_of=as_of, **penalty)

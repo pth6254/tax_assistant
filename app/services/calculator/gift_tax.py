@@ -13,6 +13,7 @@ from datetime import date
 from decimal import Decimal
 
 from app.schemas.calculator import CalculationResult, TaxBasis, TaxStep
+from app.services.calculator import penalty_tax
 from app.services.calculator.brackets import apply_progressive_tax, truncate_won
 from app.services.calculator.errors import CalculationError, require_value
 from app.services.calculator.repository import get_brackets, get_deduction
@@ -27,7 +28,7 @@ FILING_CREDIT, MINIMUM = "신고세액공제율", "과세최저한"
 
 SCOPE_NOTES = (
     "증여재산가액은 시가 등으로 평가된 금액을 입력받으며 재산 평가는 하지 않았습니다. 합산배제 증여재산, "
-    "창업자금·가업승계 특례, 영농자녀 감면, 비거주자, 외국납부세액공제와 가산세는 계산하지 않았습니다.",
+    "창업자금·가업승계 특례, 영농자녀 감면, 비거주자, 외국납부세액공제는 계산하지 않았습니다.",
     "금액은 증여 1건 기준의 참고 계산이며 실제 신고세액을 확정하지 않습니다.",
 )
 
@@ -152,16 +153,18 @@ async def load_parameters(as_of: date | None = None) -> Parameters:
 async def calculate(gift_amount: int, relation: str = "기타", is_minor: bool = False, prior_gifts_10y: int = 0,
                     debts: int = 0, prior_gift_tax: int = 0, prior_gift_taxable: int = 0, deduction_used_10y: int = 0,
                     marriage_birth: bool = False, marriage_birth_used: int = 0, generation_skipping: bool = False,
-                    filed_on_time: bool = True, as_of: date | None = None) -> CalculationResult:
+                    filed_on_time: bool = True, as_of: date | None = None, **penalty) -> CalculationResult:
     if relation not in RELATIONS:
         raise CalculationError("unsupported_condition")
     params = await load_parameters(as_of)
+    if penalty.get("penalty_type") == "무신고":
+        filed_on_time = False
     result = compute(params=params, gift_amount=gift_amount, relation=relation, is_minor=is_minor, debts=debts,
                      prior_gifts_10y=prior_gifts_10y, prior_gift_tax=prior_gift_tax,
                      prior_gift_taxable=prior_gift_taxable, deduction_used_10y=deduction_used_10y,
                      marriage_birth=marriage_birth, marriage_birth_used=marriage_birth_used,
                      generation_skipping=generation_skipping, filed_on_time=filed_on_time)
-    return CalculationResult(
+    summary = CalculationResult(
         tax_type="증여세",
         steps=[TaxStep(label=label, amount=amount) for label, amount in result.steps],
         taxable_income=result.taxable_income, calculated_tax=result.calculated_tax, final_tax=result.decided_tax,
@@ -169,3 +172,8 @@ async def calculate(gift_amount: int, relation: str = "기타", is_minor: bool =
         source_articles=list(params.sources),
         basis=TaxBasis(queried_on=(as_of or date.today()).isoformat(), effective_dates=list(params.effective_dates)),
         notes=[*result.notes, *SCOPE_NOTES])
+    if penalty.get("penalty_type") == "무신고":
+        summary.notes.insert(0, "무신고(기한 후 신고 포함)에는 신고세액공제가 없어 빼고 계산했습니다.")
+    elif penalty.get("penalty_type") == "과소신고" and filed_on_time:
+        summary.notes.insert(0, "과소신고한 부분에는 신고세액공제가 적용되지 않아, 실제 덜 낸 세액은 그 부분 산출세액의 3%만큼 더 클 수 있습니다.")
+    return await penalty_tax.attach(summary, result.decided_tax, as_of=as_of, **penalty)

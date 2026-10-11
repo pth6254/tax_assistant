@@ -3,7 +3,10 @@ import re
 from decimal import Decimal
 from pydantic import ValidationError
 from app.services.law.reference_parser import extract_law_reference, parse_law_reference
+from app.schemas.calculator import PenaltyOption
 from app.services.tools.registry import TOOL_SCHEMAS
+
+PENALTY_OPTION_FIELDS = tuple(PenaltyOption.model_fields)
 
 DOCUMENT_INTENT = re.compile(
     r"(?<![가-힣])(?:내|제|저의|우리)\s*(?:문서|계약서|서류|자료|파일)|"
@@ -26,10 +29,9 @@ def has_lookup_intent(query):
         return False  # Discovering the applicable article is ordinary retrieval.
     return bool(re.search(r"(?:원문|조문)(?:을|를)?\s*(?:보여|조회(?:해\s*(?:줘|주세요)|해주세요|[?.!]*$)|그대로|[?.!]*$)", query))
 CALC_TAX = {
-    "income_tax": r"소득|수입", "capital_gains": r"양도|매도", "inheritance": r"상속|유산",
+    "income_tax": r"소득|수입|가상자산|코인|암호화폐|가상화폐|비트코인|이더리움", "capital_gains": r"양도|매도", "inheritance": r"상속|유산",
     "gift": r"증여", "vat": r"부가세|부가가치세|매출|매입|VAT", "penalty_tax": r"가산세",
     "financial_income_tax": r"금융소득|이자|배당", "retirement": r"퇴직",
-    "virtual_asset": r"가상자산|코인|암호화폐|가상화폐|비트코인|이더리움",
 }
 FINANCIAL_INCOME = re.compile(r"금융\s*(?:소득|종합)|이자\s*소득|배당\s*소득")
 
@@ -158,7 +160,9 @@ ALIASES = {
     "purchases": "매입액|매입", "exempt_sales": "면세매출|면세 매출",
     "unpaid_tax": "미납세액|미납 세액|미납세금", "days_late": "지연일수|지연 일수",
     "filed_within_months": "기한 후 신고|수정신고", "revenue": "수입금액",
-    "retirement_pay": "퇴직금|퇴직급여|퇴직소득", "value_2026_end": "2026년말 시가|2026년 12월 31일 시가", "service_years": "근속연수|근속 연수|근속기간",
+    "retirement_pay": "퇴직금|퇴직급여|퇴직소득", "virtual_value_2026_end": "2026년말 시가|2026년 12월 31일 시가",
+    "virtual_transfer_price": "양도가액|매도가|판 금액", "virtual_acquisition_price": "취득가액|매수가|산 금액",
+    "reported_tax": "신고한 세액|이미 낸 세액|납부한 세액", "penalty_revenue": "수입금액", "service_years": "근속연수|근속 연수|근속기간",
     "zero_rated_sales": "영세율 매출|영세율매출", "common_purchases": "공통매입", "non_deductible_purchases": "불공제 매입",
     "deemed_purchases": "면세농산물", "card_sales": "카드매출|카드 매출", "card_credit_used": "이미 받은 카드공제",
     "prepaid_tax": "기납부세액|기납부 세액|중간예납세액|예정고지세액|예정고지",
@@ -184,7 +188,7 @@ BOOL_TEXT = {
     "has_spouse": {True: "배우자 있음", False: "배우자 없음"},
     "card_credit_eligible": {True: "카드공제 대상", False: "카드공제 대상 아님"},
     "e_filing": {True: "전자신고", False: "서면신고"},
-    "held_before_2027": {True: "2027년 전부터 보유", False: "2027년 이후 취득"},
+    "virtual_held_before_2027": {True: "2027년 전부터 보유", False: "2027년 이후 취득"},
     "skipped_generation_minor": {True: "손자녀 미성년", False: "손자녀 성년"},
     "filed_on_time": {True: "기한 내 신고", False: "기한 후 신고"},
     "is_negligent": {True: "부정행위 있음", False: "부정행위 없음"},
@@ -281,7 +285,11 @@ def check_proposal(tool, params, query, history, *, calculation_intent=False):
         request = TOOL_SCHEMAS[tool].model_validate(params, strict=True, extra="forbid")
     except ValidationError as exc:
         return False, "missing_input" if any(e['type'] == 'missing' for e in exc.errors()) else "invalid_input", {}
-    # Defaults are financially material too: zero, false and eligibility are not assumed.
-    proofs = {key: input_proof(key, value, texts) for key, value in request.model_dump().items()}
+    # Defaults are financially material too: zero, false and eligibility are not assumed. The penalty
+    # option is the exception: with no late filing or payment stated, there is no penalty to prove.
+    values = request.model_dump()
+    if values.get("penalty_type") == "없음" and not any(values.get(k) for k in PENALTY_OPTION_FIELDS[1:]):
+        values = {k: v for k, v in values.items() if k not in PENALTY_OPTION_FIELDS}
+    proofs = {key: input_proof(key, value, texts) for key, value in values.items()}
     missing = [key for key, proof in proofs.items() if proof is None]
     return not missing, "unconfirmed_inputs:" + ",".join(missing), proofs

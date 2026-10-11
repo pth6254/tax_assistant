@@ -7,13 +7,13 @@
 법정 수치는 DB에서 읽는다.
 
 `penalty_type`이 무신고·과소신고이면 신고 가산세와 (지연일수가 있으면) 납부지연가산세를 함께 계산하고,
-납부지연이면 납부지연가산세만 계산한다.
+납부지연이면 납부지연가산세만 계산한다. 세목 계산기는 `attach`로 자기 결과에 같은 계산을 옵션으로 붙인다.
 """
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
-from app.schemas.calculator import CalculationResult, TaxBasis, TaxStep
+from app.schemas.calculator import CalculationResult, PenaltyOption, TaxBasis, TaxStep
 from app.services.calculator.brackets import truncate_won
 from app.services.calculator.errors import CalculationError, require_value
 from app.services.calculator.repository import get_deduction
@@ -114,6 +114,48 @@ async def load_parameters(as_of: date | None = None) -> Parameters:
         daily_rate=Decimal(daily), amended_bands=amended, late_return_bands=late_return,
         effective_dates=tuple(sorted({str(r["effective_date"]) for r in used if r.get("effective_date")})),
         sources=tuple(sorted({r["source_article"] for r in used if r.get("source_article")})))
+
+
+OPTION_FIELDS = tuple(PenaltyOption.model_fields)
+BASE_LABELS = {"무신고": "가산세 대상 세액(신고하지 않은 납부할 세액)",
+               "과소신고": "가산세 대상 세액(바른 납부할 세액 {base:,}원 - 신고한 세액 {reported:,}원)",
+               "납부지연": "미납세액(납부할 세액 {base:,}원 - 이미 낸 세액 {reported:,}원)"}
+
+
+def penalty_option(options):
+    """The penalty fields of a calculator request, split from its own inputs."""
+    return {key: options.pop(key) for key in OPTION_FIELDS if key in options}
+
+
+async def attach(result: CalculationResult, base_tax: int, *, penalty_type: str = "없음", reported_tax: int = 0,
+                 is_negligent: bool = False, days_late: int = 0, filed_within_months: int = 0,
+                 penalty_revenue: int = 0, as_of: date | None = None) -> CalculationResult:
+    """세목 계산 결과에 가산세 옵션을 붙인다. base_tax는 그 세목의 납부할 세액(기납부세액 차감 후)."""
+    if penalty_type == "없음":
+        if reported_tax or is_negligent or days_late or filed_within_months or penalty_revenue:
+            raise CalculationError("invalid_input")
+        return result
+    if penalty_type == "무신고" and reported_tax:
+        raise CalculationError("invalid_input")
+    if penalty_type == "납부지연" and penalty_revenue:
+        raise CalculationError("invalid_input")
+    unpaid = max(0, base_tax - reported_tax)
+    params = await load_parameters(as_of)
+    penalty = compute(params=params, unpaid_tax=unpaid, penalty_type=penalty_type, is_negligent=is_negligent,
+                      days_late=days_late, filed_within_months=filed_within_months, revenue=penalty_revenue)
+    steps = list(penalty.steps)
+    steps[0] = (BASE_LABELS[penalty_type].format(base=base_tax, reported=reported_tax), unpaid)
+    if penalty_type != "무신고":
+        steps[-1] = ("추가로 낼 금액(덜 낸 세액 + 가산세)", penalty.decided_tax)
+    result.steps += [TaxStep(label=label, amount=amount) for label, amount in steps]
+    result.final_tax = penalty.decided_tax
+    result.source_articles = [*result.source_articles, *(s for s in params.sources if s not in result.source_articles)]
+    if result.basis:
+        result.basis.effective_dates = sorted({*result.basis.effective_dates, *params.effective_dates})
+    if base_tax <= 0:
+        penalty.notes.append("납부할 세액이 없어(환급 포함) 세액 기준 가산세는 0원입니다.")
+    result.notes = [*result.notes, *penalty.notes, *SCOPE_NOTES]
+    return result
 
 
 async def calculate(unpaid_tax: int, penalty_type: str = "무신고", is_negligent: bool = False, days_late: int = 0,

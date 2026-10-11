@@ -2,10 +2,12 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { FORMS, buildFormFromParams, QUESTION_BUILDERS } from '../src/components/Calculator/forms.js'
 
+const NO_PENALTY = { penalty_type: '없음', reported_tax: 0, is_negligent: false, days_late: 0, filed_within_months: 0, penalty_revenue: 0 }
+
 test('the capital gains tab sends the exemption facts', () => {
   const form = { ...FORMS.capital.defaults, transfer_price: '150000', acquisition_price: '100000', holding_years: '7',
     is_one_home: true, residence_years: '5' }
-  assert.deepEqual(FORMS.capital.toPayload(form), {
+  assert.deepEqual(FORMS.capital.toPayload(form), { ...NO_PENALTY,
     transfer_price: 1_500_000_000, acquisition_price: 1_000_000_000, expenses: 0, holding_years: 7,
     asset_type: '주택', is_one_home: true, residence_years: 5, acquired_in_adjusted_area: false,
     multi_home_surcharge: '없음', non_business_land: false, unregistered: false, pre_approval_gain: 0,

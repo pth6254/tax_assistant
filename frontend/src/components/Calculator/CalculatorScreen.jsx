@@ -43,10 +43,17 @@ export default function CalculatorScreen({ initial, onInitialConsumed, onAskAbou
   }
   const fields = FORMS[tab].fields
   const hasFinancial = ['interest_income', 'non_business_interest', 'dividend_gross_up', 'dividend_other'].some(k => Number(form[k] || 0) > 0)
-  const visible = fields.filter(f => !(f.key === 'business_type' && !form.is_simplified) && !(['is_negligent', 'filed_within_months', 'revenue'].includes(f.key) && form.penalty_type === '납부지연')
+  const penaltyType = form.penalty_type || '없음'
+  const visible = fields.filter(f => !(f.key === 'business_type' && !form.is_simplified)
+    && !(['reported_tax', 'is_negligent', 'filed_within_months', 'days_late', 'penalty_revenue'].includes(f.key) && penaltyType === '없음')
+    && !(f.key === 'reported_tax' && penaltyType === '무신고')
+    && !(['is_negligent', 'filed_within_months'].includes(f.key) && penaltyType === '납부지연')
+    && !(f.key === 'penalty_revenue' && !(penaltyType === '무신고' || (penaltyType === '과소신고' && form.is_negligent)))
+    && !(f.key === 'filed_on_time' && penaltyType === '무신고')
     && !(['zero_rated_sales', 'exempt_sales', 'non_deductible_purchases', 'common_purchases', 'deemed_purchases'].includes(f.key) && form.is_simplified)
     && !(f.key === 'withheld' && !hasFinancial)
-    && !(f.key === 'value_2026_end' && !form.held_before_2027)
+    && !(['virtual_acquisition_price', 'virtual_expenses', 'virtual_held_before_2027'].includes(f.key) && !(Number(form.virtual_transfer_price || 0) > 0))
+    && !(f.key === 'virtual_value_2026_end' && !form.virtual_held_before_2027)
     && !(['is_one_home', 'residence_years', 'acquired_in_adjusted_area', 'multi_home_surcharge'].includes(f.key) && tab === 'capital' && (form.asset_type || '주택') !== '주택')
     && !(f.key === 'non_business_land' && form.asset_type !== '토지·건물')
     && !(f.key === 'unregistered' && ['주식', '파생상품', '신탁수익권'].includes(form.asset_type))
@@ -73,6 +80,7 @@ export default function CalculatorScreen({ initial, onInitialConsumed, onAskAbou
           <div className="section-heading"><h2>계산 조건</h2><span className="unit-label">금액 입력: 만원</span></div>
           {tab === 'capital' && <p className="small muted">자산 1건 기준입니다. 1세대 1주택·중과·대주주 여부는 입력값을 따릅니다.</p>}
           {visible.map((field, i) => <div className="field" key={field.key}>
+            {field.section && <p className="small muted">{field.section} — 신고·납부 기한을 넘긴 경우에만 고르세요.</p>}
             {field.type === 'checkbox' ? <label className="checkbox-field"><input type="checkbox" checked={!!form[field.key]} onChange={e => change(field.key, e.target.checked)} />{field.label}{field.hint && <span className="field-hint">{field.hint}</span>}</label>
               : <><label htmlFor={'calc-' + field.key}>{field.label}{field.required && <span className="required"> *</span>}</label>
                 <div className="input-with-unit">{field.type === 'select'

@@ -1,4 +1,4 @@
-import { calcIncomeTax, calcCapitalGains, calcInheritance, calcGiftTax, calcVat, calcPenaltyTax, calcRetirement, calcVirtualAsset } from '../../api/calculatorApi.js'
+import { calcIncomeTax, calcCapitalGains, calcInheritance, calcGiftTax, calcVat, calcRetirement } from '../../api/calculatorApi.js'
 
 // 챗봇 계산기 엔진(app/services/calculator/engine.py _TOOLS)의 도구명 → 화면 탭 키
 const TOOL_TO_TAB = {
@@ -8,21 +8,50 @@ const TOOL_TO_TAB = {
   inheritance:   'inheritance',
   gift:          'gift',
   vat:           'vat',
-  penalty_tax:   'penalty',
   retirement:    'retirement',
-  virtual_asset: 'virtual',
+  virtual_asset: 'income',   // 이전 가상자산 계산기: 종합소득세 탭의 가상자산 항목으로 연다
 }
 
+// 세목·과세 단위별 6개 계산기. 가산세는 각 계산기의 옵션, 가상자산은 종합소득세의 분리과세 항목이다.
 const TABS = [
   { key: 'income',      label: '종합소득세', icon: '💼' },
+  { key: 'retirement',  label: '퇴직소득세', icon: '🧳' },
   { key: 'capital',     label: '양도소득세', icon: '🏠' },
   { key: 'inheritance', label: '상속세',    icon: '📜' },
   { key: 'gift',        label: '증여세',    icon: '🎁' },
   { key: 'vat',         label: '부가가치세', icon: '🧾' },
-  { key: 'retirement',  label: '퇴직소득세', icon: '🧳' },
-  { key: 'virtual',     label: '가상자산',   icon: '🪙' },
-  { key: 'penalty',     label: '가산세',    icon: '⏰' },
 ]
+
+// 기한을 넘긴 신고·납부의 가산세(국세기본법 제47조의2~제48조): 모든 세목 계산기에 붙는 옵션
+const PENALTY_FIELDS = [
+  { key: 'penalty_type',        label: '기한 후 신고·납부(가산세)', type: 'select', options: ['없음', '무신고', '과소신고', '납부지연'], section: '가산세',
+    hint: '무신고·과소신고는 납부지연가산세도 함께 계산' },
+  { key: 'reported_tax',        label: '이미 신고·납부한 세액', unit: '만원', required: false, hint: '과소신고: 처음 신고한 세액 · 납부지연: 낸 세액' },
+  { key: 'is_negligent',        label: '부정행위(이중장부·허위증빙 등)', type: 'checkbox', hint: '가산세 40%' },
+  { key: 'filed_within_months', label: '기한 후 신고·수정신고 시점', unit: '개월', required: false, hint: '법정신고기한 후 몇 개월 안에 스스로 신고(감면)' },
+  { key: 'days_late',           label: '납부지연 일수', unit: '일', required: false, hint: '법정납부기한 다음 날부터 납부일까지' },
+  { key: 'penalty_revenue',     label: '수입금액(복식부기의무자·법인)', unit: '만원', required: false, hint: '무신고 시 수입금액 1만분의 7 하한' },
+]
+
+const penaltyPayload = (f) => {
+  const type = f.penalty_type || '없음'
+  return {
+    penalty_type:        type,
+    reported_tax:        ['과소신고', '납부지연'].includes(type) ? toWon(f.reported_tax) : 0,
+    is_negligent:        ['무신고', '과소신고'].includes(type) && !!f.is_negligent,
+    days_late:           type === '없음' ? 0 : toInt(f.days_late),
+    filed_within_months: ['무신고', '과소신고'].includes(type) ? toInt(f.filed_within_months) : 0,
+    penalty_revenue:     type === '무신고' || (type === '과소신고' && f.is_negligent) ? toWon(f.penalty_revenue) : 0,
+  }
+}
+
+const penaltySummary = (f) => {
+  const type = f.penalty_type || '없음'
+  if (type === '없음') return ''
+  return `, ${type}${f.is_negligent && type !== '납부지연' ? '(부정행위)' : ''}` +
+    `${Number(f.filed_within_months || 0) > 0 && type !== '납부지연' ? ` 후 ${f.filed_within_months}개월 안에 신고` : ''}` +
+    `${Number(f.days_late || 0) > 0 ? `, 납부지연 ${f.days_late}일` : ''}`
+}
 
 const FORMS = {
   income: {
@@ -48,6 +77,11 @@ const FORMS = {
       { key: 'registered_rental',     label: '등록임대주택',          type: 'checkbox' },
       { key: 'daily_wage',            label: '일용근로 일급',          unit: '만원', required: false, hint: '분리과세로 끝남' },
       { key: 'daily_work_days',       label: '일용근로 일수',          unit: '일',   required: false },
+      { key: 'virtual_transfer_price', label: '가상자산 양도가액',     unit: '만원', required: false, hint: '2027년 양도분부터 20% 분리과세 · 같은 해 전체(총평균법)' },
+      { key: 'virtual_acquisition_price', label: '가상자산 취득가액',  unit: '만원', required: false },
+      { key: 'virtual_expenses',      label: '가상자산 수수료 등 경비', unit: '만원', required: false },
+      { key: 'virtual_held_before_2027', label: '가상자산을 2027년 전부터 보유', type: 'checkbox', hint: '2026-12-31 시가와 비교' },
+      { key: 'virtual_value_2026_end', label: '가상자산 2026-12-31 시가', unit: '만원', required: false },
       { key: 'other_income',          label: '그 밖의 종합소득금액',  unit: '만원', required: false, hint: '연금·기타소득 등 필요경비·공제를 뺀 소득금액' },
       { key: 'interest_income',       label: '이자소득',              unit: '만원', required: false, hint: '예금·채권 이자 등 원천징수세율 14%' },
       { key: 'non_business_interest', label: '비영업대금의 이익',     unit: '만원', required: false, hint: '개인 간 금전 대여 이자 등 원천징수세율 25%' },
@@ -60,9 +94,11 @@ const FORMS = {
       { key: 'sincere_business',      label: '성실사업자',            type: 'checkbox', hint: '근로소득이 없을 때 표준세액공제 12만원(아니면 7만원)' },
       { key: 'other_tax_credits',     label: '그 밖의 세액공제 합계', unit: '만원', required: false, hint: '자녀·연금계좌·보험료·의료비·교육비·기부금 등' },
       { key: 'prepaid_tax',           label: '기납부세액',            unit: '만원', required: false, hint: '근로소득 원천징수·중간예납 등 · 이자·배당 원천징수는 자동 추정' },
+      ...PENALTY_FIELDS,
     ],
-    defaults: { personal_deduction_count: '1', withheld: true, business_method: '장부', misc_expense_rule: '60%' },
+    defaults: { personal_deduction_count: '1', withheld: true, business_method: '장부', misc_expense_rule: '60%', penalty_type: '없음' },
     toPayload: (f) => ({
+      ...penaltyPayload(f),
       income:                   toWon(f.income),
       expense:                  (f.business_method || '장부') === '장부' ? toWon(f.expense) : 0,
       business_method:          f.business_method || '장부',
@@ -95,6 +131,11 @@ const FORMS = {
       sincere_business:         !!f.sincere_business,
       other_tax_credits:        toWon(f.other_tax_credits),
       prepaid_tax:              toWon(f.prepaid_tax),
+      virtual_transfer_price:   toWon(f.virtual_transfer_price),
+      virtual_acquisition_price: toWon(f.virtual_acquisition_price),
+      virtual_expenses:         toWon(f.virtual_expenses),
+      virtual_held_before_2027: !!f.virtual_held_before_2027,
+      virtual_value_2026_end:   f.virtual_held_before_2027 ? toWon(f.virtual_value_2026_end) : 0,
     }),
   },
   capital: {
@@ -117,9 +158,11 @@ const FORMS = {
       { key: 'residence_years',   label: '거주기간',    unit: '년',   required: false, hint: '보유기간 중 거주한 만 연수' },
       { key: 'acquired_in_adjusted_area', label: '취득 당시 조정대상지역', type: 'checkbox', hint: '1주택 비과세에 2년 거주 요건이 붙음' },
       { key: 'multi_home_surcharge', label: '다주택 중과', type: 'select', options: ['없음', '2주택', '3주택이상'], hint: '조정대상지역 중과 대상일 때만 선택' },
+      ...PENALTY_FIELDS,
     ],
-    defaults: { asset_type: '주택', multi_home_surcharge: '없음', stock_market: '국내비상장' },
+    defaults: { asset_type: '주택', multi_home_surcharge: '없음', stock_market: '국내비상장', penalty_type: '없음' },
     toPayload: (f) => ({
+      ...penaltyPayload(f),
       transfer_price:    toWon(f.transfer_price),
       non_business_land: f.asset_type === '토지·건물' && !!f.non_business_land,
       unregistered:      ['주택', '토지·건물', '분양권', '조합원입주권', '기타자산'].includes(f.asset_type || '주택') && !!f.unregistered,
@@ -163,9 +206,11 @@ const FORMS = {
       { key: 'skipped_generation_assets', label: '손자녀 등 상속분',   unit: '만원', required: false, hint: '세대생략 30% 할증' },
       { key: 'skipped_generation_minor', label: '손자녀 미성년',       type: 'checkbox', hint: '20억원 초과 시 40%' },
       { key: 'filed_on_time',      label: '기한 내 신고',           type: 'checkbox', hint: '신고세액공제 3%' },
+      ...PENALTY_FIELDS,
     ],
-    defaults: { has_spouse: true, filed_on_time: true },
+    defaults: { has_spouse: true, filed_on_time: true, penalty_type: '없음' },
     toPayload: (f) => ({
+      ...penaltyPayload(f),
       estate_value:          toWon(f.estate_value),
       debts:                 toWon(f.debts),
       spouse_inheritance:    f.has_spouse === false ? 0 : toWon(f.spouse_inheritance),
@@ -203,9 +248,11 @@ const FORMS = {
       { key: 'prior_gift_tax',      label: '이전 증여 산출세액',     unit: '만원', required: false, hint: '모르면 비워 두면 추정' },
       { key: 'deduction_used_10y',  label: '이미 쓴 증여재산공제',   unit: '만원', required: false, hint: '합산하지 않은 다른 증여에 쓴 같은 관계 공제' },
       { key: 'filed_on_time',       label: '기한 내 신고',          type: 'checkbox', hint: '신고세액공제 3%' },
+      ...PENALTY_FIELDS,
     ],
-    defaults: { relation: '직계존비속', filed_on_time: true },
+    defaults: { relation: '직계존비속', filed_on_time: true, penalty_type: '없음' },
     toPayload: (f) => ({
+      ...penaltyPayload(f),
       gift_amount:         toWon(f.gift_amount),
       relation:            f.relation || '직계존비속',
       is_minor:            f.relation === '직계존비속' && !!f.is_minor,
@@ -239,9 +286,11 @@ const FORMS = {
       { key: 'card_credit_used', label: '올해 이미 받은 카드공제', unit: '만원', required: false },
       { key: 'prepaid_tax',   label: '예정고지·미환급세액', unit: '만원', required: false },
       { key: 'e_filing',      label: '전자신고(1만원 공제)', type: 'checkbox' },
+      ...PENALTY_FIELDS,
     ],
-    defaults: { business_type: '소매업', card_credit_eligible: true },
+    defaults: { business_type: '소매업', card_credit_eligible: true, penalty_type: '없음' },
     toPayload: (f) => ({
+      ...penaltyPayload(f),
       sales:         toWon(f.sales),
       purchases:     toWon(f.purchases),
       exempt_sales:  f.is_simplified ? 0 : toWon(f.exempt_sales),
@@ -264,50 +313,14 @@ const FORMS = {
       { key: 'retirement_pay', label: '퇴직급여',     unit: '만원', required: true, hint: '퇴직금·퇴직연금 일시금(비과세 제외)' },
       { key: 'service_years',  label: '근속연수',     unit: '년',   required: true, hint: '1년 미만은 1년으로 올림 · 중간정산 시 중복기간 제외' },
       { key: 'prepaid_tax',    label: '원천징수된 세액', unit: '만원', required: false },
+      ...PENALTY_FIELDS,
     ],
-    defaults: {},
+    defaults: { penalty_type: '없음' },
     toPayload: (f) => ({
+      ...penaltyPayload(f),
       retirement_pay: toWon(f.retirement_pay),
       service_years:  toInt(f.service_years, 1),
       prepaid_tax:    toWon(f.prepaid_tax),
-    }),
-  },
-  virtual: {
-    apiFn: calcVirtualAsset,
-    fields: [
-      { key: 'transfer_price',    label: '양도가액',       unit: '만원', required: true, hint: '같은 해 전체(총평균법)' },
-      { key: 'acquisition_price', label: '실제 취득가액',   unit: '만원', required: true },
-      { key: 'expenses',          label: '수수료 등 경비', unit: '만원', required: false },
-      { key: 'held_before_2027',  label: '2027년 전부터 보유', type: 'checkbox', hint: '2026-12-31 시가와 비교' },
-      { key: 'value_2026_end',    label: '2026-12-31 시가', unit: '만원', required: false },
-    ],
-    defaults: {},
-    toPayload: (f) => ({
-      transfer_price:    toWon(f.transfer_price),
-      acquisition_price: toWon(f.acquisition_price),
-      expenses:          toWon(f.expenses),
-      held_before_2027:  !!f.held_before_2027,
-      value_2026_end:    f.held_before_2027 ? toWon(f.value_2026_end) : 0,
-    }),
-  },
-  penalty: {
-    apiFn: calcPenaltyTax,
-    fields: [
-      { key: 'unpaid_tax',    label: '무신고·과소신고·미납 세액', unit: '만원', required: true },
-      { key: 'penalty_type',  label: '경우', type: 'select', options: ['무신고', '과소신고', '납부지연'], hint: '무신고·과소신고는 납부지연가산세도 함께 계산' },
-      { key: 'is_negligent',  label: '부정행위(사기·기타 부정한 방법)', type: 'checkbox', hint: '무신고·과소신고만 해당' },
-      { key: 'filed_within_months', label: '기한 후 신고·수정신고 시점', unit: '개월', required: false, hint: '법정신고기한 후 몇 개월 안에 스스로 신고(감면)' },
-      { key: 'days_late',     label: '납부지연 일수', unit: '일', required: false, hint: '법정납부기한 다음 날부터 납부일까지' },
-      { key: 'revenue',       label: '수입금액(복식부기의무자·법인)', unit: '만원', required: false, hint: '무신고 시 수입금액 1만분의 7 하한' },
-    ],
-    defaults: { penalty_type: '무신고' },
-    toPayload: (f) => ({
-      unpaid_tax:   toWon(f.unpaid_tax),
-      penalty_type: f.penalty_type || '무신고',
-      is_negligent: f.penalty_type !== '납부지연' && !!f.is_negligent,
-      days_late:    toInt(f.days_late),
-      filed_within_months: f.penalty_type === '납부지연' ? 0 : toInt(f.filed_within_months),
-      revenue:      f.penalty_type === '납부지연' ? 0 : toWon(f.revenue),
     }),
   },
 }
@@ -323,6 +336,10 @@ const buildFormFromParams = (tabKey, params) => {
   // 이전 금융소득 계산기의 소득공제 합계(기본공제 포함)는 기본공제 0명 + 그 밖의 소득공제로 옮긴다.
   if (tabKey === 'income' && 'income_deductions' in params) {
     params = { ...params, personal_deduction_count: 0, other_deductions: params.income_deductions }
+  }
+  // 이전 가상자산 계산기의 입력은 종합소득세 탭의 가상자산 항목으로 옮긴다.
+  if (tabKey === 'income' && 'transfer_price' in params) {
+    params = Object.fromEntries(Object.entries(params).map(([k, v]) => [k.startsWith('virtual_') ? k : 'virtual_' + k, v]))
   }
   const form = { ...defaults }
   for (const field of fields) {
@@ -342,37 +359,30 @@ const QUESTION_BUILDERS = {
     const parts = [['총급여', f.wage_income], ['사업 수입', f.income], ['사업 필요경비', f.expense], ['그 밖의 소득금액', f.other_income],
       ['공적연금', f.pension_income], ['사적연금', f.private_pension], ['기타소득', f.misc_income], ['주택임대 수입', f.rental_income],
       ['이자', f.interest_income], ['비영업대금 이익', f.non_business_interest],
-      ['배당', Number(f.dividend_gross_up || 0) + Number(f.dividend_other || 0)]]
+      ['배당', Number(f.dividend_gross_up || 0) + Number(f.dividend_other || 0)], ['가상자산 양도가액', f.virtual_transfer_price]]
       .filter(([, v]) => Number(v || 0) > 0).map(([label, v]) => `${label} ${v}만원`)
-    return `${parts.join(', ') || '소득 0원'}, 기본공제 ${f.personal_deduction_count || 1}명 기준으로 ` +
+    return `${parts.join(', ') || '소득 0원'}, 기본공제 ${f.personal_deduction_count || 1}명${penaltySummary(f)} 기준으로 ` +
       `계산한 종합소득세 결정세액이 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인하고, 추가로 절세 방법이 있으면 알려주세요.`
   },
   capital: (f, r) =>
     `${f.asset_type || '주택'} 양도가액 ${f.transfer_price || 0}만원, 취득가액 ${f.acquisition_price || 0}만원, 보유기간 ${f.holding_years || 0}년` +
-    `${f.is_one_home ? `, 1세대 1주택, 거주기간 ${f.residence_years || 0}년` : ''} 기준으로 ` +
+    `${f.is_one_home ? `, 1세대 1주택, 거주기간 ${f.residence_years || 0}년` : ''}${penaltySummary(f)} 기준으로 ` +
     `계산한 양도소득세가 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인하고, 추가로 절세 방법이 있으면 알려주세요.`,
   inheritance: (f, r) =>
     `상속재산 ${f.estate_value || 0}만원, ${f.has_spouse === false ? '배우자 없음' : `배우자 실제 상속액 ${f.spouse_inheritance || 0}만원`}, 자녀 ${f.children_count || 0}명` +
-    `${Number(f.prior_gifts || 0) > 0 ? `, 10년 내 사전증여 ${f.prior_gifts}만원` : ''} 기준으로 ` +
+    `${Number(f.prior_gifts || 0) > 0 ? `, 10년 내 사전증여 ${f.prior_gifts}만원` : ''}${penaltySummary(f)} 기준으로 ` +
     `계산한 상속세가 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인하고, 추가로 공제받을 수 있는 항목이 있으면 알려주세요.`,
   gift: (f, r) =>
     `증여재산 ${f.gift_amount || 0}만원을 ${f.relation || '직계존비속'} 관계에서 증여받는 경우` +
     `${Number(f.debts || 0) > 0 ? `(인수 채무 ${f.debts}만원)` : ''}${Number(f.prior_gifts_10y || 0) > 0 ? `, 10년 내 동일인 증여 ${f.prior_gifts_10y}만원 합산` : ''}` +
-    `${f.relation === '직계존비속' && f.generation_skipping ? ', 세대생략 할증' : ''}${f.relation === '직계존비속' && f.marriage_birth ? ', 혼인·출산 공제' : ''}로 ` +
+    `${f.relation === '직계존비속' && f.generation_skipping ? ', 세대생략 할증' : ''}${f.relation === '직계존비속' && f.marriage_birth ? ', 혼인·출산 공제' : ''}${penaltySummary(f)}로 ` +
     `계산한 증여세가 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인하고, 추가로 절세 방법이 있으면 알려주세요.`,
   vat: (f, r) =>
-    `매출 ${f.sales || 0}만원, 매입 ${f.purchases || 0}만원${f.is_simplified ? ` (간이과세자, ${f.business_type} 업종)` : ' (일반과세자)'} 기준으로 ` +
+    `매출 ${f.sales || 0}만원, 매입 ${f.purchases || 0}만원${f.is_simplified ? ` (간이과세자, ${f.business_type} 업종)` : ' (일반과세자)'}${penaltySummary(f)} 기준으로 ` +
     `계산한 부가가치세 ${r.final_tax < 0 ? '환급세액' : '납부세액'}이 ${fmtWon(Math.abs(r.final_tax))}로 나왔습니다. 이 계산이 맞는지 확인해주세요.`,
   retirement: (f, r) =>
-    `퇴직급여 ${f.retirement_pay || 0}만원, 근속 ${f.service_years || 0}년 기준으로 계산한 퇴직소득세가 ${fmtWon(r.final_tax)}로 나왔습니다. ` +
+    `퇴직급여 ${f.retirement_pay || 0}만원, 근속 ${f.service_years || 0}년${penaltySummary(f)} 기준으로 계산한 퇴직소득세가 ${fmtWon(r.final_tax)}로 나왔습니다. ` +
     `이 계산이 맞는지 확인하고, 연금계좌로 받는 경우와 비교해 주세요.`,
-  virtual: (f, r) =>
-    `가상자산 양도가액 ${f.transfer_price || 0}만원, 취득가액 ${f.acquisition_price || 0}만원 기준으로 계산한 세금이 ${fmtWon(r.final_tax)}로 ` +
-    `나왔습니다. 2027년 과세 시작 전후를 포함해 이 계산이 맞는지 확인해 주세요.`,
-  penalty: (f, r) =>
-    `${f.penalty_type || '무신고'} 세액 ${f.unpaid_tax || 0}만원${f.is_negligent && f.penalty_type !== '납부지연' ? ' (부정행위)' : ''}, 납부지연 ${f.days_late || 0}일` +
-    `${Number(f.filed_within_months || 0) > 0 && f.penalty_type !== '납부지연' ? `, 기한 후 ${f.filed_within_months}개월 안에 스스로 신고` : ''} 기준으로 ` +
-    `계산한 가산세 포함 납부할 총액이 ${fmtWon(r.final_tax)}로 나왔습니다. 이 계산이 맞는지 확인해주세요.`,
 }
 
 

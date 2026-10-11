@@ -4,12 +4,12 @@
 가상자산의 취득가액은 2026년 12월 31일 당시 시가와 실제 취득가액 중 큰 금액), 제64조의3 제2항(가상자산소득금액에서
 250만원을 뺀 금액의 20%)을 따른다. 과세는 2027년 1월 1일 이후 양도분부터이므로(2027-01-01 시행본), 그 전 기준일에는
 과세되지 않음과 2027년 이후 양도했을 때의 세액을 함께 보인다. 법정 수치는 DB에서 읽는다.
+종합소득세 계산기(`income_tax.calculate`)가 이 계산을 다른 소득과 합산하지 않는 분리과세 항목으로 쓴다.
 """
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
-from app.schemas.calculator import CalculationResult, TaxBasis, TaxStep
 from app.services.calculator.brackets import truncate_won
 from app.services.calculator.errors import CalculationError
 from app.services.calculator.repository import get_deduction
@@ -80,18 +80,3 @@ async def load_parameters(as_of: date | None = None) -> tuple[Parameters, bool]:
                         local_ratio=Decimal(condition["local_ratio"]),
                         effective_dates=(str(row["effective_date"]),), sources=(row["source_article"],))
     return params, taxed
-
-
-async def calculate(transfer_price: int, acquisition_price: int, expenses: int = 0, held_before_2027: bool = False,
-                    value_2026_end: int = 0, as_of: date | None = None) -> CalculationResult:
-    params, taxed = await load_parameters(as_of)
-    result = compute(params=params, transfer_price=transfer_price, acquisition_price=acquisition_price,
-                     expenses=expenses, held_before_2027=held_before_2027, value_2026_end=value_2026_end, taxed=taxed)
-    return CalculationResult(
-        tax_type="가상자산 소득세(기타소득 분리과세)",
-        steps=[TaxStep(label=label, amount=amount) for label, amount in result.steps],
-        taxable_income=result.taxable_income, calculated_tax=result.calculated_tax, final_tax=result.decided_tax,
-        effective_rate=round(result.decided_tax / transfer_price, 6) if transfer_price else 0.0,
-        source_articles=["소득세법 제21조", "소득세법 제37조", *params.sources],
-        basis=TaxBasis(queried_on=(as_of or date.today()).isoformat(), effective_dates=list(params.effective_dates)),
-        notes=[*result.notes, *SCOPE_NOTES])

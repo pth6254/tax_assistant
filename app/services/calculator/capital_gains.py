@@ -22,6 +22,7 @@ from datetime import date
 from decimal import Decimal
 
 from app.schemas.calculator import CalculationResult, TaxBasis, TaxStep
+from app.services.calculator import penalty_tax
 from app.services.calculator.brackets import apply_progressive_tax, truncate_won
 from app.services.calculator.errors import CalculationError, require_value
 from app.services.calculator.repository import get_brackets, get_deduction
@@ -297,7 +298,8 @@ async def calculate(transfer_price: int, acquisition_price: int, expenses: int =
                     acquired_in_adjusted_area: bool = False, multi_home_surcharge: str = "없음",
                     non_business_land: bool = False, unregistered: bool = False, pre_approval_gain: int = 0,
                     pre_approval_years: int = 0, stock_market: str = "국내비상장", major_shareholder: bool = False,
-                    sme: bool = False, same_group_loss: int = 0, as_of: date | None = None) -> CalculationResult:
+                    sme: bool = False, same_group_loss: int = 0, as_of: date | None = None,
+                    **penalty) -> CalculationResult:
     params = await load_parameters(as_of)
     try:
         result = compute(params=params, transfer_price=transfer_price, acquisition_price=acquisition_price,
@@ -310,7 +312,7 @@ async def calculate(transfer_price: int, acquisition_price: int, expenses: int =
                          same_group_loss=same_group_loss)
     except KeyError as exc:
         raise CalculationError("missing_tax_data") from exc
-    return CalculationResult(
+    summary = CalculationResult(
         tax_type="양도소득세",
         steps=[TaxStep(label=label, amount=amount) for label, amount in result.steps],
         taxable_income=result.taxable_income, calculated_tax=result.calculated_tax, final_tax=result.calculated_tax,
@@ -318,3 +320,4 @@ async def calculate(transfer_price: int, acquisition_price: int, expenses: int =
         source_articles=list(params.sources),
         basis=TaxBasis(queried_on=(as_of or date.today()).isoformat(), effective_dates=list(params.effective_dates)),
         notes=[*result.notes, "최종 납부세액은 양도소득세(국세)이며 지방소득세는 별도로 표시했습니다.", *SCOPE_NOTES])
+    return await penalty_tax.attach(summary, result.calculated_tax, as_of=as_of, **penalty)

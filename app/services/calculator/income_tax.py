@@ -8,7 +8,9 @@
 연금소득은 제47조의2 연금소득공제, 기타소득은 시행령 제87조 필요경비 의제(60%·80%)로 계산한다. 법이
 납세자에게 고르게 하는 분리과세(사적연금 제14조 제3항 제9호·제64조의4, 기타소득 300만원 이하 제14조 제3항
 제8호, 주택임대 2천만원 이하 제64조의2)는 가능한 조합을 모두 계산해 세금 합계가 가장 적은 쪽을 고른다.
-일용근로소득(제14조 제3항 제2호)은 원천징수로 과세가 끝나므로 따로 보인다.
+일용근로소득(제14조 제3항 제2호)은 원천징수로 과세가 끝나므로 따로 보인다. 가상자산소득(제64조의3, 2027년
+양도분부터)은 기타소득이지만 다른 소득과 합산하지 않는 분리과세 세액으로 결정세액에 더한다(`virtual_asset`).
+기한을 넘긴 신고·납부는 `penalty_tax.attach`가 가산세 옵션으로 붙인다.
 산식은 국세청 종합소득세 신고서 작성사례와 「2026 세금절약가이드 Ⅰ」의 계산 사례로 검증한다
 (tests/data/nts_income_tax.json). 법정 수치는 DB(tax_deductions, tax_brackets)에서 읽는다.
 
@@ -19,7 +21,7 @@ from datetime import date
 from decimal import Decimal
 
 from app.schemas.calculator import CalculationResult, TaxBasis, TaxStep
-from app.services.calculator import financial_income_tax
+from app.services.calculator import financial_income_tax, penalty_tax, virtual_asset
 from app.services.calculator.brackets import apply_progressive_tax, truncate_won
 from app.services.calculator.errors import CalculationError, require_value
 from app.services.calculator.repository import get_brackets, get_deduction
@@ -36,7 +38,7 @@ KIND_NAMES = ("연금소득공제_한도", "사적연금_분리과세_기준", "
 MISC_RATES = {"실제": None, "60%": "기타소득_필요경비의제_60", "80%": "기타소득_필요경비의제_80"}
 
 SCOPE_NOTES = (
-    "결손금·이월결손금, 기장세액공제, 세액감면, 가산세, 복권·종교인소득 등 그 밖의 분리과세 소득, 출자공동사업자 배당, "
+    "결손금·이월결손금, 기장세액공제, 세액감면, 복권·종교인소득 등 그 밖의 분리과세 소득, 출자공동사업자 배당, "
     "주택임대 간주임대료, 비거주자, 국외소득의 외국납부세액공제와 지방소득세는 계산하지 않았습니다.",
     "금액은 연간 소득 기준의 참고 계산이며 실제 신고세액을 확정하지 않습니다.",
 )
@@ -224,7 +226,9 @@ def compute(*, params, income=0, expense=0, wage_income=0, other_income=0, inter
             business_method="장부", simple_rate=0, simple_excess_rate=None, standard_rate=0, major_expenses=0,
             double_entry=False, pension_income=0, private_pension=0, pension_age=0,
             misc_income=0, misc_expense_rule="실제", misc_expenses=0,
-            rental_income=0, rental_expenses=0, registered_rental=False, daily_wage=0, daily_work_days=0):
+            rental_income=0, rental_expenses=0, registered_rental=False, daily_wage=0, daily_work_days=0,
+            added_tax=(), extra_steps=()):
+    """added_tax·extra_steps: 다른 소득과 합산하지 않고 결정세액에 더하는 세액(가상자산)과 그 계산 단계."""
     k = params.kinds
     notes = []
     business, business_steps, business_notes = business_income(
@@ -259,7 +263,7 @@ def compute(*, params, income=0, expense=0, wage_income=0, other_income=0, inter
                 options.append((private_choice, misc_choice, rental_choice))
 
     def run(private_choice, misc_choice, rental_choice):
-        other_steps, final_steps, added, extra_prepaid = [], [], [], 0
+        other_steps, final_steps, added, extra_prepaid = list(extra_steps), [], list(added_tax), 0
         included_pension = pension_income + (private_pension if private_choice == "종합" else 0)
         pension_amount = 0
         if included_pension:
@@ -386,9 +390,42 @@ async def calculate(income: int = 0, expense: int = 0, wage_income: int = 0, oth
                     pension_income: int = 0, private_pension: int = 0, pension_age: int = 0, misc_income: int = 0,
                     misc_expense_rule: str = "실제", misc_expenses: int = 0, rental_income: int = 0,
                     rental_expenses: int = 0, registered_rental: bool = False, daily_wage: int = 0,
-                    daily_work_days: int = 0, as_of: date | None = None) -> CalculationResult:
+                    daily_work_days: int = 0, virtual_transfer_price: int = 0, virtual_acquisition_price: int = 0,
+                    virtual_expenses: int = 0, virtual_held_before_2027: bool = False, virtual_value_2026_end: int = 0,
+                    as_of: date | None = None, **penalty) -> CalculationResult:
+    comprehensive = any((income, expense, wage_income, other_income, interest_income, non_business_interest,
+                         dividend_gross_up, dividend_other, pension_income, private_pension, misc_income, rental_income,
+                         daily_wage))
+    virtual_steps, virtual_tax, virtual_notes = [], [], []
+    sources, dates = [], set()
+    if virtual_transfer_price or virtual_acquisition_price or virtual_value_2026_end:
+        v_params, taxed = await virtual_asset.load_parameters(as_of)
+        v = virtual_asset.compute(params=v_params, transfer_price=virtual_transfer_price,
+                                  acquisition_price=virtual_acquisition_price, expenses=virtual_expenses,
+                                  held_before_2027=virtual_held_before_2027, value_2026_end=virtual_value_2026_end,
+                                  taxed=taxed)
+        virtual_steps = [(label if label.startswith("가상자산") else "가상자산 " + label, amount) for label, amount in v.steps
+                         if not label.startswith("산출세액")]
+        if v.decided_tax:
+            virtual_tax = [(f"가상자산소득 분리과세 세액({v_params.rate * 100:.0f}%, 제64조의3)", v.decided_tax)]
+        virtual_notes = [*v.notes, *virtual_asset.SCOPE_NOTES]
+        sources += ["소득세법 제21조", "소득세법 제37조", *v_params.sources]
+        dates |= set(v_params.effective_dates)
+        if not comprehensive:
+            steps = [*virtual_steps, ("결정세액", v.decided_tax)]
+            result = CalculationResult(
+                tax_type="종합소득세(가상자산소득 분리과세)", steps=[TaxStep(label=l, amount=a) for l, a in steps],
+                taxable_income=v.taxable_income, calculated_tax=v.calculated_tax, final_tax=v.decided_tax,
+                effective_rate=round(v.decided_tax / virtual_transfer_price, 6) if virtual_transfer_price else 0.0,
+                source_articles=sorted(set(sources)),
+                basis=TaxBasis(queried_on=(as_of or date.today()).isoformat(), effective_dates=sorted(dates)),
+                notes=virtual_notes)
+            return await penalty_tax.attach(result, v.decided_tax, as_of=as_of, **penalty)
     params = await load_parameters(as_of)
-    result = compute(params=params, income=income, expense=expense, wage_income=wage_income,
+    sources += params.sources
+    dates |= set(params.effective_dates)
+    result = compute(params=params, added_tax=virtual_tax, extra_steps=virtual_steps, income=income, expense=expense,
+                     wage_income=wage_income,
                      other_income=other_income, interest_income=interest_income,
                      non_business_interest=non_business_interest, dividend_gross_up=dividend_gross_up,
                      dividend_other=dividend_other, withheld=withheld,
@@ -401,13 +438,16 @@ async def calculate(income: int = 0, expense: int = 0, wage_income: int = 0, oth
                      misc_expense_rule=misc_expense_rule, misc_expenses=misc_expenses, rental_income=rental_income,
                      rental_expenses=rental_expenses, registered_rental=registered_rental, daily_wage=daily_wage,
                      daily_work_days=daily_work_days)
+    result.notes += virtual_notes
     gross = (income + wage_income + other_income + interest_income + non_business_interest + dividend_gross_up
-             + dividend_other + pension_income + private_pension + misc_income + rental_income + daily_wage * daily_work_days)
-    return CalculationResult(
+             + dividend_other + pension_income + private_pension + misc_income + rental_income + daily_wage * daily_work_days
+             + virtual_transfer_price)
+    summary = CalculationResult(
         tax_type="종합소득세",
         steps=[TaxStep(label=label, amount=amount) for label, amount in result.steps],
         taxable_income=result.taxable_income, calculated_tax=result.calculated_tax, final_tax=result.decided_tax,
         effective_rate=round(result.decided_tax / gross, 6) if gross else 0.0,
-        source_articles=list(params.sources),
-        basis=TaxBasis(queried_on=(as_of or date.today()).isoformat(), effective_dates=list(params.effective_dates)),
+        source_articles=sorted(set(sources)),
+        basis=TaxBasis(queried_on=(as_of or date.today()).isoformat(), effective_dates=sorted(dates)),
         notes=[*result.notes, *SCOPE_NOTES])
+    return await penalty_tax.attach(summary, max(0, result.balance), as_of=as_of, **penalty)

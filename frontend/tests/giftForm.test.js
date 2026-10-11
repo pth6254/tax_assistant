@@ -2,10 +2,12 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { FORMS, buildFormFromParams, QUESTION_BUILDERS } from '../src/components/Calculator/forms.js'
 
+const NO_PENALTY = { penalty_type: '없음', reported_tax: 0, is_negligent: false, days_late: 0, filed_within_months: 0, penalty_revenue: 0 }
+
 test('the gift tab sends every fact the calculator needs', () => {
   const form = { ...FORMS.gift.defaults, gift_amount: '20000', prior_gifts_10y: '10000', prior_gift_tax: '700',
     prior_gift_taxable: '7000', generation_skipping: true }
-  assert.deepEqual(FORMS.gift.toPayload(form), {
+  assert.deepEqual(FORMS.gift.toPayload(form), { ...NO_PENALTY,
     gift_amount: 200_000_000, relation: '직계존비속', is_minor: false, prior_gifts_10y: 100_000_000, debts: 0,
     prior_gift_tax: 7_000_000, prior_gift_taxable: 70_000_000, deduction_used_10y: 0, marriage_birth: false,
     marriage_birth_used: 0, generation_skipping: true, filed_on_time: true,

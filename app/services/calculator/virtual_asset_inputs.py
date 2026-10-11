@@ -1,4 +1,6 @@
-"""Read a virtual asset (코인) tax question into calculator inputs plus stated assumptions.
+"""Read a virtual asset (코인) tax question into 종합소득세 calculator inputs plus stated assumptions.
+
+가상자산소득은 기타소득 분리과세라 종합소득세 계산기의 virtual_* 입력으로 계산한다.
 
 The sale and purchase amounts must be written. A coin bought before 2027 may use its 2026-12-31 price as the
 acquisition cost; when the user gives that price it is used, otherwise the actual cost is (which can only
@@ -53,5 +55,6 @@ def stated_virtual_asset_inputs(query, history=None):
                            "합니다. 시가를 알려주지 않아 실제 취득가액으로 계산했습니다(세금이 더 크게 나올 수 있음).")
     if expenses is None:
         assumptions.append("거래수수료 등 필요경비는 0원으로 보았습니다.")
-    return StatedInputs({"transfer_price": transfer, "acquisition_price": acquisition, "expenses": expenses or 0,
-                         "held_before_2027": before, "value_2026_end": year_end or 0}, assumptions)
+    return StatedInputs({"virtual_transfer_price": transfer, "virtual_acquisition_price": acquisition,
+                         "virtual_expenses": expenses or 0, "virtual_held_before_2027": before,
+                         "virtual_value_2026_end": year_end or 0}, assumptions)

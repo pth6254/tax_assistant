@@ -5,6 +5,9 @@ decides the rate, so it is asked when missing. A delay given in days is used as 
 months is read as the months after the deadline for the late or amended return (감면) and as 30 days
 a month for 납부지연가산세, which the result states. 부정행위 is not assumed. Anything the calculator does
 not model (세금계산서·지급명세서 가산세, 원천징수, 고지 후 체납 …) returns None.
+
+`stated_penalty_option` reads the same facts from a question to one of the six tax calculators, where the
+본세 is computed by that calculator and the penalty is its option.
 """
 from dataclasses import dataclass
 import re
@@ -18,9 +21,11 @@ UNDER = re.compile(r"과소\s*신고|덜\s*신고|적게\s*신고|누락|수정\
 LATE_ONLY = re.compile(r"(?:신고는\s*했는데|신고만\s*하고)|납부(?:만)?\s*(?:를\s*)?(?:늦|안|못)|미납|체납|납부지연")
 NEGLIGENT = re.compile(r"부정|사기|이중\s*장부|허위|가공|차명|은닉")
 NOT_NEGLIGENT = re.compile(r"부정(?:행위)?\s*(?:은|는|이)?\s*(?:없|아니|안\s*했)\S*")
-DAYS = re.compile(r"(\d+)\s*일\s*(?:늦|지연|지나|후|뒤|만에|동안|경과)|지연\s*일수\s*(?:는|:)?\s*(\d+)\s*일")
-MONTHS = re.compile(r"(\d+)\s*(?:개월|달)\s*(?:늦|지연|지나|후|뒤|만에|이내|안에|동안)")
-YEARS = re.compile(r"(\d+)\s*년\s*(?:늦|지연|지나|후|뒤|만에|동안)")
+DAYS = re.compile(r"(\d+)\s*일\s*(?:늦|지연|지나|지났|후|뒤|만에|동안|경과)|지연\s*일수\s*(?:는|:)?\s*(\d+)\s*일")
+MONTHS = re.compile(r"(\d+)\s*(?:개월|달)\s*(?:늦|지연|지나|지났|후|뒤|만에|이내|안에|동안)")
+YEARS = re.compile(r"(\d+)\s*년\s*(?:늦|지연|지나|지났|후|뒤|만에|동안)")
+PENALTY_WORD = re.compile(r"가산세")
+REPORTED = r"신고한\s*세액|신고\s*세액|이미\s*낸\s*세(?:금|액)|납부한\s*세액|낸\s*세금"
 UNSUPPORTED = re.compile(r"세금계산서|계산서|지급명세서|원천징수|가산세\s*감면\s*신청|고지서|독촉|체납\s*처분|"
                          r"영세율|기장|장부\s*(?:의\s*)?(?:기록|보관|미작성|불성실)|사업자\s*등록|현금영수증|성실신고|증빙\s*불비|인지세")
 
@@ -59,6 +64,46 @@ def stated_penalty_inputs(query, history=None):
         return None
     if tax is None:
         return None
+    facts = _penalty_facts(text)
+    if isinstance(facts, MissingInputs):
+        return facts
+    kind, days, filed_within, negligent, assumptions = facts
+    if kind == "무신고":
+        assumptions.append("복식부기의무자·법인의 수입금액 기준 하한(1만분의 7)은 반영하지 않았습니다.")
+    params = {"unpaid_tax": tax, "penalty_type": kind, "is_negligent": negligent,
+              "days_late": days, "filed_within_months": filed_within, "revenue": 0}
+    return StatedInputs(params, assumptions)
+
+
+def stated_penalty_option(query, history=None):
+    """The penalty option of a tax calculator question: None when no late filing or payment is stated,
+    StatedInputs with the option fields, or MissingInputs for the facts that decide the penalty."""
+    texts = [str(m.get("content", "")) for m in (history or []) if m.get("role") == "user"][-2:] + [query]
+    text = "\n".join(texts)
+    if not (PENALTY_WORD.search(text) or any(p.search(text) for p in (NOT_FILED, UNDER, LATE_ONLY))):
+        return None
+    facts = _penalty_facts(text)
+    if isinstance(facts, MissingInputs):
+        return facts
+    kind, days, filed_within, negligent, assumptions = facts
+    try:
+        reported = next((v for v in (stated_amount(REPORTED, t) for t in reversed(texts)) if v is not None), None)
+    except ValueError:
+        reported = None
+    if kind == "과소신고" and reported is None:
+        return MissingInputs(["처음 신고한 세액"])
+    if kind == "납부지연" and reported is None:
+        reported = 0
+        assumptions.append("기한까지 낸 세금은 없다고 보았습니다(일부 냈으면 그 금액을 알려주세요).")
+    if kind == "무신고":
+        assumptions.append("복식부기의무자·법인의 수입금액 기준 하한(1만분의 7)은 반영하지 않았습니다.")
+    return StatedInputs({"penalty_type": kind, "reported_tax": reported or 0 if kind != "무신고" else 0,
+                         "is_negligent": negligent, "days_late": days, "filed_within_months": filed_within,
+                         "penalty_revenue": 0}, assumptions)
+
+
+def _penalty_facts(text):
+    """(kind, days late, months to the late or amended return, 부정행위, assumptions) or MissingInputs."""
     kinds = [kind for kind, pattern in (("무신고", NOT_FILED), ("과소신고", UNDER), ("납부지연", LATE_ONLY))
              if pattern.search(text)]
     if len(kinds) > 1 and "납부지연" in kinds:
@@ -77,7 +122,7 @@ def stated_penalty_inputs(query, history=None):
     if days is None:
         days = months * 30
         assumptions.append(f"납부지연 일수는 {months}개월을 {days}일(1개월 30일)로 계산했습니다. 실제 일수로 하루 0.022%가 붙습니다.")
-    negligent = bool(NEGLIGENT.search(NOT_NEGLIGENT.sub("", text)))
+    negligent = bool(NEGLIGENT.search(NOT_NEGLIGENT.sub("", text))) and kind != "납부지연"
     filed_within = 0
     if kind != "납부지연":
         filed_within = months if months is not None else -(-days // 30)
@@ -87,8 +132,4 @@ def stated_penalty_inputs(query, history=None):
                                + "하는 것으로 보아 감면을 적용했습니다(세무서가 알고 고지하기 전이어야 합니다).")
         if not negligent:
             assumptions.append("부정행위(이중장부·허위증빙 등)는 없다고 보았습니다.")
-        if kind == "무신고":
-            assumptions.append("복식부기의무자·법인의 수입금액 기준 하한(1만분의 7)은 반영하지 않았습니다.")
-    params = {"unpaid_tax": tax, "penalty_type": kind, "is_negligent": negligent and kind != "납부지연",
-              "days_late": days, "filed_within_months": filed_within, "revenue": 0}
-    return StatedInputs(params, assumptions)
+    return kind, days, filed_within, negligent, assumptions

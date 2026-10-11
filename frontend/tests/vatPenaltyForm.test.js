@@ -16,19 +16,23 @@ test('the VAT tab sends card sales and prepaid tax, and drops general-only lines
   assert.equal(simple.business_type, '음식점업')
 })
 
-test('the penalty tab sends the reduction months and late days, but not for late payment only', () => {
-  const payload = FORMS.penalty.toPayload({ ...FORMS.penalty.defaults, unpaid_tax: '500', days_late: '60', filed_within_months: '2' })
-  assert.deepEqual(payload, { unpaid_tax: 5_000_000, penalty_type: '무신고', is_negligent: false, days_late: 60,
-    filed_within_months: 2, revenue: 0 })
-  const late = FORMS.penalty.toPayload({ unpaid_tax: '500', penalty_type: '납부지연', days_late: '10', filed_within_months: '2', is_negligent: true })
-  assert.equal(late.filed_within_months, 0)
-  assert.equal(late.is_negligent, false)
+test('every tax tab sends the penalty option, only with the facts its kind uses', () => {
+  const none = FORMS.vat.toPayload({ ...FORMS.vat.defaults, sales: '1000', days_late: '60' })
+  assert.deepEqual([none.penalty_type, none.days_late, none.reported_tax], ['없음', 0, 0])
+  const late = FORMS.gift.toPayload({ ...FORMS.gift.defaults, gift_amount: '30000', penalty_type: '무신고',
+    days_late: '60', filed_within_months: '2', reported_tax: '100' })
+  assert.deepEqual([late.penalty_type, late.days_late, late.filed_within_months, late.reported_tax], ['무신고', 60, 2, 0])
+  const unpaid = FORMS.capital.toPayload({ ...FORMS.capital.defaults, transfer_price: '1', acquisition_price: '1',
+    penalty_type: '납부지연', reported_tax: '300', days_late: '10', filed_within_months: '2', is_negligent: true })
+  assert.deepEqual([unpaid.reported_tax, unpaid.filed_within_months, unpaid.is_negligent], [3_000_000, 0, false])
 })
 
-test('a chat penalty calculation opens the tab and the follow-up repeats it', () => {
-  const form = buildFormFromParams('penalty', { unpaid_tax: 5_000_000, penalty_type: '무신고', days_late: 60, filed_within_months: 2 })
+test('a chat calculation with a penalty opens the tax tab and the follow-up repeats it', () => {
+  const form = buildFormFromParams('gift', { gift_amount: 300_000_000, relation: '직계존비속', penalty_type: '무신고',
+    days_late: 60, filed_within_months: 2 })
+  assert.equal(form.penalty_type, '무신고')
   assert.equal(form.days_late, '60')
-  const question = QUESTION_BUILDERS.penalty(form, { final_tax: 5_766_000 })
+  const question = QUESTION_BUILDERS.gift(form, { final_tax: 44_264_000 })
+  assert.match(question, /무신고 후 2개월 안에 신고/)
   assert.match(question, /납부지연 60일/)
-  assert.match(question, /기한 후 2개월 안에 스스로 신고/)
 })

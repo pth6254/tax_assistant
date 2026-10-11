@@ -16,6 +16,7 @@ from decimal import Decimal
 from fractions import Fraction
 
 from app.schemas.calculator import CalculationResult, TaxBasis, TaxStep
+from app.services.calculator import penalty_tax
 from app.services.calculator.brackets import truncate_won
 from app.services.calculator.errors import CalculationError, require_value
 from app.services.calculator.repository import get_brackets, get_deduction
@@ -27,7 +28,7 @@ BUSINESS_TYPES = ("소매업", "음식점업", "제조업", "농업·임업·어
 
 SCOPE_NOTES = (
     "과세표준(간주임대료·간주공급 등 포함)과 공제받는 매입은 입력값을 그대로 썼습니다. 대손세액, 재고매입세액, "
-    "음식점 개인사업자 외의 의제매입세액, 소규모 개인사업자 감면, 겸영 간이과세자와 가산세는 계산하지 않았습니다.",
+    "음식점 개인사업자 외의 의제매입세액, 소규모 개인사업자 감면, 겸영 간이과세자, 영세율 과세표준 신고불성실가산세는 계산하지 않았습니다.",
     "신용카드매출전표등 발행세액공제는 연간 한도 안에서 이번 신고까지 이미 받은 공제를 뺀 금액만큼 적용합니다.",
 )
 
@@ -175,17 +176,20 @@ async def calculate(sales: int, purchases: int = 0, exempt_sales: int = 0, is_si
                     business_type: str = "소매업", zero_rated_sales: int = 0, common_purchases: int = 0,
                     non_deductible_purchases: int = 0, deemed_purchases: int = 0, card_sales: int = 0,
                     card_credit_eligible: bool = True, card_credit_used: int = 0, e_filing: bool = False,
-                    prepaid_tax: int = 0, as_of: date | None = None) -> CalculationResult:
+                    prepaid_tax: int = 0, as_of: date | None = None, **penalty) -> CalculationResult:
     if is_simplified and business_type not in BUSINESS_TYPES:
         raise CalculationError("unsupported_condition")
     params = await load_parameters(as_of)
+    no_return = penalty.get("penalty_type") == "무신고" and e_filing
+    if no_return:
+        e_filing = False   # 전자신고세액공제는 확정신고를 한 경우에만 받는다.
     result = compute(params=params, sales=sales, purchases=purchases, exempt_sales=exempt_sales,
                      is_simplified=is_simplified, business_type=business_type, zero_rated_sales=zero_rated_sales,
                      common_purchases=common_purchases, non_deductible_purchases=non_deductible_purchases,
                      deemed_purchases=deemed_purchases, card_sales=card_sales,
                      card_credit_eligible=card_credit_eligible, card_credit_used=card_credit_used,
                      e_filing=e_filing, prepaid_tax=prepaid_tax)
-    return CalculationResult(
+    summary = CalculationResult(
         tax_type="부가가치세",
         steps=[TaxStep(label=label, amount=amount) for label, amount in result.steps],
         taxable_income=result.taxable_income, calculated_tax=result.calculated_tax, final_tax=result.decided_tax,
@@ -193,3 +197,6 @@ async def calculate(sales: int, purchases: int = 0, exempt_sales: int = 0, is_si
         source_articles=list(params.sources),
         basis=TaxBasis(queried_on=(as_of or date.today()).isoformat(), effective_dates=list(params.effective_dates)),
         notes=[*result.notes, *SCOPE_NOTES])
+    if no_return:
+        summary.notes.insert(0, "무신고에는 전자신고세액공제가 없어 빼고 계산했습니다.")
+    return await penalty_tax.attach(summary, max(0, result.decided_tax), as_of=as_of, **penalty)

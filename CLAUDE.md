@@ -32,8 +32,10 @@
 | 양도소득세 계산기·채팅 입력 해석 | [capital_gains.py](app/services/calculator/capital_gains.py), [capital_gains_inputs.py](app/services/calculator/capital_gains_inputs.py) |
 | 증여세 계산기·채팅 입력 해석 | [gift_tax.py](app/services/calculator/gift_tax.py), [gift_inputs.py](app/services/calculator/gift_inputs.py) |
 | 상속세 계산기·채팅 입력 해석 | [inheritance.py](app/services/calculator/inheritance.py), [inheritance_inputs.py](app/services/calculator/inheritance_inputs.py) |
-| 부가가치세·가산세 계산기·채팅 입력 해석 | [vat.py](app/services/calculator/vat.py), [vat_inputs.py](app/services/calculator/vat_inputs.py), [penalty_tax.py](app/services/calculator/penalty_tax.py), [penalty_inputs.py](app/services/calculator/penalty_inputs.py) |
-| 퇴직소득세·가상자산 계산기·채팅 입력 해석 | [retirement.py](app/services/calculator/retirement.py), [retirement_inputs.py](app/services/calculator/retirement_inputs.py), [virtual_asset.py](app/services/calculator/virtual_asset.py), [virtual_asset_inputs.py](app/services/calculator/virtual_asset_inputs.py) |
+| 부가가치세 계산기·채팅 입력 해석 | [vat.py](app/services/calculator/vat.py), [vat_inputs.py](app/services/calculator/vat_inputs.py) |
+| 가산세 옵션(6개 계산기 공통)·본세만 아는 가산세 | [penalty_tax.py](app/services/calculator/penalty_tax.py) (`attach`), [penalty_inputs.py](app/services/calculator/penalty_inputs.py) (`stated_penalty_option`), [planner.py](app/services/tools/planner.py) (`tax_calculation`) |
+| 퇴직소득세 계산기·채팅 입력 해석 | [retirement.py](app/services/calculator/retirement.py), [retirement_inputs.py](app/services/calculator/retirement_inputs.py) |
+| 가상자산(종합소득세의 분리과세 항목)·채팅 입력 해석 | [virtual_asset.py](app/services/calculator/virtual_asset.py), [virtual_asset_inputs.py](app/services/calculator/virtual_asset_inputs.py), [income_tax.py](app/services/calculator/income_tax.py) (`calculate`) |
 | 답변·근거 표시 | [answerSections.js](frontend/src/components/Chat/answerSections.js), [VerificationPanel.jsx](frontend/src/components/Chat/VerificationPanel.jsx) |
 | 자동 카드·실제 관측·Judge | [auto_cards.py](evaluation/auto_cards.py), [auto_pipeline.py](evaluation/auto_pipeline.py), [auto_cli.py](evaluation/auto_cli.py) |
 | 차단 집계·검사 가치 측정 | [block_report.py](evaluation/block_report.py), [filter_value.py](evaluation/filter_value.py) |
