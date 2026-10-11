@@ -278,11 +278,11 @@ Agentic RAG 파이프라인 (검색 → 계산 → 합성 → 인용 검증)
 - **전용 계산기 밖의 채팅 참고 계산**: 전용 계산기가 읽지 못한 금융소득 질문 등은 공식 법령 수집 → 제한된 JSON 산식 → Decimal 연산 → 수치·근거 검사와 필수 의미 Judge를 거칩니다. 승인된 결과만 예시 가정/계산 범위와 함께 제공하고, 웹의 **근거 및 확인 사항 → 계산에 사용한 값과 산식**에서 입력 출처와 전체 계산을 확인할 수 있습니다. 검증되지 않은 산식은 공개하지 않고 근거 설명을 계속합니다. 확보한 시행본 기준의 참고 계산이며 과거 시점 적용이나 신고세액 확정은 지원하지 않습니다.
 - **실패와 0원 결과 분리**: 필수 세율·공제 데이터가 없거나 DB 연결이 실패하면 계산을 중단한다. 입력 오류·미지원 조건·일시 장애를 구분해 화면과 채팅 도구 카드에 안내하며, 실패한 계산을 LLM이 임의로 보완하지 않도록 최종 생성을 우회한다. 정상적인 0원 및 부가세 환급 결과는 유지한다.
 
-- 종합소득세·양도소득세·상속세·증여세·부가가치세·가산세(무신고·과소신고·납부지연) 6종, DB 세율표(`tax_brackets`/`tax_deductions`) 기반 계산
-- 양도소득세(`capital_gains`, 국내 등기 주택·토지·건물 1건): 1세대 1주택 비과세(보유 2년, 취득 당시 조정대상지역이면 거주 2년)와 12억원 초과 고가주택 안분(시행령 제160조), 장기보유특별공제 표1(연 2%, 최대 30%)·표2(보유·거주 각 연 4%, 최대 80%), 단기보유 세율(주택 70%·60%, 그 밖 50%·40%), 조정대상지역 다주택 중과(입력으로 2주택 +20%p·3주택 이상 +30%p, 장기보유특별공제 배제)를 계산합니다. 결정세액은 양도소득세(국세)이고 지방소득세(10%)는 별도 단계로 표시합니다. 산식은 국세청 양도소득세 신고서 작성 사례·고가주택 계산 안내·「2026 세금절약가이드 Ⅱ」 세율 비교표 9건으로 검증합니다. 채팅의 부동산 양도 계산 질문은 이 계산기를 먼저 쓰며, 1세대 1주택 여부·거주기간·취득 당시 조정대상지역 여부처럼 비과세를 가르는 사실은 가정하지 않고 되묻습니다(필요경비만 0원 가정으로 밝힘). 다주택·분양권·비사업용 토지·주식 등은 일반 도구 경로로 갑니다.
-- 소득 종류 확장(2026-10-11): 종합소득세는 공적·사적연금(연금소득공제, 사적연금 분리과세 3~5%·15%와 종합과세 비교), 기타소득(강연료·원고료 60%·상금 80% 필요경비 의제, 300만원 이하 분리과세 비교), 주택임대소득(2천만원 이하 14% 분리과세 비교), 추계 사업소득(단순경비율 기본율·초과율, 기준경비율과 배율 2.8·3.4), 일용근로소득(분리과세)을 계산하고 법이 고르게 하는 분리과세는 세금이 적은 쪽을 고릅니다. 양도소득세는 분양권·조합원입주권·기타자산(회원권)·비사업용 토지·미등기와 주식(대주주·소액·국외·중소기업), 파생상품, 신탁수익권을 네 소득 그룹별 기본공제·손익 통산으로 계산합니다.
-- 퇴직소득세(`retirement`): 근속연수공제(2016년·2023년 표), 환산급여공제, 기본세율, 근속연수 연분연승으로 계산합니다. 국세청 퇴직소득 안내 사례로 검증합니다.
-- 가상자산 소득세(`virtual_asset`): 2027년 1월 1일 양도분부터 (소득금액 - 250만원) x 20% 분리과세이고 2027년 전 보유분은 2026-12-31 시가와 비교합니다. 그 전 양도는 과세되지 않음과 2027년 이후 세액을 함께 보입니다.
+- 종합소득세·양도소득세·퇴직소득세·가상자산 소득세·상속세·증여세·부가가치세·가산세(무신고·과소신고·납부지연) 8종, DB 세율표(`tax_brackets`/`tax_deductions`) 기반 계산
+- 양도소득세(`capital_gains`, 국내 부동산 1건): 1세대 1주택 비과세(보유 2년, 취득 당시 조정대상지역이면 거주 2년)와 12억원 초과 고가주택 안분(시행령 제160조), 장기보유특별공제 표1(연 2%, 최대 30%)·표2(보유·거주 각 연 4%, 최대 80%), 단기보유 세율(주택 70%·60%, 그 밖 50%·40%), 조정대상지역 다주택 중과(입력으로 2주택 +20%p·3주택 이상 +30%p, 장기보유특별공제 배제)를 계산합니다. 결정세액은 양도소득세(국세)이고 지방소득세(10%)는 별도 단계로 표시합니다. 산식은 국세청 양도소득세 신고서 작성 사례·고가주택 계산 안내·「2026 세금절약가이드 Ⅱ」 세율 비교표 9건으로 검증합니다. 채팅의 부동산 양도 계산 질문은 이 계산기를 먼저 쓰며, 1세대 1주택 여부·거주기간·취득 당시 조정대상지역 여부처럼 비과세를 가르는 사실은 가정하지 않고 되묻습니다(필요경비만 0원 가정으로 밝힘). 다주택은 취득 당시 조정대상지역 여부와 중과 적용 여부를, 주식은 대주주 여부와 거래 시장을 되묻습니다. 국외 부동산, 조합원입주권 1주택 비과세, 같은 해 여러 건 양도의 비교과세는 일반 도구 경로로 갑니다.
+- 그 밖의 소득·자산: 종합소득세는 공적·사적연금(연금소득공제, 사적연금 분리과세 3~5%·15%와 종합과세 비교), 기타소득(강연료·원고료 60%·상금 80% 필요경비 의제, 300만원 이하 분리과세 비교), 주택임대소득(2천만원 이하 14% 분리과세 비교), 추계 사업소득(단순경비율 기본율·초과율, 기준경비율과 배율 2.8·3.4), 일용근로소득(분리과세)을 계산하고 법이 고르게 하는 분리과세는 세금이 적은 쪽을 고릅니다. 양도소득세는 분양권·조합원입주권·기타자산(회원권)·비사업용 토지·미등기와 주식(대주주·소액·국외·중소기업), 파생상품, 신탁수익권을 네 소득 그룹별 기본공제·손익 통산으로 계산합니다.
+- 퇴직소득세(`retirement`): 근속연수공제(2016년·2023년 표), 환산급여공제, 기본세율, 근속연수 연분연승으로 계산합니다. 국세청 퇴직소득 안내 사례로 검증합니다. 연금계좌 이체에 따른 과세이연과 2016~2019년 퇴직분의 신·구 계산 안분은 지원하지 않습니다.
+- 가상자산 소득세(`virtual_asset`): 2027년 1월 1일 양도분부터 (소득금액 - 250만원) x 20% 분리과세이고 2027년 전 보유분은 2026-12-31 시가와 비교합니다. 그 전 양도는 과세되지 않음과 2027년 이후 세액을 함께 보입니다. 공식 계산 사례가 아직 없어 법조문 산식으로 검증합니다. 대여·스테이킹·코인 간 교환은 일반 도구 경로로 갑니다.
 - 부가가치세(`vat`, 과세기간 1회 신고분): 일반과세자는 매출세액(과세 10%·영세율 0%) - 공제 매입세액(불공제·공통매입 면세비율 안분 차감) - 음식점 개인사업자 의제매입세액(9/109·8/108, 과세표준 비율 한도) - 신용카드매출전표등 발행세액공제(1.3%, 연 1천만원 한도, 납부세액 한도) - 전자신고세액공제 - 예정고지세액, 간이과세자는 공급대가 x 업종별 부가가치율(15~40%) x 10% - 매입 공급대가 0.5% - 카드 발행공제(공제 합계는 납부세액 한도, 환급 없음), 연 공급대가 4,800만원 미만 납부의무 면제를 계산합니다. 산식은 국세청 2022년 확정신고 작성방법의 일반과세자 6개·간이과세자 4개 업종 사례로 검증합니다. 채팅은 과세유형과 간이과세자 업종이 없으면 되묻습니다.
 - 가산세(`penalty_tax`): 무신고(20%, 부정 40%, 복식부기의무자·법인 수입금액 1만분의 7·14 하한)·과소신고(10%, 부정 40%) 가산세에 기한 후 신고(1·3·6개월 50·30·20%)·수정신고(1개월~2년 90~10%) 감면을 적용하고 납부지연가산세(1일 0.022%)를 함께 계산합니다. 산식은 「2026 세금절약가이드 Ⅱ」 무신고 사례와 종합소득세 신고서 작성사례의 수입금액 기준 무신고가산세로 검증합니다. 채팅은 무신고·과소신고·납부지연 구분과 지연 기간이 없으면 되묻습니다.
 - 상속세(`inheritance`, 거주자 사망): 채무·공과금과 장례비용(최소 500만원·한도 1천만원+봉안 500만원)을 빼고 사전증여재산(상속인 10년·그 외 5년)을 더한 과세가액에서 기초·그 밖의 인적공제(자녀·미성년·65세 이상·장애인)와 일괄공제 중 큰 금액(배우자 단독상속이면 일괄공제 없음), 배우자 상속공제(실제 상속액, 최소 5억원, 법정상속분 기준 한도와 30억원), 금융재산 상속공제(20%·최소 2천만원·한도 2억원)를 빼고 공제 적용 한도(제24조)를 적용합니다. 세대생략 할증(손자녀 몫 비율), 증여세액공제, 과세최저한, 신고세액공제 3%까지 계산합니다. 산식은 국세청 상속세 신고서 작성 사례 2건과 「2026 세금절약가이드 Ⅱ」 사례 4건으로 검증합니다. 채팅의 상속세 계산 질문은 이 계산기를 먼저 쓰며, 배우자 유무·자녀 수·미성년 상속인의 나이·언급된 사전증여액은 되묻고, 말하지 않은 배우자 실제 상속액·금융재산 등은 세금을 줄이지 않는 쪽으로 가정해 밝힙니다. 손자녀 상속·상속포기·유증·가업·영농 등은 일반 도구 경로로 갑니다.
@@ -415,7 +415,7 @@ cron·Windows 작업 스케줄러에 등록해 주기 실행하는 것을 전제
 질문 입력
   → 명시한 계산 요청인지 확인 (금액·세액 단어만으로 계산 의도 확정하지 않음)
   → 지원 범위: 도구/입력 선택 → Pydantic·필수 조건·사용자 입력 출처 검사
-     → 전용 6종 계산기 실행 → 검증된 결과/단계/범위 표시
+     → 전용 계산기 실행 → 검증된 결과/단계/범위 표시
   → 전용 범위 밖 참고 계산: 공식 원문 → 제한 JSON 산식 → 수치/입력 검사
      → Decimal 연산 → 필수 산식 의미 Judge → 승인된 참고 결과만 표시
   → 실패/입력 부족은 실제 상태로 안내, 미검증 세액을 생성 모델에 넘기지 않음
@@ -561,7 +561,7 @@ tax-assistant/
     │   ├── chat.py               # POST /api/chat, /api/chat/stream
     │   ├── health.py             # live/ready/dependencies 상태 진단
     │   ├── upload.py             # POST /api/upload, 문서 목록/삭제
-    │   ├── calculator.py         # POST /api/calculator/{income-tax,financial-income-tax,capital-gains,inheritance,gift,vat,penalty-tax}
+    │   ├── calculator.py         # POST /api/calculator/{income-tax,financial-income-tax,capital-gains,retirement,virtual-asset,inheritance,gift,vat,penalty-tax}
     │   ├── law.py                # GET /api/law-articles/lookup (조문 원문 뷰어)
     │   └── tax_schedule.py       # GET /api/tax-schedule
     │
@@ -581,9 +581,9 @@ tax-assistant/
     │   │   ├── extractors.py     # PDF·DOCX·HWPX·PPTX·HTML 추출·PDF OCR
     │   │   └── structured_chunker.py # 구조·토큰 청킹과 원문 위치 보존
     │   ├── calculator/
-    │   │   ├── income_tax.py / capital_gains.py / inheritance.py / gift_tax.py / vat.py / penalty_tax.py  # 세목별 계산 로직
+    │   │   ├── income_tax.py / capital_gains.py / retirement.py / virtual_asset.py / inheritance.py / gift_tax.py / vat.py / penalty_tax.py  # 세목별 계산 로직
     │   │   ├── financial_income_tax.py  # 금융소득 비교과세(제62조) — income_tax가 호출
-    │   │   ├── *_inputs.py(income_tax·capital_gains·gift·inheritance·vat·penalty·financial)  # 채팅 질문 → 계산기 입력·가정
+    │   │   ├── *_inputs.py(income_tax·capital_gains·retirement·virtual_asset·gift·inheritance·vat·penalty·financial)  # 채팅 질문 → 계산기 입력·가정
     │   │   ├── engine.py         # 챗봇 tool calling — 계산 의도 감지·파라미터 추출·실행
     │   │   ├── repository.py    # tax_brackets/tax_deductions 조회
     │   │   └── brackets.py      # 계산기 공통 세율 구간 적용 (DB 세율표 기반)
@@ -927,7 +927,11 @@ pytest tests/test_ingestion.py -v           # 수집·개정 감지 유틸
 pytest tests/test_api_service.py -v         # 국가법령정보 API XML 파싱 (법령 + 법령해석례)
 pytest tests/test_interpretation_service.py -v  # 유권해석 수집 파이프라인
 pytest tests/test_hybrid_search_priority.py -v  # 법령 위계 우선순위 분류
-pytest tests/test_calculator.py -v          # 세금 계산기 6종 (소득세·양도세·상속세·증여세·부가세·가산세)
+pytest tests/test_calculator.py -v          # 세금 계산기 공통 세율 구간·공제 로직
+pytest tests/test_income_tax.py tests/test_capital_gains.py tests/test_retirement.py tests/test_virtual_asset.py \
+       tests/test_inheritance.py tests/test_gift_tax.py tests/test_vat_penalty.py -v   # 세목별 계산기·공식 사례
+pytest tests/test_income_tax_chat.py tests/test_capital_gains_chat.py tests/test_inheritance_chat.py \
+       tests/test_gift_chat.py tests/test_vat_penalty_chat.py -v   # 채팅 질문 → 계산기 입력·되묻기
 pytest tests/test_calculator_engine.py tests/test_tools.py -v   # 계산기·공통 도구 호출
 pytest tests/test_citation_guard.py -v      # 답변 인용·수치 검증 후처리
 pytest tests/test_tax_schedule.py -v        # 세무 일정 계산
@@ -955,7 +959,9 @@ pytest --lf
 | `test_api_service.py` | 법령/법령해석례 검색·본문조회 XML 파싱 | DB·외부 의존 없음 |
 | `test_interpretation_service.py` | 유권해석 수집·세목 추론·본문 조합 | DB·외부 의존 없음 (API/DB mock) |
 | `test_hybrid_search_priority.py` | law_type → (우선순위, source_type) 분류 | DB·외부 의존 없음 |
-| `test_calculator.py` | 세금 계산기 6종 세율 구간·공제 로직 | 시드 데이터 mock |
+| `test_calculator.py` | 세금 계산기 공통 세율 구간·공제 로직 | 시드 데이터 mock |
+| `test_income_tax.py`, `test_capital_gains.py`, `test_retirement.py`, `test_virtual_asset.py`, `test_inheritance.py`, `test_gift_tax.py`, `test_vat_penalty.py` | 세목별 계산 산식·국세청 공식 사례(가상자산은 법조문 산식) | 세율 파라미터 직접 주입 |
+| `test_income_tax_chat.py`, `test_capital_gains_chat.py`, `test_inheritance_chat.py`, `test_gift_chat.py`, `test_vat_penalty_chat.py` | 채팅 질문의 계산기 입력 해석·가정·되묻기 | LLM mock |
 | `test_calculator_engine.py`, `test_tools.py` | 공통 도구 선택·계산 실행·사용자 격리·실패 경계 | LLM/DB mock |
 | `test_citation_guard.py` | 조문 인용 실존 검증, 계산 금액 일치 검증 | DB·외부 의존 없음 |
 | `test_tax_schedule.py` | 사업자 유형별 신고 기한 계산 | DB·외부 의존 없음 |
@@ -1072,6 +1078,8 @@ python scripts/evaluate.py suite --mode live --include-draft --output evaluation
 | POST | `/api/calculator/capital-gains` | 양도소득세 계산 | ✅ 필요 |
 | POST | `/api/calculator/inheritance` | 상속세 계산 | ✅ 필요 |
 | POST | `/api/calculator/gift` | 증여세 계산 | ✅ 필요 |
+| POST | `/api/calculator/vat` | 부가가치세(일반·간이과세자) 계산 | ✅ 필요 |
+| POST | `/api/calculator/penalty-tax` | 무신고·과소신고·납부지연 가산세 계산 | ✅ 필요 |
 | GET | `/api/law-articles/lookup` | 법령명·조문번호로 조문 원문 조회 (조문 뷰어) | ✅ 필요 |
 | GET | `/api/tax-schedule` | 사업자 유형 기준 다가오는 신고·납부 기한 | ✅ 필요 |
 | GET | `/api/tax-schedule/official?year=2026&month=10` | 국세청 월별 공식 게시 일정(출처·확인시각·최신 확인 실패 여부 포함) | ✅ 필요 |
@@ -1118,6 +1126,10 @@ python scripts/evaluate.py suite --mode live --include-draft --output evaluation
 "수입 1억, 경비 6천만원, 부양가족 2명이면 종합소득세 계산해줘"
 "성인인 아들에게 3억 증여하면 증여세 얼마야?"
 "10년 보유한 아파트를 12억에 팔고 취득가는 7억이면 양도세 계산해줘"
+"해외주식을 5천만원에 사서 1억에 팔면 양도세 얼마?"
+"국민연금 연금소득 1,200만원이면 종합소득세 얼마?"
+"퇴직금 1억 받으면 퇴직소득세 얼마야? 20년 근무했어"
+"비트코인을 1천만원에 사서 5천만원에 팔면 세금 얼마?"
 ```
 
 ### 답변 구조
@@ -1267,11 +1279,9 @@ LLM은 법조문 번호나 계산 수치를 프롬프트 지시만으로 완벽�
 
 공통 호출의 생성 길이 인자는 `max_tokens`이며 Ollama 어댑터에서만 `options.num_predict`로 변환합니다. provider는 프로세스에서 한 번 생성해 재사용하고 종료 시 닫습니다. 환경설정 변경은 재시작으로 반영합니다. `langchain-ollama`는 사용하지 않으며, `langchain-core`는 아래 프롬프트·파이프라인·출력 검증에만 사용합니다.
 
-후속 정리 검증: 최신 Docker 전체 테스트 296개 통과, 실제 Ollama 일반 생성·스트리밍·구조화 응답과 dependency `ready` 확인.
-
 ### 공통 도구 호출 계층
 
-`app/services/tools/`에서 법령 원문 조회(`law_lookup`), 로그인 사용자 문서 검색(`document_search`), 기존 계산기 6종을 선택·실행합니다.
+`app/services/tools/`에서 법령 원문 조회(`law_lookup`), 로그인 사용자 문서 검색(`document_search`), 전용 계산기를 선택·실행합니다.
 이는 provider 고유 native `tool_calls`가 아니라 JSON 선택 결과를 Pydantic으로 검증하는 애플리케이션 수준 tool calling입니다. 기존 HTTP provider와 Runnable을 그대로 사용합니다.
 
 - `planner.py`: 의도 게이트 → 최근 대화 최대 4개 메시지와 질문으로 도구 하나 선택. 선택 제한 30초, 자동 재시도 없음.
