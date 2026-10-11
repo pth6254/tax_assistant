@@ -31,7 +31,14 @@ def params():
         wage_credit_limits=((0, 740_000, Decimal(0), 740_000), (33_000_000, 740_000, Decimal("0.008"), 660_000),
                             (70_000_000, 660_000, Decimal("0.5"), 500_000),
                             (120_000_000, 500_000, Decimal("0.5"), 200_000)),
-        standard_wage=130_000, standard_sincere=120_000, standard_other=70_000)
+        standard_wage=130_000, standard_sincere=120_000, standard_other=70_000, kinds=kinds())
+
+
+def kinds():
+    from tests.test_calculator import _BRACKETS, _DEDUCTIONS
+    rows = {name: _DEDUCTIONS[("소득세", name)] for name in it.KIND_NAMES}
+    rows["연금소득공제"] = _BRACKETS[("소득세", "연금소득공제")]
+    return rows
 
 
 def step(result, prefix):
@@ -41,7 +48,7 @@ def step(result, prefix):
 
 
 STEP = {"taxable": "과세표준", "wage_deduction": "근로소득공제", "wage_tax": "근로소득에 대한 산출세액",
-        "wage_credit": "근로소득세액공제"}
+        "wage_credit": "근로소득세액공제", "business": "사업소득금액", "daily": "일용근로소득 원천징수"}
 
 
 @pytest.mark.parametrize("case", DATA["cases"], ids=[c["id"] for c in DATA["cases"]])
@@ -145,3 +152,65 @@ async def test_the_old_financial_calculator_is_an_alias_of_this_one():
         old = await fit.calculate(interest_income=100_000_000, income_deductions=1_500_000)
         new = await it.calculate(interest_income=100_000_000, personal_deduction_count=1)
     assert old.final_tax == new.final_tax == 15_810_000   # 15,880,000 - 표준세액공제 70,000
+
+
+def test_pension_deduction_bands_and_cap():
+    p = params()
+    assert it.pension_deduction(p, 3_000_000) == 3_000_000
+    assert it.pension_deduction(p, 6_000_000) == 4_500_000      # 350만 + 250만 x 40%
+    assert it.pension_deduction(p, 12_000_000) == 5_900_000     # 490만 + 500만 x 20%
+    assert it.pension_deduction(p, 60_000_000) == 9_000_000     # 630만 + 4,600만 x 10% = 1,090만 -> 한도
+
+
+def test_public_pension_is_taxed_after_the_pension_deduction():
+    result = it.compute(params=params(), pension_income=20_000_000)
+    assert step(result, "연금소득공제") == 6_900_000 and step(result, "연금소득금액") == 13_100_000
+    assert step(result, "과세표준") == 11_600_000
+
+
+def test_small_private_pension_stays_separate_when_that_is_cheaper():
+    result = it.compute(params=params(), wage_income=80_000_000, private_pension=12_000_000, pension_age=72)
+    # 원천징수 4%(70~79세) 48만으로 과세가 끝나는 쪽이 24% 구간 합산보다 적다.
+    assert step(result, "사적연금 분리과세(원천징수 4%") == 480_000
+    assert any("사적연금은 분리과세와 종합과세" in note for note in result.notes)
+
+
+def test_large_private_pension_chooses_between_fifteen_percent_and_comprehensive():
+    alone = it.compute(params=params(), private_pension=20_000_000, pension_age=65)
+    # 다른 소득이 없으면 종합과세(공제 후 1,310만 - 150만 = 1,160만 x 6% = 69.6만 - 7만)가 15%(300만)보다 적다.
+    assert alone.decided_tax == 626_000 and step(alone, "연금소득금액") == 13_100_000
+    rich = it.compute(params=params(), wage_income=300_000_000, private_pension=20_000_000, pension_age=65)
+    assert step(rich, "사적연금 분리과세 세액(15%") == 3_000_000
+
+
+def test_lecture_fee_uses_the_sixty_percent_deemed_expense_and_the_cheaper_option():
+    small = it.compute(params=params(), wage_income=100_000_000, misc_income=5_000_000, misc_expense_rule="60%")
+    # 기타소득금액 200만 <= 300만: 분리과세 20%(40만)가 35% 구간 합산보다 적다.
+    assert step(small, "기타소득 분리과세(원천징수 20%") == 400_000
+    large = it.compute(params=params(), misc_income=20_000_000, misc_expense_rule="60%")
+    assert step(large, "기타소득금액") == 8_000_000 and step(large, "기납부세액") == 1_600_000
+
+
+def test_small_house_rental_is_compared_with_separate_taxation():
+    result = it.compute(params=params(), wage_income=60_000_000, rental_income=12_000_000, rental_expenses=2_000_000)
+    # 분리과세: (1,200만 - 50% - 200만 공제는 다른 종합소득금액 2천만원 초과로 없음) x 14% = 84만
+    assert step(result, "주택임대소득 분리과세 세액") == 840_000
+    registered = it.compute(params=params(), rental_income=12_000_000, registered_rental=True)
+    # 등록임대: (1,200만 - 60% - 400만) x 14% = 11.2만
+    assert step(registered, "주택임대소득 분리과세 세액") == 112_000
+
+
+def test_large_house_rental_is_always_comprehensive():
+    result = it.compute(params=params(), rental_income=30_000_000, rental_expenses=10_000_000)
+    assert step(result, "주택임대 사업소득금액") == 20_000_000
+    assert not any(label.startswith("주택임대소득 분리과세") for label, _ in result.steps)
+
+
+def test_daily_wage_below_the_minimum_is_not_collected():
+    assert it.daily_wage_tax(params(), 180_000, 10) == 0          # (3만 x 6% = 1,800) x 45% = 810 < 1,000
+    assert it.daily_wage_tax(params(), 200_000, 5) == 6_750
+
+
+def test_unknown_business_method_is_unsupported():
+    with pytest.raises(CalculationError):
+        it.compute(params=params(), income=1, business_method="기타")

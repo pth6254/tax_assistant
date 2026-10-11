@@ -46,6 +46,13 @@ export default function CalculatorScreen({ initial, onInitialConsumed, onAskAbou
   const visible = fields.filter(f => !(f.key === 'business_type' && !form.is_simplified) && !(['is_negligent', 'filed_within_months', 'revenue'].includes(f.key) && form.penalty_type === '납부지연')
     && !(['zero_rated_sales', 'exempt_sales', 'non_deductible_purchases', 'common_purchases', 'deemed_purchases'].includes(f.key) && form.is_simplified)
     && !(f.key === 'withheld' && !hasFinancial)
+    && !(['simple_rate', 'simple_excess_rate'].includes(f.key) && tab === 'income' && (form.business_method || '장부') === '장부')
+    && !(['standard_rate', 'major_expenses', 'double_entry'].includes(f.key) && tab === 'income' && form.business_method !== '기준경비율')
+    && !(f.key === 'expense' && tab === 'income' && (form.business_method || '장부') !== '장부')
+    && !(f.key === 'pension_age' && !(Number(form.private_pension || 0) > 0))
+    && !(['misc_expense_rule', 'misc_expenses'].includes(f.key) && !(Number(form.misc_income || 0) > 0))
+    && !(['rental_expenses', 'registered_rental'].includes(f.key) && !(Number(form.rental_income || 0) > 0))
+    && !(f.key === 'daily_work_days' && !(Number(form.daily_wage || 0) > 0))
     && !(['is_minor', 'generation_skipping', 'marriage_birth'].includes(f.key) && form.relation && form.relation !== '직계존비속')
     && !(['prior_gift_taxable', 'prior_gift_tax'].includes(f.key) && tab === 'gift' && !(Number(form.prior_gifts_10y || 0) > 0))
     && !(['prior_gifts_taxable', 'prior_gift_tax', 'spouse_prior_gifts_taxable'].includes(f.key) && tab === 'inheritance' && !(Number(form.prior_gifts || 0) + Number(form.prior_gifts_non_heirs || 0) > 0))
@@ -64,7 +71,7 @@ export default function CalculatorScreen({ initial, onInitialConsumed, onAskAbou
               : <><label htmlFor={'calc-' + field.key}>{field.label}{field.required && <span className="required"> *</span>}</label>
                 <div className="input-with-unit">{field.type === 'select'
                   ? <select id={'calc-' + field.key} value={form[field.key] || field.options[0]} onChange={e => change(field.key, e.target.value)}>{!field.options.includes(form[field.key]) && form[field.key] && <option value={form[field.key]} disabled>미지원 조건 — 변경 필요</option>}{field.options.map(v => <option key={v}>{v}</option>)}</select>
-                  : <input ref={i === 0 ? firstInput : undefined} id={'calc-' + field.key} type="number" min="0" step={field.unit === '만원' ? '0.0001' : '1'} value={form[field.key] ?? ''} onChange={e => change(field.key, e.target.value)} placeholder={field.required ? '필수 입력' : '0'} required={field.required} aria-describedby={field.hint ? field.key + '-hint' : undefined} />}
+                  : <input ref={i === 0 ? firstInput : undefined} id={'calc-' + field.key} type="number" min="0" step={field.unit === '만원' ? '0.0001' : field.unit === '%' ? '0.1' : '1'} value={form[field.key] ?? ''} onChange={e => change(field.key, e.target.value)} placeholder={field.required ? '필수 입력' : '0'} required={field.required} aria-describedby={field.hint ? field.key + '-hint' : undefined} />}
                   {field.unit && <span>{field.unit}</span>}</div>{field.hint && <p className="field-hint" id={field.key + '-hint'}>{field.hint}</p>}</>}
           </div>)}
           <Notice>{error && <><span>{error.message}</span><br />세액을 산출하지 않았습니다. 0원이라는 뜻이 아닙니다.</>}</Notice>

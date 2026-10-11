@@ -46,6 +46,10 @@ _BRACKETS[("소득세", "근로소득공제")] = [
 _BRACKETS[("소득세", "근로소득세액공제")] = [
     {"bracket_from": 0, "bracket_to": None, "rate": 0.55, "progressive_deduction": 0},
     {"bracket_from": 1300000, "bracket_to": None, "rate": 0.30, "progressive_deduction": -325000}]
+_BRACKETS[("소득세", "연금소득공제")] = [
+    {"bracket_from": lower, "bracket_to": None, "rate": rate, "progressive_deduction": constant}
+    for lower, rate, constant in ((0, 1.0, 0), (3500000, 0.4, -2100000), (7000000, 0.2, -3500000),
+                                  (14000000, 0.1, -4900000))]
 _BRACKETS[("부가가치세", "default")] = [{"bracket_from": 0, "bracket_to": None, "rate": 0.10, "progressive_deduction": 0}]
 
 _DEDUCTIONS: dict[tuple[str, str], dict] = {
@@ -57,6 +61,24 @@ _DEDUCTIONS: dict[tuple[str, str], dict] = {
     ("소득세", "근로소득세액공제_한도"):         {"amount": None, "rate": None, "condition": {"tiers": [
         [0, 740000, "0", 740000], [33000000, 740000, "0.008", 660000],
         [70000000, 660000, "0.5", 500000], [120000000, 500000, "0.5", 200000]]}},
+    ("소득세", "연금소득공제_한도"):          {"amount": 9000000, "rate": None},
+    ("소득세", "사적연금_분리과세_기준"):      {"amount": 15000000, "rate": None},
+    ("소득세", "사적연금_분리과세율"):         {"amount": None, "rate": 0.15},
+    ("소득세", "연금수령_원천징수율"):         {"amount": None, "rate": None, "condition": {"bands": [[69, "0.05"], [79, "0.04"], [None, "0.03"]]}},
+    ("소득세", "기타소득_분리과세_기준"):      {"amount": 3000000, "rate": None},
+    ("소득세", "기타소득_원천징수율"):         {"amount": None, "rate": 0.20},
+    ("소득세", "기타소득_필요경비의제_60"):    {"amount": None, "rate": 0.60},
+    ("소득세", "기타소득_필요경비의제_80"):    {"amount": None, "rate": 0.80},
+    ("소득세", "주택임대_분리과세_기준"):      {"amount": 20000000, "rate": None},
+    ("소득세", "주택임대_분리과세"):           {"amount": None, "rate": 0.14, "condition": {
+        "expense_rate": "0.50", "registered_expense_rate": "0.60", "deduction": 2000000,
+        "registered_deduction": 4000000, "other_income_limit": 20000000}},
+    ("소득세", "추계_배율"):                   {"amount": None, "rate": None, "condition": {"simple_books": "2.8", "double_entry": "3.4"}},
+    ("소득세", "추계_복식부기_기준경비율_비율"): {"amount": None, "rate": 0.5},
+    ("소득세", "일용근로_근로소득공제"):       {"amount": 150000, "rate": None},
+    ("소득세", "일용근로_원천징수율"):         {"amount": None, "rate": 0.06},
+    ("소득세", "일용근로_세액공제율"):         {"amount": None, "rate": 0.55},
+    ("소득세", "소액부징수"):                  {"amount": 1000, "rate": None},
     ("소득세", "이자소득등종합과세기준금액"):     {"amount": 20000000,  "rate": None},
     ("소득세", "금융소득원천징수율"):             {"amount": None, "rate": 0.14},
     ("소득세", "비영업대금이익원천징수율"):       {"amount": None, "rate": 0.25},

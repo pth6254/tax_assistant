@@ -2,6 +2,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field
 
 NonNegativeInt = Annotated[int, Field(ge=0, strict=True)]
+Percent = Annotated[float, Field(ge=0, le=100)]
 
 
 # ── 응답 스키마 ──────────────────────────────────────────────────────
@@ -50,6 +51,25 @@ class IncomeTaxRequest(BaseModel):
     other_tax_credits: NonNegativeInt = Field(
         0, description="근로소득·배당·표준세액공제 외 세액공제 합계(자녀·연금계좌·보험료·의료비·교육비·기부금 등)")
     prepaid_tax: NonNegativeInt = Field(0, description="중간예납·원천징수 등 기납부세액(금융소득 원천징수 제외)")
+    business_method: Literal["장부", "단순경비율", "기준경비율"] = Field(
+        "장부", description="사업소득금액 계산(장부: 수입-필요경비, 추계: 국세청 고시 경비율)")
+    simple_rate: Percent = Field(0, description="업종 단순경비율(%, 기준경비율 방식의 비교소득금액에도 사용)")
+    simple_excess_rate: Percent | None = Field(None, description="수입금액 4천만원 초과분 단순경비율(초과율, %)")
+    standard_rate: Percent = Field(0, description="업종 기준경비율(%)")
+    major_expenses: NonNegativeInt = Field(0, description="주요경비(매입비용·임차료·인건비, 증빙 금액)")
+    double_entry: bool = Field(False, description="복식부기의무자(기준경비율 1/2, 배율 3.4)")
+    pension_income: NonNegativeInt = Field(0, description="국민연금 등 공적연금 총연금액")
+    private_pension: NonNegativeInt = Field(0, description="연금저축·IRP 등 사적연금 연금수령액")
+    pension_age: NonNegativeInt = Field(0, description="사적연금 수령자 나이(원천징수율 5·4·3%)")
+    misc_income: NonNegativeInt = Field(0, description="기타소득 총수입금액(강연료·원고료 등)")
+    misc_expense_rule: Literal["실제", "60%", "80%"] = Field(
+        "실제", description="기타소득 필요경비 의제(강연료·원고료 60%, 공익법인 상금 등 80%)")
+    misc_expenses: NonNegativeInt = Field(0, description="기타소득 실제 필요경비")
+    rental_income: NonNegativeInt = Field(0, description="주택임대 총수입금액(2천만원 이하면 분리과세와 비교)")
+    rental_expenses: NonNegativeInt = Field(0, description="주택임대 실제 필요경비(종합과세 쪽 계산)")
+    registered_rental: bool = Field(False, description="등록임대주택(분리과세 필요경비 60%, 공제 400만원)")
+    daily_wage: NonNegativeInt = Field(0, description="일용근로 일급(분리과세로 끝남)")
+    daily_work_days: NonNegativeInt = Field(0, description="일용근로 일수")
 
 
 class FinancialIncomeTaxRequest(BaseModel):

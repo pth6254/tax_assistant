@@ -24,7 +24,9 @@ INACTIVE_DEFAULTS = {'is_minor': False, 'business_type': '소매업',
                      'multi_home_surcharge': '없음', 'expense': 0, 'sincere_business': False, 'withheld': True,
                      'generation_skipping': False, 'marriage_birth': False, 'prior_gift_taxable': 0, 'prior_gift_tax': 0,
                      'spouse_inheritance': 0, 'parents_count': 0, 'prior_gifts_taxable': 0,
-                     'zero_rated_sales': 0, 'non_deductible_purchases': 0, 'filed_within_months': 0, 'revenue': 0}
+                     'zero_rated_sales': 0, 'non_deductible_purchases': 0, 'filed_within_months': 0, 'revenue': 0,
+                     'pension_age': 0, 'misc_expense_rule': '실제', 'registered_rental': False, 'rental_expenses': 0,
+                     'daily_work_days': 0}
 
 
 def _active_question_specs(kind, facts):
@@ -70,6 +72,14 @@ def _active_question_specs(kind, facts):
             skip.add('sincere_business')
         if facts.get('interest_income') == 0 and facts.get('dividend_gross_up') == 0:
             skip.add('withheld')
+        if facts.get('private_pension') == 0:
+            skip.add('pension_age')
+        if facts.get('misc_income') == 0:
+            skip.add('misc_expense_rule')
+        if facts.get('rental_income') == 0:
+            skip |= {'registered_rental', 'rental_expenses'}
+        if facts.get('daily_wage') == 0:
+            skip.add('daily_work_days')
         return tuple(q for q in questions if q[0] not in skip)
     if kind == 'vat':
         # The industry only sets a 간이과세자's rate; 영세율·면세 and 공제 불공제 lines only apply to 일반과세자.
@@ -111,7 +121,7 @@ def _answered(value, options):
 
 def _questions(facts, kind='income_tax'):
     return [{'key': key, 'question': question, 'type': field_type,
-             'unit': '원' if field_type == 'amount' else '명' if key in {'personal_deduction_count', 'children_count', 'parents_count', 'elderly_count'} else '년' if key in {'holding_years', 'residence_years', 'minor_years', 'disabled_years'} else '개월' if key == 'filed_within_months' else '일' if key == 'days_late' else None,
+             'unit': '원' if field_type == 'amount' else '명' if key in {'personal_deduction_count', 'children_count', 'parents_count', 'elderly_count'} else '세' if key == 'pension_age' else '일' if key == 'daily_work_days' else '년' if key in {'holding_years', 'residence_years', 'minor_years', 'disabled_years'} else '개월' if key == 'filed_within_months' else '일' if key == 'days_late' else None,
              'options': list(options) if options else None,
              'answered': _answered(facts.get(key), options), 'value': facts.get(key)}
             for key, question, field_type, options in _active_question_specs(kind, facts)]

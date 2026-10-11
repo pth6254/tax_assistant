@@ -54,7 +54,7 @@ def test_interest_of_100_million_with_the_basic_deduction(client, auth_cookie, s
     assert body["calculated_tax"] == 15_880_000
     # 표준세액공제 7만원: 원천징수세율로 과세된 2,000만원분을 뺀 산출세액 안에서 공제된다(제61조 제2항).
     assert steps["표준세액공제"] == 70_000 and body["final_tax"] == 15_810_000
-    assert steps["기납부세액(금융소득 원천징수 추정액 포함)"] == 14_000_000
+    assert steps["기납부세액(원천징수 추정액 포함)"] == 14_000_000
     assert steps["차감 납부할 세액"] == 1_810_000
     assert body["tax_type"] == "종합소득세"
     assert any("비교과세" in note for note in body["notes"]) and any("지방소득세" in note for note in body["notes"])

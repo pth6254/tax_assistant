@@ -25,8 +25,25 @@ const FORMS = {
     apiFn: calcIncomeTax,
     fields: [
       { key: 'wage_income',           label: '근로소득 총급여액',     unit: '만원', required: false, hint: '비과세 제외 · 근무지가 둘 이상이면 합계' },
+      { key: 'business_method',       label: '사업소득 계산 방법',     type: 'select', options: ['장부', '단순경비율', '기준경비율'], hint: '장부가 없으면 국세청 고시 경비율로 추계' },
       { key: 'income',                label: '사업소득 총수입금액',   unit: '만원', required: false },
-      { key: 'expense',               label: '사업소득 필요경비',     unit: '만원', required: false },
+      { key: 'expense',               label: '사업소득 필요경비',     unit: '만원', required: false, hint: '장부 기준' },
+      { key: 'simple_rate',           label: '단순경비율',            unit: '%',   required: false, hint: '홈택스 기준·단순경비율 조회' },
+      { key: 'simple_excess_rate',    label: '단순경비율 초과율',      unit: '%',   required: false, hint: '수입 4천만원 초과분(없으면 비움)' },
+      { key: 'standard_rate',         label: '기준경비율',            unit: '%',   required: false },
+      { key: 'major_expenses',        label: '주요경비',              unit: '만원', required: false, hint: '매입·임차료·인건비' },
+      { key: 'double_entry',          label: '복식부기의무자',         type: 'checkbox', hint: '기준경비율 1/2, 배율 3.4' },
+      { key: 'pension_income',        label: '공적연금 총연금액',      unit: '만원', required: false, hint: '국민연금·공무원연금 등' },
+      { key: 'private_pension',       label: '사적연금 연금수령액',    unit: '만원', required: false, hint: '연금저축·IRP · 분리과세와 비교' },
+      { key: 'pension_age',           label: '사적연금 수령자 나이',   unit: '세',   required: false },
+      { key: 'misc_income',           label: '기타소득 총수입금액',    unit: '만원', required: false, hint: '강연료·원고료 등' },
+      { key: 'misc_expense_rule',     label: '기타소득 필요경비',      type: 'select', options: ['60%', '80%', '실제'] },
+      { key: 'misc_expenses',         label: '기타소득 실제 필요경비', unit: '만원', required: false },
+      { key: 'rental_income',         label: '주택임대 총수입금액',    unit: '만원', required: false, hint: '2천만원 이하면 분리과세와 비교' },
+      { key: 'rental_expenses',       label: '주택임대 필요경비',      unit: '만원', required: false },
+      { key: 'registered_rental',     label: '등록임대주택',          type: 'checkbox' },
+      { key: 'daily_wage',            label: '일용근로 일급',          unit: '만원', required: false, hint: '분리과세로 끝남' },
+      { key: 'daily_work_days',       label: '일용근로 일수',          unit: '일',   required: false },
       { key: 'other_income',          label: '그 밖의 종합소득금액',  unit: '만원', required: false, hint: '연금·기타소득 등 필요경비·공제를 뺀 소득금액' },
       { key: 'interest_income',       label: '이자소득',              unit: '만원', required: false, hint: '예금·채권 이자 등 원천징수세율 14%' },
       { key: 'non_business_interest', label: '비영업대금의 이익',     unit: '만원', required: false, hint: '개인 간 금전 대여 이자 등 원천징수세율 25%' },
@@ -40,10 +57,27 @@ const FORMS = {
       { key: 'other_tax_credits',     label: '그 밖의 세액공제 합계', unit: '만원', required: false, hint: '자녀·연금계좌·보험료·의료비·교육비·기부금 등' },
       { key: 'prepaid_tax',           label: '기납부세액',            unit: '만원', required: false, hint: '근로소득 원천징수·중간예납 등 · 이자·배당 원천징수는 자동 추정' },
     ],
-    defaults: { personal_deduction_count: '1', withheld: true },
+    defaults: { personal_deduction_count: '1', withheld: true, business_method: '장부', misc_expense_rule: '60%' },
     toPayload: (f) => ({
       income:                   toWon(f.income),
-      expense:                  toWon(f.expense),
+      expense:                  (f.business_method || '장부') === '장부' ? toWon(f.expense) : 0,
+      business_method:          f.business_method || '장부',
+      simple_rate:              Number(f.simple_rate || 0),
+      simple_excess_rate:       f.simple_excess_rate === '' || f.simple_excess_rate == null ? null : Number(f.simple_excess_rate),
+      standard_rate:            Number(f.standard_rate || 0),
+      major_expenses:           toWon(f.major_expenses),
+      double_entry:             !!f.double_entry,
+      pension_income:           toWon(f.pension_income),
+      private_pension:          toWon(f.private_pension),
+      pension_age:              toInt(f.pension_age),
+      misc_income:              toWon(f.misc_income),
+      misc_expense_rule:        f.misc_expense_rule || '60%',
+      misc_expenses:            toWon(f.misc_expenses),
+      rental_income:            toWon(f.rental_income),
+      rental_expenses:          toWon(f.rental_expenses),
+      registered_rental:        !!f.registered_rental,
+      daily_wage:               toWon(f.daily_wage),
+      daily_work_days:          toInt(f.daily_work_days),
       wage_income:              toWon(f.wage_income),
       other_income:             toWon(f.other_income),
       interest_income:          toWon(f.interest_income),
@@ -240,7 +274,7 @@ const buildFormFromParams = (tabKey, params) => {
   }
   const form = { ...defaults }
   for (const field of fields) {
-    if (!(field.key in params)) continue
+    if (!(field.key in params) || params[field.key] == null) continue
     const raw = params[field.key]
     if (field.type === 'checkbox') form[field.key] = !!raw
     else if (field.type === 'select') form[field.key] = raw
@@ -254,6 +288,7 @@ const buildFormFromParams = (tabKey, params) => {
 const QUESTION_BUILDERS = {
   income: (f, r) => {
     const parts = [['총급여', f.wage_income], ['사업 수입', f.income], ['사업 필요경비', f.expense], ['그 밖의 소득금액', f.other_income],
+      ['공적연금', f.pension_income], ['사적연금', f.private_pension], ['기타소득', f.misc_income], ['주택임대 수입', f.rental_income],
       ['이자', f.interest_income], ['비영업대금 이익', f.non_business_interest],
       ['배당', Number(f.dividend_gross_up || 0) + Number(f.dividend_other || 0)]]
       .filter(([, v]) => Number(v || 0) > 0).map(([label, v]) => `${label} ${v}만원`)

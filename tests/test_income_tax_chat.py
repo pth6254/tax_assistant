@@ -163,3 +163,41 @@ async def test_a_capital_gains_question_is_not_read_as_income_tax(monkeypatch):
     monkeypatch.setattr(planner, 'capital_gains_calculation', AsyncMock(return_value=None))
     monkeypatch.setattr(planner, 'select_tool', AsyncMock(return_value=None))
     await planner.run_tools_for_query('10억에 산 아파트를 15억에 팔면 양도소득세 얼마야?', user_id=str(uuid4()))
+
+
+@pytest.mark.parametrize('query, expected', [
+    ('국민연금 연금소득 1,200만원이면 종합소득세 얼마?', {'pension_income': 12_000_000}),
+    ('연금저축에서 사적연금 1,800만원 받으면 종합소득세 얼마? 72세야', {'private_pension': 18_000_000, 'pension_age': 72}),
+    ('강연료 1천만원 받았는데 연봉 6천만원이면 종합소득세 얼마?', {'misc_income': 10_000_000, 'misc_expense_rule': '60%'}),
+    ('주택임대 수입 1,200만원, 연봉 6천만원이면 종합소득세 얼마?', {'rental_income': 12_000_000, 'income': 0}),
+    ('프리랜서 수입 6천만원, 단순경비율 61.7%, 초과율 46.4%면 종합소득세 얼마?',
+     {'business_method': '단순경비율', 'simple_rate': 61.7, 'simple_excess_rate': 46.4}),
+    ('수입 1억, 기준경비율 6%, 단순경비율 93.7%, 주요경비 6천만원이면 종합소득세 얼마?',
+     {'business_method': '기준경비율', 'major_expenses': 60_000_000, 'standard_rate': 6.0}),
+    ('일당 20만원으로 100일 일하면 소득세 얼마?', {'daily_wage': 200_000, 'daily_work_days': 100}),
+])
+def test_other_kinds_of_income_are_read(query, expected):
+    stated = read(query)
+    assert isinstance(stated, StatedInputs), stated
+    assert {k: stated.params[k] for k in expected} == expected
+
+
+@pytest.mark.parametrize('query, label', [
+    ('연금소득 1,200만원이면 종합소득세 얼마?', '연금의 종류'),
+    ('프리랜서 수입 3천만원인데 단순경비율로 신고하면 종합소득세 얼마?', '단순경비율'),
+    ('수입 1억, 기준경비율 6%이면 종합소득세 얼마?', '주요경비'),
+    ('일당 20만원이면 소득세 얼마?', '날수'),
+])
+def test_missing_facts_of_other_kinds_are_asked(query, label):
+    stated = read(query)
+    assert isinstance(stated, MissingInputs) and any(label in item for item in stated.labels), stated
+
+
+@pytest.mark.asyncio
+async def test_chat_answers_an_estimated_business_income_question(monkeypatch, stored_figures):
+    monkeypatch.setattr(planner, 'select_tool', AsyncMock(side_effect=AssertionError('no selection needed')))
+    result = await planner.run_tools_for_query(
+        '수입 1억, 기준경비율 6%, 단순경비율 93.7%, 주요경비 6천만원이면 종합소득세 얼마?', user_id=str(uuid4()))
+    assert (result.tool, result.status) == ('income_tax', 'ok')
+    # 국세청 가이드 이납부 사례와 같은 1,764만원
+    assert '- 사업소득금액(둘 중 적은 금액): 17,640,000원' in result.calculation.context

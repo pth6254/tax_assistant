@@ -14,7 +14,8 @@ from app.services.consultation_catalog import CASE_KINDS
 
 INCOME_FACTS = {'wage_income': 0, 'income': 50000000, 'expense': 100, 'sincere_business': False, 'other_income': 0,
                 'interest_income': 0, 'dividend_gross_up': 0, 'personal_deduction_count': 1, 'other_deductions': 0,
-                'itemized_special_credits': False, 'other_tax_credits': 0, 'prepaid_tax': 0}
+                'itemized_special_credits': False, 'other_tax_credits': 0, 'prepaid_tax': 0,
+                'pension_income': 0, 'private_pension': 0, 'misc_income': 0, 'rental_income': 0, 'daily_wage': 0}
 
 
 def test_case_questions_require_explicit_zero_and_checklist_detects_changed_document():

@@ -45,6 +45,16 @@ class CaseFactsPatch(StrictCaseModel):
     itemized_special_credits: bool | None = None
     other_tax_credits: int | None = Field(default=None, ge=0, strict=True)
     prepaid_tax: int | None = Field(default=None, ge=0, strict=True)
+    pension_income: int | None = Field(default=None, ge=0, strict=True)
+    private_pension: int | None = Field(default=None, ge=0, strict=True)
+    pension_age: int | None = Field(default=None, ge=0, strict=True)
+    misc_income: int | None = Field(default=None, ge=0, strict=True)
+    misc_expense_rule: Literal['60%', '80%', '실제'] | None = None
+    rental_income: int | None = Field(default=None, ge=0, strict=True)
+    registered_rental: bool | None = None
+    rental_expenses: int | None = Field(default=None, ge=0, strict=True)
+    daily_wage: int | None = Field(default=None, ge=0, strict=True)
+    daily_work_days: int | None = Field(default=None, ge=0, strict=True)
     transfer_price: int | None = Field(default=None, ge=0, strict=True)
     acquisition_price: int | None = Field(default=None, ge=0, strict=True)
     expenses: int | None = Field(default=None, ge=0, strict=True)
