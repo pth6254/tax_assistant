@@ -15,6 +15,7 @@ test('one comprehensive income tab sends every income kind in won', () => {
     misc_income: 0, misc_expense_rule: '60%', misc_expenses: 0, rental_income: 0, rental_expenses: 0,
     registered_rental: false, daily_wage: 0, daily_work_days: 0, virtual_transfer_price: 0,
     virtual_acquisition_price: 0, virtual_expenses: 0, virtual_held_before_2027: false, virtual_value_2026_end: 0,
+    rental_deposits: 0, rental_house_count: 0, religious_income: 0, religious_as_wage: false,
   })
   assert.equal(FORMS.income.toPayload({ ...form, withheld: false }).withheld, false)
   assert.ok(!TABS.some(tab => tab.key === 'financial'))

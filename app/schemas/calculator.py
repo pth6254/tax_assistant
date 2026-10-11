@@ -83,6 +83,11 @@ class IncomeTaxRequest(PenaltyOption):
     registered_rental: bool = Field(False, description="등록임대주택(분리과세 필요경비 60%, 공제 400만원)")
     daily_wage: NonNegativeInt = Field(0, description="일용근로 일급(분리과세로 끝남)")
     daily_work_days: NonNegativeInt = Field(0, description="일용근로 일수")
+    rental_deposits: NonNegativeInt = Field(0, description="주택임대 보증금·전세금 합계(1년 내내 받은 금액, 간주임대료)")
+    rental_house_count: NonNegativeInt = Field(
+        0, description="간주임대료 주택 수(40㎡ 이하·기준시가 2억원 이하 소형주택 제외, 2주택이면 기준시가 12억원 이하 제외)")
+    religious_income: NonNegativeInt = Field(0, description="종교인소득(비과세 제외, 종교단체에서 받은 금액)")
+    religious_as_wage: bool = Field(False, description="종교인소득을 근로소득으로 원천징수·신고하는지")
     virtual_transfer_price: NonNegativeInt = Field(
         0, description="가상자산 양도가액(기타소득 분리과세, 2027년 양도분부터, 같은 해 전체를 총평균법으로 합친 금액)")
     virtual_acquisition_price: NonNegativeInt = Field(0, description="가상자산 실제 취득가액")
@@ -123,6 +128,9 @@ class CapitalGainsRequest(PenaltyOption):
     major_shareholder: bool = Field(False, description="대주주(상장 1%·코스닥 2% 또는 50억원, 비상장 4% 또는 10억원 등)")
     sme: bool = Field(False, description="중소기업 주식")
     same_group_loss: NonNegativeInt = Field(0, description="같은 그룹 다른 자산의 같은 해 양도차손(통산)")
+    prior_same_year_taxable: NonNegativeInt = Field(
+        0, description="같은 해 먼저 양도한 부동산·부동산권리·기타자산의 과세표준(비교과세, 기본공제는 그때 받은 것으로 봄)")
+    prior_same_year_tax: NonNegativeInt = Field(0, description="같은 해 먼저 양도한 자산의 산출세액(자산별 세율)")
 
 
 class InheritanceRequest(PenaltyOption):
@@ -149,6 +157,7 @@ class InheritanceRequest(PenaltyOption):
     skipped_generation_assets: NonNegativeInt = Field(0, description="자녀가 아닌 직계비속(손자녀 등)이 받은 상속재산")
     skipped_generation_minor: bool = Field(False, description="그 손자녀 등이 미성년자인지(20억원 초과 시 40%)")
     filed_on_time: bool = Field(True, description="신고기한(상속개시일이 속하는 달 말일부터 6개월) 내 신고")
+    reported_taxable: NonNegativeInt = Field(0, description="과소신고: 기한 안에 처음 신고한 과세표준(신고세액공제 계산)")
 
 
 class GiftTaxRequest(PenaltyOption):
@@ -168,6 +177,7 @@ class GiftTaxRequest(PenaltyOption):
     marriage_birth_used: NonNegativeInt = Field(0, description="이미 받은 혼인·출산 증여재산공제(합계 1억원 한도)")
     generation_skipping: bool = Field(False, description="부모가 살아 있는 손자녀 등 자녀가 아닌 직계비속에게 증여(할증)")
     filed_on_time: bool = Field(True, description="신고기한(증여일이 속하는 달 말일부터 3개월) 내 신고")
+    reported_taxable: NonNegativeInt = Field(0, description="과소신고: 기한 안에 처음 신고한 과세표준(신고세액공제 계산)")
 
 
 class VatRequest(PenaltyOption):
@@ -191,6 +201,8 @@ class VatRequest(PenaltyOption):
     card_credit_used: NonNegativeInt = Field(0, description="같은 해 이전 신고에서 받은 신용카드 발행세액공제")
     e_filing: bool = Field(False, description="확정신고를 전자신고하는 개인사업자(전자신고세액공제 1만원)")
     prepaid_tax: NonNegativeInt = Field(0, description="예정고지(부과)세액·예정신고 미환급세액")
+    reported_zero_rated_sales: NonNegativeInt = Field(
+        0, description="과소신고: 처음 신고한 영세율 과세표준(영세율과세표준 신고불성실가산세)")
 
 
 class RetirementTaxRequest(PenaltyOption):
@@ -198,6 +210,7 @@ class RetirementTaxRequest(PenaltyOption):
     retirement_pay: NonNegativeInt = Field(description="과세대상 퇴직급여(퇴직금·퇴직연금 일시금, 비과세 제외)")
     service_years: Annotated[int, Field(ge=1, strict=True)] = Field(description="정산근속연수(1년 미만은 1년)")
     prepaid_tax: NonNegativeInt = Field(0, description="이미 원천징수된 퇴직소득세")
+    pension_transfer: NonNegativeInt = Field(0, description="퇴직일 현재 또는 60일 안에 연금계좌(IRP 등)로 옮긴 퇴직급여")
 
 
 class PenaltyTaxRequest(BaseModel):

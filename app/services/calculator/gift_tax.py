@@ -62,7 +62,8 @@ def _tax(params, taxable):
 
 def compute(*, params, gift_amount, relation="기타", is_minor=False, debts=0, prior_gifts_10y=0,
             prior_gift_tax=0, prior_gift_taxable=0, deduction_used_10y=0, marriage_birth=False,
-            marriage_birth_used=0, generation_skipping=False, filed_on_time=True):
+            marriage_birth_used=0, generation_skipping=False, filed_on_time=True, filed_taxable=None):
+    """filed_taxable: 과소신고 때 기한 안에 신고한 과세표준. 신고세액공제는 그 과세표준의 산출세액에만 준다(시행령 제65조의2)."""
     if relation not in RELATIONS:
         raise CalculationError("unsupported_condition")
     if debts > gift_amount or (generation_skipping or marriage_birth) and relation != "직계존비속":
@@ -114,8 +115,12 @@ def compute(*, params, gift_amount, relation="기타", is_minor=False, debts=0, 
         cap = int(Decimal(total) * prior_gift_taxable / taxable) if taxable else 0
         paid_credit = min(prior_gift_tax, cap)
         steps.append((f"기납부세액공제(이전 증여 산출세액 {prior_gift_tax:,}원과 한도 {cap:,}원 중 작은 금액)", paid_credit))
-    filing = truncate_won(total - paid_credit, params.filing_credit_rate) if filed_on_time else 0
-    steps.append(("신고세액공제(3%)" if filed_on_time else "신고세액공제(기한 내 신고 아님)", filing))
+    credit_base, label = total - paid_credit, "신고세액공제(3%)"
+    if filed_on_time and filed_taxable is not None and filed_taxable < taxable and calculated:
+        credit_base = int(Decimal(credit_base) * _tax(params, filed_taxable) / calculated)
+        label = f"신고세액공제(신고한 과세표준 {filed_taxable:,}원의 산출세액 비율만 3%)"
+    filing = truncate_won(credit_base, params.filing_credit_rate) if filed_on_time else 0
+    steps.append((label if filed_on_time else "신고세액공제(기한 내 신고 아님)", filing))
     decided = max(0, total - paid_credit - filing)
     steps.append(("납부할 세액", decided))
     if generation_skipping:
@@ -153,17 +158,20 @@ async def load_parameters(as_of: date | None = None) -> Parameters:
 async def calculate(gift_amount: int, relation: str = "기타", is_minor: bool = False, prior_gifts_10y: int = 0,
                     debts: int = 0, prior_gift_tax: int = 0, prior_gift_taxable: int = 0, deduction_used_10y: int = 0,
                     marriage_birth: bool = False, marriage_birth_used: int = 0, generation_skipping: bool = False,
-                    filed_on_time: bool = True, as_of: date | None = None, **penalty) -> CalculationResult:
+                    filed_on_time: bool = True, reported_taxable: int = 0, as_of: date | None = None, **penalty) -> CalculationResult:
     if relation not in RELATIONS:
         raise CalculationError("unsupported_condition")
     params = await load_parameters(as_of)
     if penalty.get("penalty_type") == "무신고":
         filed_on_time = False
+    if reported_taxable and penalty.get("penalty_type") != "과소신고":
+        raise CalculationError("invalid_input")
+    filed_taxable = reported_taxable if reported_taxable else None
     result = compute(params=params, gift_amount=gift_amount, relation=relation, is_minor=is_minor, debts=debts,
                      prior_gifts_10y=prior_gifts_10y, prior_gift_tax=prior_gift_tax,
                      prior_gift_taxable=prior_gift_taxable, deduction_used_10y=deduction_used_10y,
                      marriage_birth=marriage_birth, marriage_birth_used=marriage_birth_used,
-                     generation_skipping=generation_skipping, filed_on_time=filed_on_time)
+                     generation_skipping=generation_skipping, filed_on_time=filed_on_time, filed_taxable=filed_taxable)
     summary = CalculationResult(
         tax_type="증여세",
         steps=[TaxStep(label=label, amount=amount) for label, amount in result.steps],
@@ -174,6 +182,6 @@ async def calculate(gift_amount: int, relation: str = "기타", is_minor: bool =
         notes=[*result.notes, *SCOPE_NOTES])
     if penalty.get("penalty_type") == "무신고":
         summary.notes.insert(0, "무신고(기한 후 신고 포함)에는 신고세액공제가 없어 빼고 계산했습니다.")
-    elif penalty.get("penalty_type") == "과소신고" and filed_on_time:
-        summary.notes.insert(0, "과소신고한 부분에는 신고세액공제가 적용되지 않아, 실제 덜 낸 세액은 그 부분 산출세액의 3%만큼 더 클 수 있습니다.")
+    elif penalty.get("penalty_type") == "과소신고" and filed_on_time and not reported_taxable:
+        summary.notes.insert(0, "과소신고한 부분에는 신고세액공제가 적용되지 않습니다. 처음 신고한 과세표준을 입력하지 않아 덜 낸 세액이 그 부분 산출세액의 3%만큼 작게 나왔을 수 있습니다.")
     return await penalty_tax.attach(summary, result.decided_tax, as_of=as_of, **penalty)

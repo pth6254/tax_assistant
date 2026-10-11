@@ -16,10 +16,11 @@ from app.services.calculator.errors import CalculationError
 from app.services.calculator.repository import get_brackets, get_deduction
 
 SERVICE_DEDUCTION, LOCAL_RATIO = "퇴직소득_근속연수공제", "퇴직소득_지방소득세_비율"
+PENSION_RATIOS = "이연퇴직소득_연금수령_감경"
 
 SCOPE_NOTES = (
-    "2016~2019년 퇴직분의 종전·개정 규정 안분, 임원 퇴직금 한도 초과분(근로소득), 비과세 퇴직급여, 외국납부세액공제, "
-    "퇴직소득을 연금계좌로 옮겨 연금으로 받는 경우(과세이연)는 계산하지 않았습니다.",
+    "2016~2019년 퇴직분의 종전·개정 규정 안분, 임원 퇴직금 한도 초과분(근로소득), 비과세 퇴직급여, 외국납부세액공제는 "
+    "계산하지 않았습니다.",
     "근속연수는 중간정산·여러 회사 합산 시 중복 기간을 뺀 정산근속연수를 입력해야 합니다.",
 )
 
@@ -51,8 +52,10 @@ def service_deduction(params, years):
     raise CalculationError("missing_tax_data")
 
 
-def compute(*, params, retirement_pay, service_years, prepaid_tax=0):
-    if service_years <= 0:
+def compute(*, params, retirement_pay, service_years, prepaid_tax=0, pension_transfer=0, pension_bands=None):
+    """pension_transfer: 연금계좌로 옮긴 퇴직급여(제146조 제2항 과세이연, 시행령 제202조의2), pension_bands:
+    연금으로 받을 때 연금외수령 원천징수세율에 곱하는 비율(제129조 제1항 제5호의3)."""
+    if service_years <= 0 or pension_transfer > retirement_pay:
         raise CalculationError("invalid_input")
     deduction = min(service_deduction(params, service_years), retirement_pay)
     converted = int(Decimal(retirement_pay - deduction) * 12 / service_years)
@@ -60,7 +63,8 @@ def compute(*, params, retirement_pay, service_years, prepaid_tax=0):
     taxable = converted - converted_deduction
     converted_tax, rate = apply_progressive_tax(taxable, params.brackets)
     calculated = int(Decimal(converted_tax) * service_years / 12)
-    local = truncate_won(calculated, params.local_ratio)
+    deferred = int(Decimal(calculated) * pension_transfer / retirement_pay) if pension_transfer else 0
+    local = truncate_won(calculated - deferred, params.local_ratio)
     steps = [("퇴직소득금액(퇴직급여)", retirement_pay),
              (f"근속연수공제(근속 {service_years}년)", deduction),
              ("환산급여((퇴직소득금액-근속연수공제) x 12 / 근속연수)", converted),
@@ -68,14 +72,30 @@ def compute(*, params, retirement_pay, service_years, prepaid_tax=0):
              ("퇴직소득 과세표준", taxable),
              (f"환산산출세액(기본세율 {rate})", converted_tax),
              ("퇴직소득 산출세액(환산산출세액 / 12 x 근속연수)", calculated)]
+    if deferred:
+        steps.append((f"연금계좌 이체로 미뤄지는 퇴직소득세(산출세액 x 이체액 {pension_transfer:,}원/퇴직급여)", deferred))
     if prepaid_tax:
         steps.append(("기납부(원천징수)세액", prepaid_tax))
-    balance = calculated - prepaid_tax
+    balance = calculated - deferred - prepaid_tax
     steps += [("차감 납부할 세액" if balance >= 0 else "환급받을 세액", abs(balance)),
-              ("지방소득세(별도, 산출세액의 10%)", local)]
+              ("지방소득세(별도, 납부할 퇴직소득세의 10%)", local)]
     notes = ["퇴직소득은 다른 소득과 합산하지 않고 따로 과세합니다(분류과세). 결정세액은 퇴직소득세(국세)이고 "
              "지방소득세는 별도로 표시했습니다."]
-    return Computation(steps, taxable, calculated, calculated, notes)
+    if deferred:
+        if not pension_bands:
+            raise CalculationError("missing_tax_data")
+        first = Decimal(pension_bands[0][1])
+        steps.append((f"연금으로 받을 때 낼 세금(실제 수령 10년 이하분, 미뤄진 세액의 {first * 100:.0f}%)",
+                      truncate_won(deferred, first)))
+        later = ", ".join(f"{'10년 초과' if i == 1 else '20년 초과'}분 {Decimal(r) * 100:.0f}%"
+                          for i, (_, r) in enumerate(pension_bands) if i)
+        notes.append(f"연금계좌로 옮긴 퇴직급여는 연금으로 받을 때까지 퇴직소득세가 미뤄집니다. 연금으로 받으면 연금외수령 "
+                     f"원천징수세율(산출세액/퇴직급여 {Decimal(calculated) / retirement_pay * 100:.2f}%)의 {first * 100:.0f}%"
+                     + (f"({later})" if later else "") + "로 원천징수하고, 연금 외로 찾으면 미뤄진 세액 전부를 냅니다.")
+        if prepaid_tax:
+            notes.append("이미 원천징수된 세액 중 연금계좌로 옮긴 몫은 환급을 신청할 수 있습니다(제146조 제2항).")
+    # 결정세액은 지금 과세되는 몫(연금계좌로 옮긴 몫의 세액은 연금으로 받을 때까지 미뤄진다).
+    return Computation(steps, taxable, calculated, calculated - deferred, notes)
 
 
 async def load_parameters(as_of: date | None = None) -> Parameters:
@@ -93,10 +113,15 @@ async def load_parameters(as_of: date | None = None) -> Parameters:
         sources=tuple(sorted({r["source_article"] for r in used if r.get("source_article")})))
 
 
-async def calculate(retirement_pay: int, service_years: int, prepaid_tax: int = 0,
+async def calculate(retirement_pay: int, service_years: int, prepaid_tax: int = 0, pension_transfer: int = 0,
                     as_of: date | None = None, **penalty) -> CalculationResult:
     params = await load_parameters(as_of)
-    result = compute(params=params, retirement_pay=retirement_pay, service_years=service_years, prepaid_tax=prepaid_tax)
+    bands = None
+    if pension_transfer:
+        row = await get_deduction("소득세", PENSION_RATIOS, as_of=as_of)
+        bands = ((row or {}).get("condition") or {}).get("bands")
+    result = compute(params=params, retirement_pay=retirement_pay, service_years=service_years, prepaid_tax=prepaid_tax,
+                     pension_transfer=pension_transfer, pension_bands=bands)
     summary = CalculationResult(
         tax_type="퇴직소득세",
         steps=[TaxStep(label=label, amount=amount) for label, amount in result.steps],
@@ -105,4 +130,6 @@ async def calculate(retirement_pay: int, service_years: int, prepaid_tax: int = 
         source_articles=list(params.sources),
         basis=TaxBasis(queried_on=(as_of or date.today()).isoformat(), effective_dates=list(params.effective_dates)),
         notes=[*result.notes, *SCOPE_NOTES])
+    if bands:
+        summary.source_articles = [*summary.source_articles, "소득세법 제146조", "소득세법 제129조"]
     return await penalty_tax.attach(summary, max(0, result.decided_tax - prepaid_tax), as_of=as_of, **penalty)

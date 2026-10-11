@@ -12,6 +12,7 @@ test('the capital gains tab sends the exemption facts', () => {
     asset_type: '주택', is_one_home: true, residence_years: 5, acquired_in_adjusted_area: false,
     multi_home_surcharge: '없음', non_business_land: false, unregistered: false, pre_approval_gain: 0,
     pre_approval_years: 0, stock_market: '국내비상장', major_shareholder: false, sme: false, same_group_loss: 0,
+    prior_same_year_taxable: 0, prior_same_year_tax: 0,
   })
 })
 

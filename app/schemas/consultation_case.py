@@ -10,7 +10,8 @@ class StrictCaseModel(BaseModel):
 
 
 class CaseCreate(StrictCaseModel):
-    kind: Literal['income_tax', 'capital_gains', 'inheritance', 'gift', 'vat', 'penalty_tax'] = 'income_tax'
+    # 가산세는 각 세목 상담의 질문으로 묻고, 이전 'penalty_tax' 상담은 저장된 것만 연다.
+    kind: Literal['income_tax', 'retirement', 'capital_gains', 'inheritance', 'gift', 'vat'] = 'income_tax'
     title: str = Field(min_length=1, max_length=80)
     question: str = Field(min_length=1, max_length=5000)
     tax_year: int = Field(ge=2000, le=2100, strict=True)
@@ -104,7 +105,14 @@ class CaseFactsPatch(StrictCaseModel):
     filed_within_months: int | None = Field(default=None, ge=0, strict=True)
     revenue: int | None = Field(default=None, ge=0, strict=True)
     unpaid_tax: int | None = Field(default=None, ge=0, strict=True)
-    penalty_type: Literal['무신고', '과소신고', '납부지연'] | None = None
+    penalty_type: Literal['없음', '무신고', '과소신고', '납부지연'] | None = None
+    reported_tax: int | None = Field(default=None, ge=0, strict=True)
+    penalty_revenue: int | None = Field(default=None, ge=0, strict=True)
+    reported_taxable: int | None = Field(default=None, ge=0, strict=True)
+    reported_zero_rated_sales: int | None = Field(default=None, ge=0, strict=True)
+    retirement_pay: int | None = Field(default=None, ge=0, strict=True)
+    service_years: int | None = Field(default=None, ge=1, strict=True)
+    pension_transfer: int | None = Field(default=None, ge=0, strict=True)
     is_negligent: bool | None = None
     days_late: int | None = Field(default=None, ge=0, strict=True)
 

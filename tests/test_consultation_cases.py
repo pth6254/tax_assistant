@@ -15,7 +15,8 @@ from app.services.consultation_catalog import CASE_KINDS
 INCOME_FACTS = {'wage_income': 0, 'income': 50000000, 'expense': 100, 'sincere_business': False, 'other_income': 0,
                 'interest_income': 0, 'dividend_gross_up': 0, 'personal_deduction_count': 1, 'other_deductions': 0,
                 'itemized_special_credits': False, 'other_tax_credits': 0, 'prepaid_tax': 0,
-                'pension_income': 0, 'private_pension': 0, 'misc_income': 0, 'rental_income': 0, 'daily_wage': 0}
+                'pension_income': 0, 'private_pension': 0, 'misc_income': 0, 'rental_income': 0, 'daily_wage': 0,
+                'penalty_type': '없음'}
 
 
 def test_case_questions_require_explicit_zero_and_checklist_detects_changed_document():
@@ -152,3 +153,22 @@ def test_conditional_questions_only_ask_relevant_calculator_inputs():
     assert 'filed_within_months' in {q['key'] for q in cases._questions({'penalty_type': '무신고'}, 'penalty_tax')}
     assert 'revenue' not in {q['key'] for q in cases._questions({'penalty_type': '과소신고'}, 'penalty_tax')}
     assert 'zero_rated_sales' not in {q['key'] for q in cases._questions({'is_simplified': True}, 'vat')}
+
+
+def test_every_tax_case_asks_the_penalty_only_for_the_chosen_case():
+    for kind in ('income_tax', 'retirement', 'capital_gains', 'inheritance', 'gift', 'vat'):
+        keys = {q['key'] for q in cases._questions({'penalty_type': '없음'}, kind)}
+        assert 'penalty_type' in keys and not keys & cases.PENALTY_FOLLOW_UPS
+    late = {q['key'] for q in cases._questions({'penalty_type': '납부지연'}, 'gift')}
+    assert {'reported_tax', 'days_late'} <= late and not late & {'is_negligent', 'filed_within_months', 'reported_taxable'}
+    under = {q['key'] for q in cases._questions({'penalty_type': '과소신고'}, 'gift')}
+    assert {'reported_tax', 'reported_taxable', 'filed_within_months'} <= under
+    none = {q['key'] for q in cases._questions({'penalty_type': '무신고'}, 'income_tax')}
+    assert 'penalty_revenue' in none and 'reported_tax' not in none
+    assert {q['key'] for q in cases._questions({}, 'retirement')} >= {'retirement_pay', 'service_years', 'pension_transfer'}
+
+
+def test_new_cases_choose_among_the_six_taxes():
+    CaseCreate(kind='retirement', title='x', question='x', tax_year=2024)
+    with pytest.raises(ValidationError):
+        CaseCreate(kind='penalty_tax', title='x', question='x', tax_year=2024)

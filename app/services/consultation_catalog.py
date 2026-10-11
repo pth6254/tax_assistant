@@ -1,5 +1,16 @@
 """Supported consultation flows; questions and document prompts are not legal eligibility rules."""
 
+# 6개 세목 상담 공통: 기한을 넘긴 신고·납부의 가산세(계산기의 가산세 옵션과 같은 입력).
+PENALTY_QUESTIONS = (
+    ('penalty_type', "법정 신고·납부기한을 넘겼나요? (기한 안에 신고·납부하면 '없음')", 'choice', ('없음', '무신고', '과소신고', '납부지연')),
+    ('reported_tax', '처음 신고한 세액(과소신고) 또는 기한까지 낸 세액(납부지연)은 얼마인가요?', 'amount', None),
+    ('is_negligent', '부정행위(이중장부·허위증빙 등)로 인한 무신고·과소신고인가요?', 'boolean', None),
+    ('filed_within_months', '법정신고기한이 지나고 몇 개월 안에 스스로 기한 후 신고·수정신고하나요? (스스로 신고하지 않으면 0)', 'count', None),
+    ('days_late', '법정납부기한 다음 날부터 납부일까지 며칠인가요?', 'count', None),
+)
+REVENUE_QUESTION = ('penalty_revenue', '복식부기의무자·법인이면 해당 연도 수입금액은 얼마인가요? 아니면 0원을 입력해 주세요.', 'amount', None)
+REPORTED_TAXABLE_QUESTION = ('reported_taxable', '기한 안에 처음 신고한 과세표준은 얼마인가요? (신고세액공제는 그 부분에만 적용)', 'amount', None)
+
 CASE_KINDS = {
     'income_tax': {
         'label': '종합소득세', 'date_label': '귀속연도',
@@ -27,6 +38,7 @@ CASE_KINDS = {
             ('itemized_special_credits', '보험료·의료비·교육비 등 특별소득공제나 특별세액공제를 신청하나요? (신청하면 표준세액공제를 받지 않습니다)', 'boolean', None),
             ('other_tax_credits', '근로소득·배당·표준세액공제 외 세액공제(자녀·연금계좌·의료비 등) 합계는 얼마인가요? 없다면 0원을 입력해 주세요.', 'amount', None),
             ('prepaid_tax', '이미 낸 세금(근로소득 원천징수·중간예납 등, 이자·배당 원천징수 제외)은 얼마인가요? 없다면 0원을 입력해 주세요.', 'amount', None),
+            *PENALTY_QUESTIONS, REVENUE_QUESTION,
         ),
         'documents': (
             ('wage_proof', '근로소득 원천징수영수증', '총급여액과 원천징수세액 확인 자료', 'wage_income'),
@@ -53,6 +65,7 @@ CASE_KINDS = {
             ('residence_years', '보유기간 중 거주한 기간은 몇 년인가요? (완료된 연수)', 'count', None),
             ('acquired_in_adjusted_area', '취득 당시 조정대상지역이었나요?', 'boolean', None),
             ('multi_home_surcharge', '조정대상지역 다주택 중과 대상인가요?', 'choice', ('없음', '2주택', '3주택이상')),
+            *PENALTY_QUESTIONS,
         ),
         'documents': (
             ('transfer_contract', '양도 계약 자료', '양도가액·양도일 확인 자료', None),
@@ -78,7 +91,7 @@ CASE_KINDS = {
             ('prior_gifts', '돌아가시기 전 10년(상속인 아닌 사람은 5년) 안에 증여한 재산은 얼마인가요? 없다면 0원을 입력해 주세요.', 'amount', None),
             ('prior_gifts_taxable', '그 증여의 증여세 과세표준 합계는 얼마인가요?', 'amount', None),
             ('prior_gift_tax', '그 증여의 증여세 산출세액 합계는 얼마인가요?', 'amount', None),
-            ('filed_on_time', '상속개시일이 속하는 달의 말일부터 6개월 안에 신고하나요?', 'boolean', None),
+            *PENALTY_QUESTIONS, REPORTED_TAXABLE_QUESTION,
         ),
         'documents': (
             ('estate_proof', '상속재산 자료', '재산목록·평가 자료', None),
@@ -102,7 +115,7 @@ CASE_KINDS = {
             ('prior_gift_taxable', '그 이전 증여의 신고 과세표준은 얼마인가요? 모르면 0원을 입력하면 추정합니다.', 'amount', None),
             ('prior_gift_tax', '그 이전 증여의 산출세액은 얼마인가요? 모르면 0원을 입력하면 추정합니다.', 'amount', None),
             ('deduction_used_10y', '합산하지 않은 다른 증여(예: 조부모 증여)에 10년 내 이미 쓴 같은 관계의 증여재산공제는 얼마인가요? 없다면 0원을 입력해 주세요.', 'amount', None),
-            ('filed_on_time', '증여일이 속하는 달의 말일부터 3개월 안에 신고하나요?', 'boolean', None),
+            *PENALTY_QUESTIONS, REPORTED_TAXABLE_QUESTION,
         ),
         'documents': (
             ('gift_proof', '증여재산 자료', '증여 계약·재산 평가 자료', None),
@@ -126,6 +139,8 @@ CASE_KINDS = {
             ('card_credit_eligible', '개인사업자이고 직전 연도 공급가액이 10억원 이하인가요? (신용카드 발행세액공제 대상)', 'boolean', None),
             ('prepaid_tax', '예정고지(부과)세액이나 예정신고 미환급세액은 얼마인가요? 없다면 0원을 입력해 주세요.', 'amount', None),
             ('e_filing', '확정신고를 직접 전자신고하나요? (전자신고세액공제 1만원)', 'boolean', None),
+            *PENALTY_QUESTIONS, REVENUE_QUESTION,
+            ('reported_zero_rated_sales', '처음 신고한 영세율 매출은 얼마인가요? (영세율과세표준 신고불성실가산세)', 'amount', None),
         ),
         'documents': (
             ('sales_proof', '매출 자료', '매출 세금계산서·카드매출 자료', None),
@@ -134,8 +149,23 @@ CASE_KINDS = {
             ('business_proof', '사업자 유형 자료', '과세유형·업종 확인 자료', None),
         ),
     },
+    'retirement': {
+        'label': '퇴직소득세', 'date_label': '퇴직일·자료 조회 기준일',
+        'questions': (
+            ('retirement_pay', '과세대상 퇴직급여(퇴직금·퇴직연금 일시금, 비과세 제외)는 얼마인가요?', 'amount', None),
+            ('service_years', '근속연수는 몇 년인가요? (1년 미만은 1년으로 올림, 중간정산 시 중복기간 제외)', 'count', None),
+            ('pension_transfer', '그중 연금계좌(IRP 등)로 옮긴 금액은 얼마인가요? 없다면 0원을 입력해 주세요.', 'amount', None),
+            ('prepaid_tax', '이미 원천징수된 퇴직소득세는 얼마인가요? 없다면 0원을 입력해 주세요.', 'amount', None),
+            *PENALTY_QUESTIONS,
+        ),
+        'documents': (
+            ('retirement_receipt', '퇴직소득 원천징수영수증', '퇴직급여·근속연수·원천징수세액 확인 자료', None),
+            ('pension_transfer_proof', '연금계좌 이체 자료', '연금계좌 입금 확인서', 'pension_transfer'),
+        ),
+    },
+    # 이전 상담 유형: 새로 만들지 않고(가산세는 각 세목 상담의 질문) 저장된 상담만 열고 계산한다.
     'penalty_tax': {
-        'label': '가산세', 'date_label': '위반·납부 기준일·자료 조회 기준일',
+        'label': '가산세', 'date_label': '위반·납부 기준일·자료 조회 기준일', 'legacy': True,
         'questions': (
             ('unpaid_tax', '신고하지 않았거나 덜 신고·납부한 본세는 얼마인가요?', 'amount', None),
             ('penalty_type', '어떤 경우인가요?', 'choice', ('무신고', '과소신고', '납부지연')),

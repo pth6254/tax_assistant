@@ -10,7 +10,7 @@ test('the gift tab sends every fact the calculator needs', () => {
   assert.deepEqual(FORMS.gift.toPayload(form), { ...NO_PENALTY,
     gift_amount: 200_000_000, relation: '직계존비속', is_minor: false, prior_gifts_10y: 100_000_000, debts: 0,
     prior_gift_tax: 7_000_000, prior_gift_taxable: 70_000_000, deduction_used_10y: 0, marriage_birth: false,
-    marriage_birth_used: 0, generation_skipping: true, filed_on_time: true,
+    marriage_birth_used: 0, generation_skipping: true, filed_on_time: true, reported_taxable: 0,
   })
 })
 

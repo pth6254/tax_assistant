@@ -76,7 +76,8 @@ def compute(*, params, estate_value, debts=0, funeral_expenses=0, memorial_expen
             prior_gifts=0, prior_gifts_non_heirs=0, prior_gifts_taxable=0, prior_gift_tax=0,
             has_spouse=False, spouse_inheritance=0, spouse_prior_gifts_taxable=0, children_count=0,
             parents_count=0, minor_years=0, elderly_count=0, disabled_years=0, non_heir_bequests=0,
-            skipped_generation_assets=0, skipped_generation_minor=False, filed_on_time=True):
+            skipped_generation_assets=0, skipped_generation_minor=False, filed_on_time=True, filed_taxable=None):
+    """filed_taxable: 과소신고 때 기한 안에 신고한 과세표준. 신고세액공제는 그 과세표준의 산출세액에만 준다(시행령 제65조의2)."""
     a = params.amounts
     has_spouse = has_spouse or spouse_inheritance > 0
     if financial_assets > estate_value or non_heir_bequests > estate_value or skipped_generation_assets > estate_value:
@@ -138,8 +139,13 @@ def compute(*, params, estate_value, debts=0, funeral_expenses=0, memorial_expen
         cap = int(Decimal(calculated) * prior_gifts_taxable / taxable) if taxable else 0
         gift_credit = min(prior_gift_tax, cap)
         steps.append((f"증여세액공제(사전증여 산출세액 {prior_gift_tax:,}원과 한도 {cap:,}원 중 작은 금액)", gift_credit))
-    filing = truncate_won(calculated + surcharge - gift_credit, params.filing_credit_rate) if filed_on_time else 0
-    steps.append(("신고세액공제(3%)" if filed_on_time else "신고세액공제(기한 내 신고 아님)", filing))
+    credit_base, label = calculated + surcharge - gift_credit, "신고세액공제(3%)"
+    if filed_on_time and filed_taxable is not None and filed_taxable < taxable and calculated:
+        filed_tax = apply_progressive_tax(filed_taxable, params.brackets)[0] if filed_taxable >= a["minimum"] else 0
+        credit_base = int(Decimal(credit_base) * filed_tax / calculated)
+        label = f"신고세액공제(신고한 과세표준 {filed_taxable:,}원의 산출세액 비율만 3%)"
+    filing = truncate_won(credit_base, params.filing_credit_rate) if filed_on_time else 0
+    steps.append((label if filed_on_time else "신고세액공제(기한 내 신고 아님)", filing))
     decided = max(0, calculated + surcharge - gift_credit - filing)
     steps.append(("납부할 세액", decided))
     if prior_gifts and not prior_gift_tax:
@@ -173,11 +179,14 @@ async def calculate(estate_value: int, debts: int = 0, spouse_inheritance: int =
                     prior_gift_tax: int = 0, has_spouse: bool = False, spouse_prior_gifts_taxable: int = 0,
                     parents_count: int = 0, minor_years: int = 0, elderly_count: int = 0, disabled_years: int = 0,
                     non_heir_bequests: int = 0, skipped_generation_assets: int = 0,
-                    skipped_generation_minor: bool = False, filed_on_time: bool = True,
+                    skipped_generation_minor: bool = False, filed_on_time: bool = True, reported_taxable: int = 0,
                     as_of: date | None = None, **penalty) -> CalculationResult:
     params = await load_parameters(as_of)
     if penalty.get("penalty_type") == "무신고":
         filed_on_time = False
+    if reported_taxable and penalty.get("penalty_type") != "과소신고":
+        raise CalculationError("invalid_input")
+    filed_taxable = reported_taxable if reported_taxable else None
     result = compute(
         params=params, estate_value=estate_value, debts=debts, funeral_expenses=funeral_expenses,
         memorial_expenses=memorial_expenses, financial_assets=financial_assets, prior_gifts=prior_gifts,
@@ -187,7 +196,7 @@ async def calculate(estate_value: int, debts: int = 0, spouse_inheritance: int =
         parents_count=parents_count, minor_years=minor_years, elderly_count=elderly_count,
         disabled_years=disabled_years, non_heir_bequests=non_heir_bequests,
         skipped_generation_assets=skipped_generation_assets, skipped_generation_minor=skipped_generation_minor,
-        filed_on_time=filed_on_time)
+        filed_on_time=filed_on_time, filed_taxable=filed_taxable)
     summary = CalculationResult(
         tax_type="상속세",
         steps=[TaxStep(label=label, amount=amount) for label, amount in result.steps],
@@ -198,6 +207,6 @@ async def calculate(estate_value: int, debts: int = 0, spouse_inheritance: int =
         notes=[*result.notes, *SCOPE_NOTES])
     if penalty.get("penalty_type") == "무신고":
         summary.notes.insert(0, "무신고(기한 후 신고 포함)에는 신고세액공제가 없어 빼고 계산했습니다.")
-    elif penalty.get("penalty_type") == "과소신고" and filed_on_time:
-        summary.notes.insert(0, "과소신고한 부분에는 신고세액공제가 적용되지 않아, 실제 덜 낸 세액은 그 부분 산출세액의 3%만큼 더 클 수 있습니다.")
+    elif penalty.get("penalty_type") == "과소신고" and filed_on_time and not reported_taxable:
+        summary.notes.insert(0, "과소신고한 부분에는 신고세액공제가 적용되지 않습니다. 처음 신고한 과세표준을 입력하지 않아 덜 낸 세액이 그 부분 산출세액의 3%만큼 작게 나왔을 수 있습니다.")
     return await penalty_tax.attach(summary, result.decided_tax, as_of=as_of, **penalty)

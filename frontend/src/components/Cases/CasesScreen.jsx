@@ -11,10 +11,11 @@ import './consultationCases.css'
 
 const yearNow = new Date().getFullYear()
 const todayLocal = () => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}` }
+// 계산기와 같은 6개 세목. 가산세는 각 상담의 질문이고, 이전 '가산세' 상담은 목록에서만 보인다.
 const kinds = [
-  ['income_tax', '종합소득세', '귀속연도'], ['capital_gains', '양도소득세', '양도일'],
+  ['income_tax', '종합소득세', '귀속연도'], ['retirement', '퇴직소득세', '퇴직일'], ['capital_gains', '양도소득세', '양도일'],
   ['inheritance', '상속세', '상속개시일'], ['gift', '증여세', '증여일'],
-  ['vat', '부가가치세', '과세기간 종료일'], ['penalty_tax', '가산세', '위반·납부 기준일'],
+  ['vat', '부가가치세', '과세기간 종료일'], ['penalty_tax', '가산세', '위반·납부 기준일', 'legacy'],
 ]
 const kindInfo = kind => kinds.find(item => item[0] === kind) || kinds[0]
 const showValue = (q) => q.value == null ? '' : String(q.type === 'amount' ? q.value / 10000 : q.type === 'boolean' ? q.value : q.value)
@@ -162,7 +163,7 @@ export default function CasesScreen({ library, onOpenDocuments, onOpenChat }) {
       {creating && <form className="case-create" onSubmit={create}>
         <h2>세무 상담 시작</h2><p className="small muted">세목을 고른 뒤 필요한 계산 조건을 차례로 확인합니다.</p>
         <label>세목<select value={kind} onChange={e => { const selected = e.target.value; setKind(selected); setTitle(`${kindInfo(selected)[1]} 상담`) }}>
-          {kinds.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+          {kinds.filter(item => !item[3]).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
         <label>상담 제목<input required maxLength="80" value={title} onChange={e => setTitle(e.target.value)} /></label>
         {kind === 'income_tax' ? <label>귀속연도<input required type="number" min="2000" max={yearNow} value={taxYear} onChange={e => setTaxYear(e.target.value)} /></label>
           : <label>{kindInfo(kind)[2]} · 자료 조회 기준일<input required type="date" min="2000-01-01" max={todayLocal()} value={referenceDate} onChange={e => setReferenceDate(e.target.value)} /></label>}

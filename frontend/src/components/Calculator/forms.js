@@ -33,6 +33,8 @@ const PENALTY_FIELDS = [
   { key: 'penalty_revenue',     label: '수입금액(복식부기의무자·법인)', unit: '만원', required: false, hint: '무신고 시 수입금액 1만분의 7 하한' },
 ]
 
+const REAL_ESTATE = ['주택', '토지·건물', '분양권', '조합원입주권', '기타자산']
+
 const penaltyPayload = (f) => {
   const type = f.penalty_type || '없음'
   return {
@@ -75,6 +77,10 @@ const FORMS = {
       { key: 'rental_income',         label: '주택임대 총수입금액',    unit: '만원', required: false, hint: '2천만원 이하면 분리과세와 비교' },
       { key: 'rental_expenses',       label: '주택임대 필요경비',      unit: '만원', required: false },
       { key: 'registered_rental',     label: '등록임대주택',          type: 'checkbox' },
+      { key: 'rental_deposits',       label: '주택임대 보증금 합계',   unit: '만원', required: false, hint: '간주임대료: 3주택 이상·3억원 초과 또는 2주택·12억원 초과' },
+      { key: 'rental_house_count',    label: '임대 주택 수',          unit: '채',   required: false, hint: '40㎡·기준시가 2억원 이하 소형주택 제외' },
+      { key: 'religious_income',      label: '종교인소득',            unit: '만원', required: false, hint: '비과세 제외 · 필요경비 80~20% 표 적용' },
+      { key: 'religious_as_wage',     label: '종교인소득을 근로소득으로 신고', type: 'checkbox' },
       { key: 'daily_wage',            label: '일용근로 일급',          unit: '만원', required: false, hint: '분리과세로 끝남' },
       { key: 'daily_work_days',       label: '일용근로 일수',          unit: '일',   required: false },
       { key: 'virtual_transfer_price', label: '가상자산 양도가액',     unit: '만원', required: false, hint: '2027년 양도분부터 20% 분리과세 · 같은 해 전체(총평균법)' },
@@ -131,6 +137,10 @@ const FORMS = {
       sincere_business:         !!f.sincere_business,
       other_tax_credits:        toWon(f.other_tax_credits),
       prepaid_tax:              toWon(f.prepaid_tax),
+      rental_deposits:          toWon(f.rental_deposits),
+      rental_house_count:       Number(f.rental_deposits || 0) > 0 ? toInt(f.rental_house_count) : 0,
+      religious_income:         toWon(f.religious_income),
+      religious_as_wage:        Number(f.religious_income || 0) > 0 && !!f.religious_as_wage,
       virtual_transfer_price:   toWon(f.virtual_transfer_price),
       virtual_acquisition_price: toWon(f.virtual_acquisition_price),
       virtual_expenses:         toWon(f.virtual_expenses),
@@ -154,7 +164,9 @@ const FORMS = {
       { key: 'major_shareholder', label: '대주주',        type: 'checkbox', hint: '상장 1%·코스닥 2% 또는 50억원, 비상장 4% 또는 10억원 등' },
       { key: 'sme',               label: '중소기업 주식', type: 'checkbox' },
       { key: 'same_group_loss',   label: '같은 그룹 양도차손', unit: '만원', required: false, hint: '같은 해 다른 자산 손실(통산)' },
-      { key: 'is_one_home',       label: '1세대 1주택', type: 'checkbox', hint: '양도일 현재 세대가 이 주택 하나만 보유' },
+      { key: 'prior_same_year_taxable', label: '같은 해 먼저 양도한 자산 과세표준', unit: '만원', required: false, hint: '부동산·권리·기타자산 비교과세(제104조 제5항)' },
+      { key: 'prior_same_year_tax', label: '그 자산의 산출세액', unit: '만원', required: false },
+      { key: 'is_one_home',       label: '1세대 1주택', type: 'checkbox', hint: '입주권: 1조합원입주권만 가진 원조합원(인가일 현재 기존주택 비과세 요건 충족)' },
       { key: 'residence_years',   label: '거주기간',    unit: '년',   required: false, hint: '보유기간 중 거주한 만 연수' },
       { key: 'acquired_in_adjusted_area', label: '취득 당시 조정대상지역', type: 'checkbox', hint: '1주택 비과세에 2년 거주 요건이 붙음' },
       { key: 'multi_home_surcharge', label: '다주택 중과', type: 'select', options: ['없음', '2주택', '3주택이상'], hint: '조정대상지역 중과 대상일 때만 선택' },
@@ -165,20 +177,22 @@ const FORMS = {
       ...penaltyPayload(f),
       transfer_price:    toWon(f.transfer_price),
       non_business_land: f.asset_type === '토지·건물' && !!f.non_business_land,
-      unregistered:      ['주택', '토지·건물', '분양권', '조합원입주권', '기타자산'].includes(f.asset_type || '주택') && !!f.unregistered,
+      unregistered:      REAL_ESTATE.includes(f.asset_type || '주택') && !!f.unregistered,
       pre_approval_gain: f.asset_type === '조합원입주권' ? toWon(f.pre_approval_gain) : 0,
       pre_approval_years: f.asset_type === '조합원입주권' ? toInt(f.pre_approval_years) : 0,
       stock_market:      f.stock_market || '국내비상장',
       major_shareholder: f.asset_type === '주식' && !!f.major_shareholder,
       sme:               f.asset_type === '주식' && !!f.sme,
       same_group_loss:   toWon(f.same_group_loss),
+      prior_same_year_taxable: REAL_ESTATE.includes(f.asset_type || '주택') ? toWon(f.prior_same_year_taxable) : 0,
+      prior_same_year_tax: REAL_ESTATE.includes(f.asset_type || '주택') ? toWon(f.prior_same_year_tax) : 0,
       acquisition_price: toWon(f.acquisition_price),
       expenses:          toWon(f.expenses),
       holding_years:     toInt(f.holding_years),
       asset_type:        f.asset_type || '주택',
-      is_one_home:       (f.asset_type || '주택') === '주택' && !!f.is_one_home,
+      is_one_home:       ['주택', '조합원입주권'].includes(f.asset_type || '주택') && !!f.is_one_home,
       residence_years:   ['주택', '조합원입주권'].includes(f.asset_type || '주택') ? toInt(f.residence_years) : 0,
-      acquired_in_adjusted_area: (f.asset_type || '주택') === '주택' && !!f.acquired_in_adjusted_area,
+      acquired_in_adjusted_area: ['주택', '조합원입주권'].includes(f.asset_type || '주택') && !!f.acquired_in_adjusted_area,
       multi_home_surcharge: (f.asset_type || '주택') === '주택' ? f.multi_home_surcharge || '없음' : '없음',
     }),
   },
@@ -207,6 +221,7 @@ const FORMS = {
       { key: 'skipped_generation_minor', label: '손자녀 미성년',       type: 'checkbox', hint: '20억원 초과 시 40%' },
       { key: 'filed_on_time',      label: '기한 내 신고',           type: 'checkbox', hint: '신고세액공제 3%' },
       ...PENALTY_FIELDS,
+      { key: 'reported_taxable', label: '처음 신고한 과세표준', unit: '만원', required: false, hint: '과소신고: 신고세액공제는 이 부분에만' },
     ],
     defaults: { has_spouse: true, filed_on_time: true, penalty_type: '없음' },
     toPayload: (f) => ({
@@ -232,6 +247,7 @@ const FORMS = {
       skipped_generation_assets: toWon(f.skipped_generation_assets),
       skipped_generation_minor: !!f.skipped_generation_minor,
       filed_on_time:         f.filed_on_time !== false,
+      reported_taxable:      f.penalty_type === '과소신고' ? toWon(f.reported_taxable) : 0,
     }),
   },
   gift: {
@@ -249,6 +265,7 @@ const FORMS = {
       { key: 'deduction_used_10y',  label: '이미 쓴 증여재산공제',   unit: '만원', required: false, hint: '합산하지 않은 다른 증여에 쓴 같은 관계 공제' },
       { key: 'filed_on_time',       label: '기한 내 신고',          type: 'checkbox', hint: '신고세액공제 3%' },
       ...PENALTY_FIELDS,
+      { key: 'reported_taxable', label: '처음 신고한 과세표준', unit: '만원', required: false, hint: '과소신고: 신고세액공제는 이 부분에만' },
     ],
     defaults: { relation: '직계존비속', filed_on_time: true, penalty_type: '없음' },
     toPayload: (f) => ({
@@ -265,6 +282,7 @@ const FORMS = {
       marriage_birth_used: 0,
       generation_skipping: f.relation === '직계존비속' && !!f.generation_skipping,
       filed_on_time:       f.filed_on_time !== false,
+      reported_taxable:    f.penalty_type === '과소신고' ? toWon(f.reported_taxable) : 0,
     }),
   },
   vat: {
@@ -287,6 +305,7 @@ const FORMS = {
       { key: 'prepaid_tax',   label: '예정고지·미환급세액', unit: '만원', required: false },
       { key: 'e_filing',      label: '전자신고(1만원 공제)', type: 'checkbox' },
       ...PENALTY_FIELDS,
+      { key: 'reported_zero_rated_sales', label: '처음 신고한 영세율 매출', unit: '만원', required: false, hint: '과소신고: 덜 신고한 영세율 매출의 0.5% 가산세' },
     ],
     defaults: { business_type: '소매업', card_credit_eligible: true, penalty_type: '없음' },
     toPayload: (f) => ({
@@ -304,6 +323,7 @@ const FORMS = {
       card_credit_eligible: f.card_credit_eligible !== false,
       card_credit_used: toWon(f.card_credit_used),
       e_filing:      !!f.e_filing,
+      reported_zero_rated_sales: f.penalty_type === '과소신고' && !f.is_simplified ? toWon(f.reported_zero_rated_sales) : 0,
       prepaid_tax:   toWon(f.prepaid_tax),
     }),
   },
@@ -313,6 +333,7 @@ const FORMS = {
       { key: 'retirement_pay', label: '퇴직급여',     unit: '만원', required: true, hint: '퇴직금·퇴직연금 일시금(비과세 제외)' },
       { key: 'service_years',  label: '근속연수',     unit: '년',   required: true, hint: '1년 미만은 1년으로 올림 · 중간정산 시 중복기간 제외' },
       { key: 'prepaid_tax',    label: '원천징수된 세액', unit: '만원', required: false },
+      { key: 'pension_transfer', label: '연금계좌(IRP)로 옮긴 금액', unit: '만원', required: false, hint: '그 몫의 퇴직소득세는 연금으로 받을 때까지 미뤄짐' },
       ...PENALTY_FIELDS,
     ],
     defaults: { penalty_type: '없음' },
@@ -321,6 +342,7 @@ const FORMS = {
       retirement_pay: toWon(f.retirement_pay),
       service_years:  toInt(f.service_years, 1),
       prepaid_tax:    toWon(f.prepaid_tax),
+      pension_transfer: toWon(f.pension_transfer),
     }),
   },
 }

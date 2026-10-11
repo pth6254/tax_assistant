@@ -57,7 +57,7 @@ EXTRA_RATE_NAMES = {"presale_short": "분양권_1년미만", "presale": "분양�
 
 SCOPE_NOTES = (
     "거주자의 자산 1건을 그해 같은 그룹의 유일한 양도로 보고 계산했습니다(입력한 같은 그룹 양도차손만 통산). "
-    "조세특례제한법 감면, 장기임대주택 특례, 같은 해 여러 건 양도의 비교과세, 조합원입주권 1주택 비과세, 국외 부동산, "
+    "조세특례제한법 감면, 장기임대주택 특례, 1주택과 입주권·분양권을 함께 가진 경우의 비과세 특례, 국외 부동산, "
     "외국납부세액공제, 전자신고세액공제는 반영하지 않았습니다.",
     "1세대 1주택·조정대상지역·다주택 중과·비사업용 토지·대주주·중소기업 해당 여부는 입력값을 따른 것이며 계산기가 "
     "사실관계를 판정하지 않습니다.",
@@ -101,7 +101,7 @@ def _check_inputs(asset_type, holding_years, residence_years, is_one_home, multi
         raise CalculationError("invalid_input")
     if residence_years > holding_years:
         raise CalculationError("invalid_input")
-    if asset_type != HOUSE and (is_one_home or multi_home_surcharge != "없음"):
+    if (asset_type != HOUSE and multi_home_surcharge != "없음") or (is_one_home and asset_type not in (HOUSE, MEMBERSHIP_RIGHT)):
         raise CalculationError("invalid_input")
     if is_one_home and multi_home_surcharge != "없음":
         raise CalculationError("invalid_input")
@@ -159,9 +159,15 @@ def _securities(params, *, asset_type, gain, holding_years, stock_market, major_
 def compute(*, params, transfer_price, acquisition_price, expenses=0, holding_years=0, asset_type=HOUSE,
             is_one_home=False, residence_years=0, acquired_in_adjusted_area=False, multi_home_surcharge="없음",
             non_business_land=False, unregistered=False, pre_approval_gain=0, pre_approval_years=0,
-            stock_market="국내비상장", major_shareholder=False, sme=False, same_group_loss=0):
+            stock_market="국내비상장", major_shareholder=False, sme=False, same_group_loss=0,
+            prior_same_year_taxable=0, prior_same_year_tax=0):
+    """is_one_home은 주택이면 1세대 1주택, 조합원입주권이면 1조합원입주권만 가진 원조합원(제89조 제1항 제4호 가목:
+    관리처분계획인가일 현재 기존주택이 비과세 요건을 충족, 양도일 현재 다른 주택·분양권 없음).
+    prior_same_year_*: 같은 해 먼저 양도한 토지·건물·부동산권리·기타자산(제104조 제5항 비교과세)."""
     _check_inputs(asset_type, holding_years, residence_years, is_one_home, multi_home_surcharge)
-    if (non_business_land and asset_type != LAND) or (is_one_home and asset_type != HOUSE) or (
+    if (prior_same_year_taxable or prior_same_year_tax) and asset_type not in REAL_ESTATE_GROUP:
+        raise CalculationError("invalid_input")
+    if (non_business_land and asset_type != LAND) or (is_one_home and asset_type not in (HOUSE, MEMBERSHIP_RIGHT)) or (
             unregistered and asset_type not in REAL_ESTATE_GROUP) or stock_market not in STOCK_MARKETS or (
             pre_approval_gain and asset_type != MEMBERSHIP_RIGHT):
         raise CalculationError("invalid_input")
@@ -180,16 +186,21 @@ def compute(*, params, transfer_price, acquisition_price, expenses=0, holding_ye
         notes.append("양도차익이 없어(양도차손) 납부할 양도소득세가 없습니다. 같은 해 다른 양도차익과의 통산은 계산하지 않았습니다.")
         return Computation(steps, 0, 0, 0, "no_gain", notes)
 
-    exempt = (is_one_home and holding_years >= EXEMPT_HOLDING_YEARS
+    right = asset_type == MEMBERSHIP_RIGHT
+    # 입주권은 관리처분계획인가일 현재 기존주택이 1세대 1주택 비과세 요건을 갖춰야 한다(인가 전 보유기간으로 판단).
+    exempt_years = pre_approval_years if right else holding_years
+    exempt = (is_one_home and exempt_years >= EXEMPT_HOLDING_YEARS
               and (not acquired_in_adjusted_area or residence_years >= EXEMPT_RESIDENCE_YEARS))
     threshold = params.high_price_threshold
+    kind = "1조합원입주권" if right else "1세대 1주택"
     if is_one_home and not exempt:
-        notes.append(f"1세대 1주택이지만 비과세 요건(보유 {EXEMPT_HOLDING_YEARS}년 이상"
+        notes.append(f"{kind}이지만 비과세 요건({'관리처분계획인가일까지 기존주택 ' if right else ''}"
+                     f"보유 {EXEMPT_HOLDING_YEARS}년 이상"
                      + (f", 취득 당시 조정대상지역이면 거주 {EXEMPT_RESIDENCE_YEARS}년 이상" if acquired_in_adjusted_area else "")
                      + ")을 충족하지 않아 전체 양도차익에 과세했습니다.")
     if exempt and transfer_price <= threshold:
-        steps.append((f"1세대 1주택 비과세(양도가액 {threshold:,}원 이하)", max(0, gain)))
-        notes.append("1세대 1주택 비과세 요건을 충족하고 양도가액이 고가주택 기준금액 이하라 양도소득세가 없습니다.")
+        steps.append((f"{kind} 비과세(양도가액 {threshold:,}원 이하)", max(0, gain)))
+        notes.append(f"{kind} 비과세 요건을 충족하고 양도가액이 고가주택 기준금액 이하라 양도소득세가 없습니다.")
         return Computation(steps, 0, 0, 0, "exempt", notes)
 
     surcharged = multi_home_surcharge != "없음"
@@ -200,8 +211,9 @@ def compute(*, params, transfer_price, acquisition_price, expenses=0, holding_ye
     full_deduction = truncate_won(gain, rate)
     if asset_type == MEMBERSHIP_RIGHT and not unregistered:
         # 제95조 제2항: 원조합원은 관리처분계획인가 전 양도차익에만, 그 전 보유기간으로 공제한다.
-        pre_rate, _ = long_term_rate(params, holding_years=pre_approval_years, residence_years=0,
-                                     is_one_home=False, surcharged=False)
+        pre_rate, _ = long_term_rate(params, holding_years=pre_approval_years,
+                                     residence_years=residence_years if is_one_home else 0,
+                                     is_one_home=is_one_home, surcharged=False)
         full_deduction = truncate_won(min(pre_approval_gain, gain), pre_rate)
         rate_text = (f"관리처분계획인가 전 양도차익 {min(pre_approval_gain, gain):,}원 x {_pct(pre_rate)}"
                      if pre_approval_gain else "승계조합원은 공제 없음")
@@ -211,12 +223,13 @@ def compute(*, params, transfer_price, acquisition_price, expenses=0, holding_ye
         deduction = full_deduction * (transfer_price - threshold) // transfer_price
         steps.append((f"고가주택 과세대상 양도차익(×(양도가액-{threshold:,})/양도가액)", taxable_gain))
         steps.append((f"장기보유특별공제({rate_text}, 고가주택 안분)", deduction))
-        notes.append("1세대 1주택 고가주택이라 양도가액 중 고가주택 기준금액을 넘는 비율만큼만 과세했습니다.")
+        notes.append(f"{kind} 고가{'입주권' if right else '주택'}이라 양도가액 중 기준금액을 넘는 비율만큼만 과세했습니다.")
     else:
         taxable_gain, deduction = gain, full_deduction
         steps.append((f"장기보유특별공제({rate_text})", deduction))
     income = taxable_gain - deduction
-    basic = 0 if unregistered else min(income, params.basic_deduction)
+    # 기본공제는 그룹별 연 1회: 같은 해 먼저 양도한 자산에서 받은 것으로 본다.
+    basic = 0 if unregistered or prior_same_year_taxable else min(income, params.basic_deduction)
     taxable = income - basic
     steps += [("양도소득금액", income), ("양도소득 기본공제", basic), ("과세표준", taxable)]
 
@@ -242,6 +255,20 @@ def compute(*, params, transfer_price, acquisition_price, expenses=0, holding_ye
     if len(candidates) > 1:
         notes.append("한 자산에 둘 이상의 세율이 해당하면 그중 큰 세액을 적용합니다(제104조 제1항·제7항): "
                      + ", ".join(f"{label} {tax:,}원" for tax, label in candidates) + ".")
+    if prior_same_year_taxable or prior_same_year_tax:
+        # 제104조 제5항: ① 과세표준 합계 x 기본세율 ② 자산별 세율 산출세액 합계 중 큰 금액이 그해 산출세액.
+        combined = apply_progressive_tax(taxable + prior_same_year_taxable, params.brackets)[0]
+        separate = calculated + prior_same_year_tax
+        this_year = max(combined, separate)
+        steps += [(f"이번 자산 산출세액({rate_label})", calculated),
+                  ("같은 해 먼저 양도한 자산의 과세표준", prior_same_year_taxable),
+                  ("비교과세 ① 과세표준 합계 x 기본세율", combined),
+                  ("비교과세 ② 자산별 세율 산출세액 합계", separate),
+                  ("그해 양도소득 산출세액(큰 금액)", this_year)]
+        calculated, rate_label = max(0, this_year - prior_same_year_tax), "비교과세 후 먼저 양도분 산출세액 차감"
+        notes.append("같은 해 둘 이상 양도해 과세표준 합계에 기본세율을 적용한 세액과 자산별 세율 세액의 합계 중 큰 금액을 "
+                     "그해 산출세액으로 하고, 먼저 양도할 때 계산한 산출세액을 뺀 금액을 이번 양도분으로 보였습니다"
+                     "(제104조 제5항). 기본공제는 먼저 양도한 자산에서 받은 것으로 보았습니다.")
     local = truncate_won(calculated, params.local_tax_ratio)
     steps += [(f"산출세액({rate_label})", calculated),
               (f"지방소득세(별도 납부, 산출세액의 {_pct(params.local_tax_ratio)})", local),
@@ -298,7 +325,8 @@ async def calculate(transfer_price: int, acquisition_price: int, expenses: int =
                     acquired_in_adjusted_area: bool = False, multi_home_surcharge: str = "없음",
                     non_business_land: bool = False, unregistered: bool = False, pre_approval_gain: int = 0,
                     pre_approval_years: int = 0, stock_market: str = "국내비상장", major_shareholder: bool = False,
-                    sme: bool = False, same_group_loss: int = 0, as_of: date | None = None,
+                    sme: bool = False, same_group_loss: int = 0, prior_same_year_taxable: int = 0,
+                    prior_same_year_tax: int = 0, as_of: date | None = None,
                     **penalty) -> CalculationResult:
     params = await load_parameters(as_of)
     try:
@@ -309,7 +337,8 @@ async def calculate(transfer_price: int, acquisition_price: int, expenses: int =
                          non_business_land=non_business_land, unregistered=unregistered,
                          pre_approval_gain=pre_approval_gain, pre_approval_years=pre_approval_years,
                          stock_market=stock_market, major_shareholder=major_shareholder, sme=sme,
-                         same_group_loss=same_group_loss)
+                         same_group_loss=same_group_loss, prior_same_year_taxable=prior_same_year_taxable,
+                         prior_same_year_tax=prior_same_year_tax)
     except KeyError as exc:
         raise CalculationError("missing_tax_data") from exc
     summary = CalculationResult(

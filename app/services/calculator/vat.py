@@ -176,7 +176,8 @@ async def calculate(sales: int, purchases: int = 0, exempt_sales: int = 0, is_si
                     business_type: str = "소매업", zero_rated_sales: int = 0, common_purchases: int = 0,
                     non_deductible_purchases: int = 0, deemed_purchases: int = 0, card_sales: int = 0,
                     card_credit_eligible: bool = True, card_credit_used: int = 0, e_filing: bool = False,
-                    prepaid_tax: int = 0, as_of: date | None = None, **penalty) -> CalculationResult:
+                    prepaid_tax: int = 0, reported_zero_rated_sales: int = 0, as_of: date | None = None,
+                    **penalty) -> CalculationResult:
     if is_simplified and business_type not in BUSINESS_TYPES:
         raise CalculationError("unsupported_condition")
     params = await load_parameters(as_of)
@@ -199,4 +200,13 @@ async def calculate(sales: int, purchases: int = 0, exempt_sales: int = 0, is_si
         notes=[*result.notes, *SCOPE_NOTES])
     if no_return:
         summary.notes.insert(0, "무신고에는 전자신고세액공제가 없어 빼고 계산했습니다.")
-    return await penalty_tax.attach(summary, max(0, result.decided_tax), as_of=as_of, **penalty)
+    kind = penalty.get("penalty_type", "없음")
+    if reported_zero_rated_sales and (kind != "과소신고" or reported_zero_rated_sales > zero_rated_sales):
+        raise CalculationError("invalid_input")
+    zero_base = (zero_rated_sales if kind == "무신고" else zero_rated_sales - reported_zero_rated_sales
+                 if kind == "과소신고" else 0) if not is_simplified else 0
+    if kind == "과소신고" and zero_rated_sales and not reported_zero_rated_sales:
+        summary.notes.insert(0, "처음 신고한 영세율 과세표준을 입력하지 않아 영세율 매출 전체를 과소신고분으로 보고 "
+                                "영세율과세표준 신고불성실가산세(0.5%)를 계산했습니다.")
+    return await penalty_tax.attach(summary, max(0, result.decided_tax), zero_rated_base=zero_base, as_of=as_of,
+                                    **penalty)

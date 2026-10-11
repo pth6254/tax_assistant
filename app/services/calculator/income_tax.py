@@ -8,7 +8,9 @@
 연금소득은 제47조의2 연금소득공제, 기타소득은 시행령 제87조 필요경비 의제(60%·80%)로 계산한다. 법이
 납세자에게 고르게 하는 분리과세(사적연금 제14조 제3항 제9호·제64조의4, 기타소득 300만원 이하 제14조 제3항
 제8호, 주택임대 2천만원 이하 제64조의2)는 가능한 조합을 모두 계산해 세금 합계가 가장 적은 쪽을 고른다.
-일용근로소득(제14조 제3항 제2호)은 원천징수로 과세가 끝나므로 따로 보인다. 가상자산소득(제64조의3, 2027년
+일용근로소득(제14조 제3항 제2호)은 원천징수로 과세가 끝나므로 따로 보인다. 주택 보증금은 제25조·시행령 제53조의
+간주임대료를 주택임대 총수입금액에 더하고, 종교인소득(제21조 제1항 제26호)은 시행령 제87조 제3호 필요경비 표로
+기타소득금액을 구하거나 근로소득으로 신고하면 총급여에 더한다. 가상자산소득(제64조의3, 2027년
 양도분부터)은 기타소득이지만 다른 소득과 합산하지 않는 분리과세 세액으로 결정세액에 더한다(`virtual_asset`).
 기한을 넘긴 신고·납부는 `penalty_tax.attach`가 가산세 옵션으로 붙인다.
 산식은 국세청 종합소득세 신고서 작성사례와 「2026 세금절약가이드 Ⅰ」의 계산 사례로 검증한다
@@ -35,10 +37,11 @@ KIND_NAMES = ("연금소득공제_한도", "사적연금_분리과세_기준", "
               "기타소득_분리과세_기준", "기타소득_원천징수율", "기타소득_필요경비의제_60", "기타소득_필요경비의제_80",
               "주택임대_분리과세_기준", "주택임대_분리과세", "추계_배율", "추계_복식부기_기준경비율_비율",
               "일용근로_근로소득공제", "일용근로_원천징수율", "일용근로_세액공제율", "소액부징수")
+DEEMED_RENT, RELIGIOUS = "간주임대료_주택", "종교인소득_필요경비"
 MISC_RATES = {"실제": None, "60%": "기타소득_필요경비의제_60", "80%": "기타소득_필요경비의제_80"}
 
 SCOPE_NOTES = (
-    "결손금·이월결손금, 기장세액공제, 세액감면, 복권·종교인소득 등 그 밖의 분리과세 소득, 출자공동사업자 배당, "
+    "결손금·이월결손금, 기장세액공제, 세액감면, 복권 등 그 밖의 분리과세 소득, 출자공동사업자 배당, "
     "주택임대 간주임대료, 비거주자, 국외소득의 외국납부세액공제와 지방소득세는 계산하지 않았습니다.",
     "금액은 연간 소득 기준의 참고 계산이며 실제 신고세액을 확정하지 않습니다.",
 )
@@ -211,6 +214,33 @@ def business_income(params, *, income, expense, method, simple_rate, simple_exce
     return amount, steps, ["장부 없이 추계로 신고하면 무기장가산세(산출세액의 20%)가 붙을 수 있으며 이 계산에는 넣지 않았습니다."]
 
 
+def deemed_rental_income(row, rental_income, deposits, house_count, two_house_rule):
+    """제25조 제1항·시행령 제53조 제3항: (보증금 - 3억원) x 60% x 정기예금이자율을 주택임대 총수입금액에 더한다.
+    3주택 이상·보증금 합계 3억원 초과, 또는 2주택·12억원 초과(2026년 과세기간부터)일 때만. 1년 내내 받은 보증금으로 본다."""
+    if row is None:
+        raise CalculationError("missing_tax_data")
+    c, floor, rate = row["condition"], row["amount"], _rate(row["rate"])
+    applies = (house_count >= c["house_count"] and deposits > floor) or (
+        two_house_rule and house_count == 2 and deposits > c["two_house_deposit"])
+    if not applies:
+        return rental_income, [], ["보증금 간주임대료는 3주택 이상이고 보증금 합계가 3억원을 넘거나, 2주택이고 12억원을 넘을 때만 "
+                                   "더합니다(40㎡ 이하·기준시가 2억원 이하 소형주택은 주택 수에서 제외). 이번에는 더하지 않았습니다."]
+    deemed = truncate_won(deposits - floor, _rate(c["ratio"]), rate)
+    step = (f"주택임대 간주임대료((보증금 {deposits:,} - {floor:,}) x {_rate(c['ratio']) * 100:.0f}% x "
+            f"{rate * 100:.1f}%)", deemed)
+    return rental_income + deemed, [step], [
+        "간주임대료는 보증금을 1년 내내 받은 것으로 보고, 보증금 운용으로 생긴 이자·배당은 없다고 보아 계산했습니다(있으면 뺍니다)."]
+
+
+def religious_expense(bands, amount):
+    """시행령 제87조 제3호 표: 2천만원 이하 80%, 4천만원 이하 1,600만원+50%, 6천만원 이하 2,600만원+30%, 초과 3,200만원+20%."""
+    if not bands:
+        raise CalculationError("missing_tax_data")
+    for upper, rate, base, start in bands:
+        if upper is None or amount <= upper:
+            return base + truncate_won(amount - start, _rate(rate))
+
+
 def daily_wage_tax(params, daily_wage, days):
     """일용근로소득: (일급-15만원) x 6% - 55%, 1천원 미만이면 징수하지 않음(제86조). 분리과세로 끝난다."""
     k = params.kinds
@@ -227,10 +257,28 @@ def compute(*, params, income=0, expense=0, wage_income=0, other_income=0, inter
             double_entry=False, pension_income=0, private_pension=0, pension_age=0,
             misc_income=0, misc_expense_rule="실제", misc_expenses=0,
             rental_income=0, rental_expenses=0, registered_rental=False, daily_wage=0, daily_work_days=0,
-            added_tax=(), extra_steps=()):
-    """added_tax·extra_steps: 다른 소득과 합산하지 않고 결정세액에 더하는 세액(가상자산)과 그 계산 단계."""
+            added_tax=(), extra_steps=(), rental_deposits=0, rental_house_count=0, deemed_rent=None,
+            two_house_rule=True, religious_income=0, religious_as_wage=False, religious_bands=None):
+    """added_tax·extra_steps: 다른 소득과 합산하지 않고 결정세액에 더하는 세액(가상자산)과 그 계산 단계.
+    deemed_rent: 간주임대료 행(3억원·이자율·60%·주택 수 기준), religious_bands: 종교인소득 필요경비 표."""
     k = params.kinds
     notes = []
+    extra_steps = list(extra_steps)
+    if rental_deposits:
+        rental_income, deemed_steps, deemed_notes = deemed_rental_income(
+            deemed_rent, rental_income, rental_deposits, rental_house_count, two_house_rule)
+        extra_steps, notes = deemed_steps + extra_steps, notes + deemed_notes
+    religious_amount = 0
+    if religious_income and religious_as_wage:
+        wage_income += religious_income
+        notes.append(f"종교인소득 {religious_income:,}원을 근로소득으로 신고하는 것으로 보아 총급여에 더했습니다(제21조 제4항).")
+    elif religious_income:
+        expense = religious_expense(religious_bands, religious_income)
+        religious_amount = religious_income - expense
+        extra_steps += [("종교인소득 총수입금액", religious_income), ("종교인소득 필요경비(시행령 제87조 제3호 표)", expense),
+                        ("종교인소득금액(기타소득)", religious_amount)]
+        notes.append("종교인소득은 기타소득으로 종합과세했습니다. 비과세(식비·학자금·숙소 등)를 뺀 금액을 입력하고, 원천징수된 "
+                     "세액은 기납부세액에 넣으세요. 300만원 이하 분리과세 선택은 비교하지 않았습니다.")
     business, business_steps, business_notes = business_income(
         params, income=income, expense=expense, method=business_method, simple_rate=simple_rate,
         simple_excess_rate=simple_excess_rate, standard_rate=standard_rate, major_expenses=major_expenses,
@@ -291,7 +339,7 @@ def compute(*, params, income=0, expense=0, wage_income=0, other_income=0, inter
             rental_amount = max(0, rental_income - rental_expenses)
             other_steps += [("주택임대 사업소득금액(총수입금액-필요경비)", rental_amount)]
         result = _core(params=params, business=business + rental_amount, business_steps=business_steps,
-                       wage_income=wage_income, other_income=other_income + pension_amount +
+                       wage_income=wage_income, other_income=other_income + religious_amount + pension_amount +
                        (misc_amount if misc_choice == "종합" else 0), other_steps=other_steps + (
                            [("그 밖의 종합소득금액(입력값)", other_income)] if other_income else []),
                        interest_income=interest_income, non_business_interest=non_business_interest,
@@ -309,7 +357,7 @@ def compute(*, params, income=0, expense=0, wage_income=0, other_income=0, inter
             rental_tax = truncate_won(rental_base, _rate(k["주택임대_분리과세"]["rate"]))
             # 제64조의2 제1항 제2호: 분리과세 주택임대소득 세액 + 그 외 종합소득 결정세액
             result = _core(params=params, business=business, business_steps=business_steps, wage_income=wage_income,
-                           other_income=other_income + pension_amount + (misc_amount if misc_choice == "종합" else 0),
+                           other_income=other_income + religious_amount + pension_amount + (misc_amount if misc_choice == "종합" else 0),
                            other_steps=other_steps + ([("그 밖의 종합소득금액(입력값)", other_income)] if other_income else []),
                            interest_income=interest_income, non_business_interest=non_business_interest,
                            dividend_gross_up=dividend_gross_up, dividend_other=dividend_other, withheld=withheld,
@@ -392,10 +440,11 @@ async def calculate(income: int = 0, expense: int = 0, wage_income: int = 0, oth
                     rental_expenses: int = 0, registered_rental: bool = False, daily_wage: int = 0,
                     daily_work_days: int = 0, virtual_transfer_price: int = 0, virtual_acquisition_price: int = 0,
                     virtual_expenses: int = 0, virtual_held_before_2027: bool = False, virtual_value_2026_end: int = 0,
-                    as_of: date | None = None, **penalty) -> CalculationResult:
+                    rental_deposits: int = 0, rental_house_count: int = 0, religious_income: int = 0,
+                    religious_as_wage: bool = False, as_of: date | None = None, **penalty) -> CalculationResult:
     comprehensive = any((income, expense, wage_income, other_income, interest_income, non_business_interest,
                          dividend_gross_up, dividend_other, pension_income, private_pension, misc_income, rental_income,
-                         daily_wage))
+                         daily_wage, rental_deposits, religious_income))
     virtual_steps, virtual_tax, virtual_notes = [], [], []
     sources, dates = [], set()
     if virtual_transfer_price or virtual_acquisition_price or virtual_value_2026_end:
@@ -424,7 +473,21 @@ async def calculate(income: int = 0, expense: int = 0, wage_income: int = 0, oth
     params = await load_parameters(as_of)
     sources += params.sources
     dates |= set(params.effective_dates)
-    result = compute(params=params, added_tax=virtual_tax, extra_steps=virtual_steps, income=income, expense=expense,
+    deemed_rent = religious_row = None
+    if rental_deposits:
+        deemed_rent = await get_deduction("소득세", DEEMED_RENT, as_of=as_of)
+    if religious_income and not religious_as_wage:
+        religious_row = await get_deduction("소득세", RELIGIOUS, as_of=as_of)
+    religious_bands = ((religious_row or {}).get("condition") or {}).get("bands")
+    for row in (r for r in (deemed_rent, religious_row) if r):
+        sources.append(row["source_article"])
+        dates.add(str(row["effective_date"]))
+    two_house_from = ((deemed_rent or {}).get("condition") or {}).get("two_house_from")
+    two_house_rule = bool(two_house_from) and (as_of or date.today()) >= date.fromisoformat(two_house_from)
+    result = compute(params=params, added_tax=virtual_tax, extra_steps=virtual_steps, rental_deposits=rental_deposits,
+                     rental_house_count=rental_house_count, deemed_rent=deemed_rent, two_house_rule=two_house_rule,
+                     religious_income=religious_income, religious_as_wage=religious_as_wage,
+                     religious_bands=religious_bands, income=income, expense=expense,
                      wage_income=wage_income,
                      other_income=other_income, interest_income=interest_income,
                      non_business_interest=non_business_interest, dividend_gross_up=dividend_gross_up,
@@ -441,7 +504,7 @@ async def calculate(income: int = 0, expense: int = 0, wage_income: int = 0, oth
     result.notes += virtual_notes
     gross = (income + wage_income + other_income + interest_income + non_business_interest + dividend_gross_up
              + dividend_other + pension_income + private_pension + misc_income + rental_income + daily_wage * daily_work_days
-             + virtual_transfer_price)
+             + virtual_transfer_price + religious_income)
     summary = CalculationResult(
         tax_type="종합소득세",
         steps=[TaxStep(label=label, amount=amount) for label, amount in result.steps],
