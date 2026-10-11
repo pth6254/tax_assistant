@@ -29,6 +29,7 @@ CALC_TAX = {
     "income_tax": r"소득|수입", "capital_gains": r"양도|매도", "inheritance": r"상속|유산",
     "gift": r"증여", "vat": r"부가세|부가가치세|매출|매입|VAT", "penalty_tax": r"가산세",
     "financial_income_tax": r"금융소득|이자|배당", "retirement": r"퇴직",
+    "virtual_asset": r"가상자산|코인|암호화폐|가상화폐|비트코인|이더리움",
 }
 FINANCIAL_INCOME = re.compile(r"금융\s*(?:소득|종합)|이자\s*소득|배당\s*소득")
 
@@ -108,6 +109,14 @@ def retirement_scope(query, history=None):
     return _scoped(RETIREMENT, re.compile(r"가산세|양도|증여|상속"), query, history)
 
 
+VIRTUAL = re.compile(r"가상자산|암호화폐|가상화폐|코인|비트코인|이더리움", re.I)
+
+
+def virtual_asset_scope(query, history=None):
+    """A virtual asset sale is being calculated in this turn, or the previous one for a follow-up."""
+    return _scoped(VIRTUAL, None, query, history)
+
+
 VAT = re.compile(r"부가세|부가가치세|VAT", re.I)
 PENALTY = re.compile(r"가산세")
 
@@ -149,7 +158,7 @@ ALIASES = {
     "purchases": "매입액|매입", "exempt_sales": "면세매출|면세 매출",
     "unpaid_tax": "미납세액|미납 세액|미납세금", "days_late": "지연일수|지연 일수",
     "filed_within_months": "기한 후 신고|수정신고", "revenue": "수입금액",
-    "retirement_pay": "퇴직금|퇴직급여|퇴직소득", "service_years": "근속연수|근속 연수|근속기간",
+    "retirement_pay": "퇴직금|퇴직급여|퇴직소득", "value_2026_end": "2026년말 시가|2026년 12월 31일 시가", "service_years": "근속연수|근속 연수|근속기간",
     "zero_rated_sales": "영세율 매출|영세율매출", "common_purchases": "공통매입", "non_deductible_purchases": "불공제 매입",
     "deemed_purchases": "면세농산물", "card_sales": "카드매출|카드 매출", "card_credit_used": "이미 받은 카드공제",
     "prepaid_tax": "기납부세액|기납부 세액|중간예납세액|예정고지세액|예정고지",
@@ -175,6 +184,7 @@ BOOL_TEXT = {
     "has_spouse": {True: "배우자 있음", False: "배우자 없음"},
     "card_credit_eligible": {True: "카드공제 대상", False: "카드공제 대상 아님"},
     "e_filing": {True: "전자신고", False: "서면신고"},
+    "held_before_2027": {True: "2027년 전부터 보유", False: "2027년 이후 취득"},
     "skipped_generation_minor": {True: "손자녀 미성년", False: "손자녀 성년"},
     "filed_on_time": {True: "기한 내 신고", False: "기한 후 신고"},
     "is_negligent": {True: "부정행위 있음", False: "부정행위 없음"},

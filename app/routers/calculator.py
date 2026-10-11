@@ -13,10 +13,11 @@ from app.schemas.calculator import (
     InheritanceRequest,
     PenaltyTaxRequest,
     RetirementTaxRequest,
+    VirtualAssetRequest,
     VatRequest,
 )
 from app.services.calculator import (capital_gains, financial_income_tax, gift_tax, income_tax, inheritance,
-                                     penalty_tax, retirement, vat)
+                                     penalty_tax, retirement, vat, virtual_asset)
 from app.core.security import verify_token
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,14 @@ async def calc_retirement(
     user: dict = Depends(verify_token),
 ):
     return await _calculate(retirement.calculate, req)
+
+
+@router.post("/virtual-asset", response_model=CalculationResult)
+async def calc_virtual_asset(
+    req: VirtualAssetRequest,
+    user: dict = Depends(verify_token),
+):
+    return await _calculate(virtual_asset.calculate, req)
 
 
 @router.post("/penalty-tax", response_model=CalculationResult)

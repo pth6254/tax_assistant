@@ -1,4 +1,4 @@
-import { calcIncomeTax, calcCapitalGains, calcInheritance, calcGiftTax, calcVat, calcPenaltyTax, calcRetirement } from '../../api/calculatorApi.js'
+import { calcIncomeTax, calcCapitalGains, calcInheritance, calcGiftTax, calcVat, calcPenaltyTax, calcRetirement, calcVirtualAsset } from '../../api/calculatorApi.js'
 
 // 챗봇 계산기 엔진(app/services/calculator/engine.py _TOOLS)의 도구명 → 화면 탭 키
 const TOOL_TO_TAB = {
@@ -10,6 +10,7 @@ const TOOL_TO_TAB = {
   vat:           'vat',
   penalty_tax:   'penalty',
   retirement:    'retirement',
+  virtual_asset: 'virtual',
 }
 
 const TABS = [
@@ -19,6 +20,7 @@ const TABS = [
   { key: 'gift',        label: '증여세',    icon: '🎁' },
   { key: 'vat',         label: '부가가치세', icon: '🧾' },
   { key: 'retirement',  label: '퇴직소득세', icon: '🧳' },
+  { key: 'virtual',     label: '가상자산',   icon: '🪙' },
   { key: 'penalty',     label: '가산세',    icon: '⏰' },
 ]
 
@@ -270,6 +272,24 @@ const FORMS = {
       prepaid_tax:    toWon(f.prepaid_tax),
     }),
   },
+  virtual: {
+    apiFn: calcVirtualAsset,
+    fields: [
+      { key: 'transfer_price',    label: '양도가액',       unit: '만원', required: true, hint: '같은 해 전체(총평균법)' },
+      { key: 'acquisition_price', label: '실제 취득가액',   unit: '만원', required: true },
+      { key: 'expenses',          label: '수수료 등 경비', unit: '만원', required: false },
+      { key: 'held_before_2027',  label: '2027년 전부터 보유', type: 'checkbox', hint: '2026-12-31 시가와 비교' },
+      { key: 'value_2026_end',    label: '2026-12-31 시가', unit: '만원', required: false },
+    ],
+    defaults: {},
+    toPayload: (f) => ({
+      transfer_price:    toWon(f.transfer_price),
+      acquisition_price: toWon(f.acquisition_price),
+      expenses:          toWon(f.expenses),
+      held_before_2027:  !!f.held_before_2027,
+      value_2026_end:    f.held_before_2027 ? toWon(f.value_2026_end) : 0,
+    }),
+  },
   penalty: {
     apiFn: calcPenaltyTax,
     fields: [
@@ -346,6 +366,9 @@ const QUESTION_BUILDERS = {
   retirement: (f, r) =>
     `퇴직급여 ${f.retirement_pay || 0}만원, 근속 ${f.service_years || 0}년 기준으로 계산한 퇴직소득세가 ${fmtWon(r.final_tax)}로 나왔습니다. ` +
     `이 계산이 맞는지 확인하고, 연금계좌로 받는 경우와 비교해 주세요.`,
+  virtual: (f, r) =>
+    `가상자산 양도가액 ${f.transfer_price || 0}만원, 취득가액 ${f.acquisition_price || 0}만원 기준으로 계산한 세금이 ${fmtWon(r.final_tax)}로 ` +
+    `나왔습니다. 2027년 과세 시작 전후를 포함해 이 계산이 맞는지 확인해 주세요.`,
   penalty: (f, r) =>
     `${f.penalty_type || '무신고'} 세액 ${f.unpaid_tax || 0}만원${f.is_negligent && f.penalty_type !== '납부지연' ? ' (부정행위)' : ''}, 납부지연 ${f.days_late || 0}일` +
     `${Number(f.filed_within_months || 0) > 0 && f.penalty_type !== '납부지연' ? `, 기한 후 ${f.filed_within_months}개월 안에 스스로 신고` : ''} 기준으로 ` +

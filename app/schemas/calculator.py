@@ -181,6 +181,15 @@ class RetirementTaxRequest(BaseModel):
     prepaid_tax: NonNegativeInt = Field(0, description="이미 원천징수된 퇴직소득세")
 
 
+class VirtualAssetRequest(BaseModel):
+    """가상자산 양도소득(기타소득 분리과세, 2027년 양도분부터). 같은 해 전체 손익을 총평균법으로 합친 금액."""
+    transfer_price: NonNegativeInt = Field(description="양도가액")
+    acquisition_price: NonNegativeInt = Field(description="실제 취득가액")
+    expenses: NonNegativeInt = Field(0, description="거래수수료 등 필요경비")
+    held_before_2027: bool = Field(False, description="2027년 1월 1일 전부터 보유(2026-12-31 시가와 비교)")
+    value_2026_end: NonNegativeInt = Field(0, description="2026년 12월 31일 당시 시가(보유분 전체)")
+
+
 class PenaltyTaxRequest(BaseModel):
     """국세 신고·납부 가산세. 무신고·과소신고는 신고 가산세와 납부지연가산세를 함께 계산한다."""
     unpaid_tax: NonNegativeInt = Field(description="신고하지 않았거나 덜 신고·납부한 세액")

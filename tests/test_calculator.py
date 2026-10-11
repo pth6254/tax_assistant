@@ -89,6 +89,8 @@ _DEDUCTIONS: dict[tuple[str, str], dict] = {
     ("소득세", "퇴직소득_근속연수공제"):      {"amount": None, "rate": None, "condition": {"tiers": [
         [5, 0, 1000000, 0], [10, 5000000, 2000000, 5], [20, 15000000, 2500000, 10], [None, 40000000, 3000000, 20]]}},
     ("소득세", "퇴직소득_지방소득세_비율"):    {"amount": None, "rate": 0.10},
+    ("소득세", "가상자산소득"): {"amount": 2500000, "rate": 0.20, "condition": {"local_ratio": "0.1"},
+                               "effective_date": "2027-01-01", "source_article": "소득세법 제64조의3"},
     ("소득세", "이자소득등종합과세기준금액"):     {"amount": 20000000,  "rate": None},
     ("소득세", "금융소득원천징수율"):             {"amount": None, "rate": 0.14},
     ("소득세", "비영업대금이익원천징수율"):       {"amount": None, "rate": 0.25},

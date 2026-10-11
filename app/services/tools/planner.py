@@ -15,7 +15,8 @@ from app.services.tools.registry import TOOL_SCHEMAS
 from app.services.tools.executor import ToolRun, execute_tool
 from app.services.tools.policy import DOCUMENT_INTENT, CALC_TAX, ALIASES, check_proposal, has_lookup_intent
 from app.services.tools.policy import (capital_gains_scope, financial_income_scope, gift_scope, income_tax_scope,
-                                       inheritance_scope, penalty_scope, retirement_scope, vat_scope)
+                                       inheritance_scope, penalty_scope, retirement_scope, vat_scope,
+                                       virtual_asset_scope)
 
 logger = logging.getLogger(__name__)
 _AMOUNT_RE = re.compile(r"(?:\d[\d,.]*|[일이삼사오육칠팔구십백천]+)\s*(?:억|천만|백만|천|만|원)")
@@ -69,7 +70,7 @@ async def select_tool(query: str, history: list[dict] | None = None) -> tuple[st
     prompt = chat_prompt(
         "세무 보조 도구를 최대 하나 선택하고 JSON만 출력하세요. "
         "원문 조회는 law_lookup, 내 업로드 문서 검색은 document_search. "
-        "세액 계산은 retirement(퇴직소득세), income_tax(근로·사업·기타·연금·이자·배당 소득의 종합소득세, 금융소득 종합과세 포함), capital_gains(양도소득세), inheritance(상속세), "
+        "세액 계산은 retirement(퇴직소득세), virtual_asset(가상자산 소득세), income_tax(근로·사업·기타·연금·이자·배당 소득의 종합소득세, 금융소득 종합과세 포함), capital_gains(양도소득세), inheritance(상속세), "
         "gift(증여세), vat(부가가치세), penalty_tax(가산세)를 사용하세요. "
         "위 계산기의 지원 대상 밖인 세액 계산은 formula_calculation을 선택하고 params는 빈 객체로 두세요. "
         "일반 설명이나 기존 계산기의 단순 입력 부족을 formula_calculation으로 보내지 마세요. "
@@ -110,6 +111,11 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
             return result
         if financial_income_scope(query, history):
             return ToolRun("formula_calculation", "planned", "공식 근거를 확인한 산식으로 참고 계산을 준비합니다.")
+    if (has_calculation_intent(query) or calculation_followup) and virtual_asset_scope(query, history):
+        # 가상자산은 양도소득이 아니라 기타소득 분리과세라 양도소득세 해석보다 먼저 본다.
+        result = await virtual_asset_calculation(query, history, on_event)
+        if result is not None:
+            return result
     if (has_calculation_intent(query) or calculation_followup) and capital_gains_scope(query, history):
         result = await capital_gains_calculation(query, history, on_event)
         if result is not None:
@@ -273,6 +279,12 @@ async def retirement_calculation(query, history, on_event=None):
     """퇴직소득세 계산기 결과, a request for the facts it must not assume, or None for the model path."""
     from app.services.calculator.retirement_inputs import stated_retirement_inputs
     return await _stated_calculation("retirement", "퇴직소득세", stated_retirement_inputs(query, history), on_event)
+
+
+async def virtual_asset_calculation(query, history, on_event=None):
+    """가상자산 소득세 계산기 결과, a request for the facts it must not assume, or None for the model path."""
+    from app.services.calculator.virtual_asset_inputs import stated_virtual_asset_inputs
+    return await _stated_calculation("virtual_asset", "가상자산 소득세", stated_virtual_asset_inputs(query, history), on_event)
 
 
 def _emit_result(result, params, callback):

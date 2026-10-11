@@ -46,6 +46,7 @@ export default function CalculatorScreen({ initial, onInitialConsumed, onAskAbou
   const visible = fields.filter(f => !(f.key === 'business_type' && !form.is_simplified) && !(['is_negligent', 'filed_within_months', 'revenue'].includes(f.key) && form.penalty_type === '납부지연')
     && !(['zero_rated_sales', 'exempt_sales', 'non_deductible_purchases', 'common_purchases', 'deemed_purchases'].includes(f.key) && form.is_simplified)
     && !(f.key === 'withheld' && !hasFinancial)
+    && !(f.key === 'value_2026_end' && !form.held_before_2027)
     && !(['is_one_home', 'residence_years', 'acquired_in_adjusted_area', 'multi_home_surcharge'].includes(f.key) && tab === 'capital' && (form.asset_type || '주택') !== '주택')
     && !(f.key === 'non_business_land' && form.asset_type !== '토지·건물')
     && !(f.key === 'unregistered' && ['주식', '파생상품', '신탁수익권'].includes(form.asset_type))
