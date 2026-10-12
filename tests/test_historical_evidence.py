@@ -7,7 +7,7 @@ import pytest
 from app.schemas.reliability import AnswerClaim, AnswerDraft, ClaimCitation, Issue, QuestionPlan
 from app.services import claim_verification as claims
 from app.services.evidence import context_from_records, is_official, record_from_result
-from app.services.historical_evidence import ArchivedArticle, attach_event_versions, determined_article
+from app.services.historical_evidence import ArchivedArticle, attach_event_versions, in_force_versions, version_texts
 from app.services.temporal_scope import unresolved_dates
 from tests.test_reliability_workflow import source
 
@@ -23,16 +23,18 @@ def row(body=OLD, content_hash=None):
     return {'title': '무기장가산세', 'body': body, 'content_hash': content_hash or sha(body)}
 
 
-def test_article_text_must_be_the_same_and_intact_in_every_in_force_version():
-    assert determined_article([row(), row()]) == row()
-    assert determined_article([row(), None]) is None                       # missing in one version
-    assert determined_article([row(), row(OLD + ' 다만')]) is None          # amended inside the interval
-    assert determined_article([row(content_hash=sha('다른 본문'))]) is None   # stored hash does not match
-    assert determined_article([]) is None
+def test_article_text_must_be_present_and_intact_in_every_in_force_version():
+    assert version_texts([row(), row()]) == [(0, row())]
+    assert version_texts([row(), None]) is None                            # missing in one version
+    assert version_texts([row(), row(OLD + ' 다만'), row(OLD + ' 다만')]) == [   # amended inside the interval
+        (0, row()), (1, row(OLD + ' 다만'))]
+    assert version_texts([row(content_hash=sha('다른 본문'))]) is None        # stored hash does not match
+    assert version_texts([]) is None
 
 
-def archived(effective_from=date(2024, 1, 1), effective_to=date(2024, 12, 31), body=OLD, content_hash=None):
-    return ArchivedArticle(version_id=300, law_name='소득세법', effective_from=effective_from,
+def archived(effective_from=date(2024, 1, 1), effective_to=date(2024, 12, 31), body=OLD, content_hash=None,
+             version_id=300):
+    return ArchivedArticle(version_id=version_id, law_name='소득세법', effective_from=effective_from,
                            effective_to=effective_to, title='무기장가산세', body=body,
                            content_hash=content_hash or sha(body), source_url='https://www.law.go.kr/history/300')
 
@@ -50,7 +52,7 @@ def fake_lookup(result):
 
     async def lookup(law_name, reference, start, end):
         calls.append((law_name, reference.article_no, start, end))
-        return result
+        return result if isinstance(result, list) else [result] if result else []
     return lookup, calls
 
 
@@ -135,3 +137,47 @@ async def test_archived_citation_is_labelled_by_version_and_not_as_a_current_law
     assert '사건일(2024년 6월 1일)에 시행 중이던 법령 시행본' in answer and '조문별 시행일' in answer
     current_only = claims.render_structured_answer(legal(current).claims, ctx, '질문')
     assert '[법률] 소득세법 제81조의5' in current_only
+
+
+AMENDED = OLD + ' 다만, 소규모사업자는 제외한다.'
+
+
+@pytest.mark.asyncio
+async def test_an_article_amended_during_the_year_governs_it_only_through_every_version():
+    current, ctx = dated_context(['2024년'])
+    lookup, _ = fake_lookup([archived(effective_to=date(2024, 2, 27)),
+                             archived(effective_from=date(2024, 2, 28), effective_to=None, body=AMENDED,
+                                      version_id=301)])
+    result = await attach_event_versions(ctx, lookup=lookup, today=TODAY)
+    before, after = [r for r in result.records if r.id != current.id]
+    assert (before.effective_to, after.effective_from) == ('2024-02-27', '2024-02-28')
+    assert {before.id, after.id} <= set(result.coverage['I1']['evidence_ids'])
+    assert unresolved_dates(['2024년'], [before], TODAY) == ['2024년']
+    assert unresolved_dates(['2024년'], [before, after], TODAY) == []
+    assert unresolved_dates(['2024년'], [before, after, current], TODAY) == ['2024년']   # not in force in 2024
+    both = AnswerDraft(claims=[AnswerClaim(id='C1', issue_id='I1', text='장부를 기록하지 않으면 가산세가 부과됩니다.',
+                                           kind='legal', citations=[
+        ClaimCitation(evidence_id=r.id, quote=r.text.splitlines()[-1]) for r in (before, after)])])
+    assert 'historical_version_required' not in claims.check_claims(both, result, '질문')['C1']
+    assert 'historical_version_required' in claims.check_claims(legal(before), result, '질문')['C1']
+    aliases = {before.id: 'E1', after.id: 'E2', current.id: 'E3'}
+    fields = claims.event_date_fields(['2024년'], before, result.records, aliases)
+    assert fields == {'governs_event_dates': False, 'governs_with': ['E1', 'E2']}
+    assert 'governs_with' not in claims.event_date_fields(['2024년'], current, result.records, aliases)
+
+
+@pytest.mark.asyncio
+async def test_a_gap_between_versions_does_not_cover_the_year():
+    _, ctx = dated_context(['2024년'])
+    lookup, _ = fake_lookup([archived(effective_to=date(2024, 2, 27)),
+                             archived(effective_from=date(2024, 3, 5), effective_to=None, body=AMENDED,
+                                      version_id=301)])
+    result = await attach_event_versions(ctx, lookup=lookup, today=TODAY)
+    old = [r for r in result.records if r.source_id.startswith('history:')]
+    assert len(old) == 2 and unresolved_dates(['2024년'], old, TODAY) == ['2024년']
+
+
+def test_of_amendments_taking_effect_the_same_day_the_last_promulgated_is_in_force():
+    versions = [{'id': 1, 'effective_date': date(2025, 1, 1)}, {'id': 2, 'effective_date': date(2025, 1, 1)},
+                {'id': 3, 'effective_date': date(2025, 2, 28)}]   # ordered by promulgation within a day
+    assert [v['id'] for v in in_force_versions(versions)] == [2, 3]

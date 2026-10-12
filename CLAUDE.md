@@ -21,7 +21,7 @@
 | 작업 | 먼저 확인할 코드 |
 |---|---|
 | 주체·쟁점 계획·세법 선택 | [question_planning.py](app/services/question_planning.py), [tax_laws.py](app/services/tax_laws.py) |
-| 재검색·교차 법령 조회 | [reliable_workflow.py](app/services/reliable_workflow.py), [hybrid_search_service.py](app/services/search/hybrid_search_service.py) |
+| 재검색·교차 법령 조회 | [reliable_workflow.py](app/services/reliable_workflow.py), [question_planning.py](app/services/question_planning.py) (`retrieve_issues`: 빠진 요건 재검색·국세기본법 보조 검색), [hybrid_search_service.py](app/services/search/hybrid_search_service.py) |
 | 쟁점별 근거 충족 판정 | [issue_coverage.py](app/services/issue_coverage.py) |
 | 질문 경로(과거 법령·도구) | [history_context.py](app/services/law/history_context.py), [policy.py](app/services/tools/policy.py), [planner.py](app/services/tools/planner.py) |
 | 검색 후보·Graph 확장 | [hybrid_search_service.py](app/services/search/hybrid_search_service.py), [graph_search_service.py](app/services/search/graph_search_service.py) |

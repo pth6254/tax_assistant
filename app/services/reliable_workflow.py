@@ -1,8 +1,6 @@
 """Bounded orchestration; tool failure affects its issue and dependencies."""
 from app.services.evidence import EvidenceContext, context_from_records
-from app.services.search.query_constraints import extract_constraints
-from app.services.tax_laws import KNOWN_LAWS
-from app.services.question_planning import plan_question, retrieve_issues
+from app.services.question_planning import named_articles, plan_question, retrieve_issues
 from app.services.historical_evidence import attach_event_versions
 from app.services.tools.planner import run_tools_for_query, self_contained
 from app.services.calculator.engine import format_calculation_answer
@@ -36,13 +34,7 @@ def gap_references(issue, context, judge):
     texts = list(context.coverage.get(issue.id, {}).get("missing_requirements") or [])
     if judge:
         texts += [row.reason for row in judge.claims if row.claim_id.split(":", 1)[0] == issue.id]
-    found = []
-    for text in texts:
-        for reference in extract_constraints(text).references:
-            if (reference.law_name and reference.article_no
-                    and any(reference.law_name.startswith(law) for law in KNOWN_LAWS)):
-                found.append(f"{reference.law_name} {reference.article_no}")
-    return list(dict.fromkeys(found))[:MAX_GAP_REFERENCES]
+    return named_articles(texts)[:MAX_GAP_REFERENCES]
 
 
 async def prepare_context(query, laws, user_id, history, search, on_event=None):

@@ -12,6 +12,7 @@ from app.services.law.lookup_service import get_law_article
 
 logger = logging.getLogger(__name__)
 _MAX_ADDED_CHARS = 4000
+SEED_COUNT = 3
 
 
 async def expand_graph(results, query=''):
@@ -64,11 +65,11 @@ async def _expand(results, query=''):
         lookups.update(zip(missing, articles))
 
     seeds = {}
-    await prefetch((r.law_name, r.article_no) for r in results[:3]
-                   if r.article_no and r.source_type != 'interpretation')
-    for result in results[:3]:
-        if not result.article_no or result.source_type == 'interpretation':
-            continue
+    # Interpretations often lead the ranking; they cite no delegation, so the seeds
+    # are the three highest-ranked statute articles instead of the first three rows.
+    starts = [r for r in results if r.article_no and r.source_type != 'interpretation'][:SEED_COUNT]
+    await prefetch((r.law_name, r.article_no) for r in starts)
+    for result in starts:
         article = lookups[(result.law_name, result.article_no)]
         if article and effective_now(article.model_dump()):
             header = article.article_no + (f' [{article.article_title}]' if article.article_title else '')

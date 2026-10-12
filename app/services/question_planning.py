@@ -10,12 +10,19 @@ from app.services.issue_coverage import assess_issues
 from app.services.llm_client import call_llm_structured
 from app.services.inference.llm.errors import LLMRequestError
 from app.services.law.reference_parser import reference_spans, extract_law_references
+from app.services.search.query_constraints import extract_constraints
 from app.services.temporal_scope import is_event_date
 from app.services.tax_laws import KNOWN_LAWS
 
 SUPPORT_LAWS = {"국세기본법", "국세징수법", "조세범처벌법", "지방세기본법", "지방세징수법"}
 # Laws the planner may add beyond the keyword candidates for one question.
 MAX_ADDED_LAWS = 3
+# Penalties, amended returns and appeals are set by the framework act whichever tax
+# they concern. These words only add a small framework-act search; they never block.
+PROCEDURE_TERMS = re.compile(r"가산세|수정신고|경정청구|기한\s*후\s*신고|제척기간|부과제척|이의신청|심사청구|심판청구"
+                             r"|환급가산금|납부지연|납세의무\s*(?:의\s*)?성립|제2차\s*납세의무|연대납세")
+PROCEDURE_LAW = "국세기본법"
+PROCEDURE_RESULTS = 2
 logger = logging.getLogger(__name__)
 
 
@@ -45,6 +52,17 @@ def issue_queries(issue, original_query=""):
     focus = primary[-180:] if len(primary) > 180 else primary
     alternate = f"{issue.subject} {issue.law} {focus} 적용 요건 예외".strip()
     return list(dict.fromkeys([primary, alternate]))
+
+
+def named_articles(texts):
+    """'법률명 제N조' references in free text that name a known statute and article."""
+    found = []
+    for text in texts:
+        for reference in extract_constraints(text).references:
+            if (reference.law_name and reference.article_no
+                    and any(reference.law_name.startswith(law) for law in KNOWN_LAWS)):
+                found.append(f"{reference.law_name} {reference.article_no}")
+    return list(dict.fromkeys(found))
 
 
 def date_mentions(query):
@@ -177,6 +195,7 @@ async def plan_question(query, laws, history=None):
 async def retrieve_issues(plan, query, user_id, search, *, on_progress=None, scope_issues=None):
     """Retrieve and assess each analysis issue without losing its tax scope."""
     semaphore = asyncio.Semaphore(2)
+    framework_issue = any(i.law == PROCEDURE_LAW and i.kind == "analysis" for i in (scope_issues or plan.issues))
     async def retrieve(issue):
         if on_progress:
             on_progress({"type": "verification", "status": "retrieving", "issue_id": issue.id})
@@ -191,6 +210,20 @@ async def retrieve_issues(plan, query, user_id, search, *, on_progress=None, sco
                 records = list({r.id: r for r in [record_from_result(r) for r in results]}.values())
             except Exception as exc:
                 error = type(exc).__name__
+            if (issue.law not in {PROCEDURE_LAW, "ALL"} and not framework_issue
+                    and PROCEDURE_TERMS.search(f"{issue.request_quote} {issue.question}")):
+                # The rule that decides a penalty or a correction is often in the framework
+                # act while the issue is filed under the tax law, and the plan has no issue of
+                # its own for that act; a few of its articles join this issue.
+                try:
+                    async with asyncio.timeout(20):
+                        extra = await search([issue.question], PROCEDURE_LAW, user_id=user_id,
+                                             original_query=query, official_only=True, issue_mode=True)
+                    known = {r.id for r in records}
+                    records += [r for r in map(record_from_result, extra)
+                                if r.law_name == PROCEDURE_LAW and r.id not in known][:PROCEDURE_RESULTS]
+                except Exception:
+                    pass  # The issue's own search still stands.
             if not any(is_official(r) for r in records) and config.TAVILY_API_KEY:
                 # Web snippets only discover references. A verified local original
                 # must be obtained before anything can become answer evidence.
@@ -234,7 +267,9 @@ async def retrieve_issues(plan, query, user_id, search, *, on_progress=None, sco
              and coverage[issue.id].get("missing_requirements")]
     async def retry_issue(issue):
         missing = coverage[issue.id]["missing_requirements"]
-        queries = [f"{issue.subject} {issue.law} {term}" for term in missing[:2]]
+        # Every gap is searched; one that names a statute and article is also looked up
+        # by itself, so another act's provision is fetched exactly (no model call).
+        queries = [f"{issue.subject} {issue.law} {term}".strip() for term in missing] + named_articles(missing)
         try:
             async with asyncio.timeout(45):
                 results = await search(queries, issue.law, user_id=user_id,
@@ -250,7 +285,7 @@ async def retrieve_issues(plan, query, user_id, search, *, on_progress=None, sco
         # The searched terms may name an article of another statute; the second
         # assessment must see it under the same rule the search used to fetch it.
         asked = [issue.model_copy(update={"question": " ".join([issue.question,
-                                                                *coverage[issue.id]["missing_requirements"][:2]])})
+                                                                *coverage[issue.id]["missing_requirements"]])})
                  for issue in retry]
         second = await assess_issues(asked, by_issue, scope_issues=owners)
         for key, assessment in second.items():

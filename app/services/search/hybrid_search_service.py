@@ -365,6 +365,25 @@ def _fuse_issue_rankings(rankings: list[list[HybridSearchResult]], top_k: int,
     return [results[key] for key in keys[:top_k]]
 
 
+MAX_ISSUE_INTERPRETATIONS = 2
+
+
+def _cap_interpretations(rows, limit, cap=MAX_ISSUE_INTERPRETATIONS):
+    """Keep ranking order but let at most `cap` interpretations take the `limit` slots.
+
+    An interpretation applies the statute to one case; the articles it applies are
+    still needed as evidence, and they are the starting points of Graph expansion.
+    """
+    kept, count = [], 0
+    for row in rows:
+        if row.source_type == 'interpretation':
+            if count >= cap:
+                continue
+            count += 1
+        kept.append(row)
+    return kept[:limit]
+
+
 def _preserve_dense_leaders(rows, primary):
     """Keep two primary-query official provisions through candidate fusion.
 
@@ -539,7 +558,7 @@ async def _search_issue_candidates(queries: list[str], law_filter: str,
     fusion_k = config.SEARCH_RRF_K if bm25 else 60
     weights = [1.0] * len(vector_rankings) + [config.SEARCH_LEXICAL_WEIGHT if bm25 else 1.0]
     diagnostics['rrf_k'], diagnostics['rrf_weights'] = fusion_k, weights
-    results = _fuse_issue_rankings(rankings, result_k, fusion_k, weights)
+    results = _cap_interpretations(_fuse_issue_rankings(rankings, result_k * 2, fusion_k, weights), result_k)
     if ISSUE_TITLE_RESCUE:
         pool = list({(row.law_name, row.article_no): row for ranking in [*vector_rankings, *keyword_rankings]
                      for row in ranking}.values())
