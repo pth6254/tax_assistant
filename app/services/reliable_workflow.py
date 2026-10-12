@@ -5,6 +5,7 @@ from app.services.tax_laws import KNOWN_LAWS
 from app.services.question_planning import plan_question, retrieve_issues
 from app.services.historical_evidence import attach_event_versions
 from app.services.tools.planner import run_tools_for_query, self_contained
+from app.services.calculator.engine import format_calculation_answer
 from app.services.claim_verification import generate_verified_answer
 from app.schemas.reliability import QuestionPlan
 from app.schemas.reliability import Contract, strict_schema
@@ -100,7 +101,10 @@ async def prepare_context(query, laws, user_id, history, search, on_event=None):
         if tool and tool.calculation:
             coverage[issue.id]["calculation"] = {"tool": tool.calculation.tool,
                                                 "params": tool.calculation.params,
-                                                "context": tool.calculation.context}
+                                                "context": tool.calculation.context,
+                                                # What the answer shows: a conclusion and a table, as in a single question.
+                                                "answer": format_calculation_answer(tool.calculation),
+                                                "tax_type": tool.calculation.result.tax_type if tool.calculation.result else None}
             if tool.calculation.verification:
                 coverage[issue.id]["calculation"]["verification"] = tool.calculation.verification
     return context_from_records(records, plan=plan, coverage=coverage)

@@ -7,6 +7,9 @@
 
 - 계산기 결과 답변을 결론 한 줄 + `| 항목 | 금액 |` 표 + 가정·참고·기준일·근거 조문으로 바꿨다(`engine.format_calculation_answer`, 참고 계산
   `formula_workflow.render_calculation`과 같은 모양). 복합 질문 검증 단계에 넘기는 `format_calculation_context` 문자열은 그대로다.
+- 복합 질문의 계산 쟁점도 같은 표로 보인다: 쟁점별 도구 실행 때 표 답변(`coverage[...]['calculation']['answer']`)과 세목명을 저장하고
+  `render_claims`가 "### 종합소득세 계산"처럼 세목 제목과 함께 붙인다. 실제 DB에서 소득세·증여세 두 계산 쟁점(쟁점 계획은 고정, 유료 호출 없음)이
+  각각 표로 나오는 것을 확인했고 WSL 전체 **1,513 passed, 2 skipped**.
 - 검증: WSL 전체 백엔드 **1,512 passed, 2 skipped**. 재빌드 후 실제 DB로 "성인 자녀 3억 증여" 답변이 표로 나오는 것을 확인(38,800,000원).
   화면 렌더링은 기존 마크다운(GFM) 표 스타일을 쓰며 브라우저로 직접 보지는 않았다.
 

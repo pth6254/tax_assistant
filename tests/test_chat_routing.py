@@ -160,3 +160,28 @@ def test_a_calculator_answer_is_a_conclusion_then_a_table():
     assert "- 성인으로 보았습니다." in lines and "- 적용 세법 기준일: 2026-10-12" in lines
     refund = result.model_copy(update={"final_tax": -1_000_000, "tax_type": "부가가치세"})
     assert "환급받을 세액은 1,000,000원" in format_calculation_answer(CalcRun("ctx", "vat", {}, result=refund))
+
+
+@pytest.mark.asyncio
+async def test_a_composite_question_shows_its_calculation_as_a_table(monkeypatch):
+    from app.schemas.reliability import Issue, QuestionPlan
+    from app.services.claim_verification import render_claims
+    from app.services.tools.executor import ToolRun
+    query = "연봉 5천만원이면 소득세 얼마인지 계산하고 연말정산 절차도 설명해줘"
+    plan = QuestionPlan(issues=[
+        Issue(id="C1", kind="calculation", law="소득세법", request_quote="연봉 5천만원이면 소득세 얼마인지 계산하고",
+              question="종합소득세 계산"),
+        Issue(id="A1", kind="analysis", law="소득세법", request_quote="연말정산 절차도 설명해줘", question="연말정산 절차")])
+    result = CalculationResult(tax_type="종합소득세", steps=[TaxStep(label="결정세액", amount=3_387_500)],
+                               taxable_income=36_250_000, calculated_tax=4_177_500, final_tax=3_387_500,
+                               effective_rate=0.068, source_articles=[])
+    calc = CalcRun("세목: 종합소득세\n- 결정세액: 3,387,500원", "income_tax", {}, result=result)
+    monkeypatch.setattr(reliable, "plan_question", AsyncMock(return_value=plan))
+    monkeypatch.setattr(reliable, "retrieve_issues", AsyncMock(return_value=context_from_records([], plan=plan)))
+    monkeypatch.setattr(reliable, "attach_event_versions", AsyncMock(side_effect=lambda c: c))
+    monkeypatch.setattr(reliable, "run_tools_for_query", AsyncMock(return_value=ToolRun("income_tax", "ok", "", calc)))
+    prepared = await reliable.prepare_context(query, [], "u", [], AsyncMock())
+    assert prepared.coverage["C1"]["calculation"]["answer"].startswith("말씀하신 조건에서 **종합소득세 납부할 세액은 3,387,500원**")
+    answer = render_claims([], prepared)
+    assert "### 종합소득세 계산\n\n말씀하신 조건에서" in answer
+    assert "| 결정세액 | 3,387,500원 |" in answer and "- 결정세액: 3,387,500원" not in answer

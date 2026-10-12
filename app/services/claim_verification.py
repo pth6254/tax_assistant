@@ -606,6 +606,18 @@ def render_claims(claims, context):
     historical_scope = any(version_undetermined(c, context) for c in claims)
     asked = " ".join(issue.request_quote for issue in context.plan.issues)
     tool_ids = successful_tools(claims, context)
+
+    def section_title(issue):
+        if len(context.plan.issues) <= 1:
+            return ""
+        law = law_label(issue.law)
+        if issue.law == '소득세법' and '양도' in issue.question:
+            law = '양도소득세'
+        elif issue.law == '소득세법' and '금융' in issue.question:
+            law = '금융소득 종합과세'
+        subject = subject_label(issue.subject, asked) + ' ' if re.fullmatch(r'[A-Z]', issue.subject) else ''
+        return f"### {subject}{law}\n\n"
+
     for issue in context.plan.issues:
         if issue.kind == "exact_lookup" and issue.id in tool_ids:
             ids = context.coverage.get(issue.id, {}).get("evidence_ids", [])
@@ -615,7 +627,12 @@ def render_claims(claims, context):
                 continue
         calculation = context.coverage.get(issue.id, {}).get("calculation")
         if calculation and issue.id in tool_ids:
-            sections.append(calculation["context"] + "\n\n사용자 입력을 대조한 참고 계산입니다. 법적 적용 요건은 별도 확인이 필요합니다.")
+            # The same conclusion-and-table layout as a single calculation question.
+            title = section_title(issue)
+            if title and calculation.get("tax_type"):
+                title = f"### {calculation['tax_type']} 계산\n\n"   # 법 이름보다 계산한 세목 이름이 맞다
+            sections.append(title + calculation.get("answer", calculation["context"])
+                            + "\n\n사용자 입력을 대조한 참고 계산입니다. 법적 적용 요건은 별도 확인이 필요합니다.")
             continue
         rows = [c for c in claims if c.issue_id == issue.id]
         if not rows:
@@ -624,15 +641,7 @@ def render_claims(claims, context):
         # Lead with the supported rule; put document checks and unresolved
         # secondary consequences after the explanation they qualify.
         rows.sort(key=lambda c: 0 if c.kind in {"legal", "source_summary"} else 1)
-        title = ""
-        if len(context.plan.issues) > 1:
-            law = law_label(issue.law)
-            if issue.law == '소득세법' and '양도' in issue.question:
-                law = '양도소득세'
-            elif issue.law == '소득세법' and '금융' in issue.question:
-                law = '금융소득 종합과세'
-            subject = subject_label(issue.subject, asked) + ' ' if re.fullmatch(r'[A-Z]', issue.subject) else ''
-            title = f"### {subject}{law}\n\n"
+        title = section_title(issue)
         body = "\n\n".join(c.text for c in rows)
         conditions = list(dict.fromkeys(condition for c in rows for condition in c.conditions
                                         if condition and condition not in body
