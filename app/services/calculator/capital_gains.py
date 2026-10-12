@@ -247,8 +247,9 @@ def compute(*, params, transfer_price, acquisition_price, expenses=0, holding_ye
         candidates = [(truncate_won(taxable, rate), f"분양권 {'1년 미만 보유 ' if holding_years < 1 else ''}{_pct(rate)}")]
     elif holding_years < 2 and asset_type in (HOUSE, LAND, MEMBERSHIP_RIGHT):
         short = params.short_rates[(LAND if asset_type == LAND else HOUSE, holding_years)]
-        candidates.append((truncate_won(taxable, short),
-                           f"{'1년 미만' if holding_years == 0 else '1년 이상 2년 미만'} 보유 {_pct(short)}"))
+        if short:   # 0: no short-term rate then (주택 1~2년, 2021-06-01 전), the basic rate alone applies
+            candidates.append((truncate_won(taxable, short),
+                               f"{'1년 미만' if holding_years == 0 else '1년 이상 2년 미만'} 보유 {_pct(short)}"))
     if unregistered:
         candidates.append((truncate_won(taxable, r["unregistered"]), f"미등기 양도 {_pct(r['unregistered'])}"))
     calculated, rate_label = max(candidates, key=lambda c: c[0])

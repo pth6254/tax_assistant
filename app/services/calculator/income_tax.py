@@ -33,6 +33,7 @@ WAGE_DEDUCTION_CAP = "근로소득공제_한도"
 WAGE_CREDIT_LIMIT = "근로소득세액공제_한도"
 STANDARD_WAGE, STANDARD_SINCERE, STANDARD_OTHER = "표준세액공제_근로", "표준세액공제_성실사업자", "표준세액공제_그밖"
 DEDUCTION_NAMES = (BASIC, WAGE_DEDUCTION_CAP, WAGE_CREDIT_LIMIT, STANDARD_WAGE, STANDARD_SINCERE, STANDARD_OTHER)
+OPTIONAL_KINDS = ("사적연금_분리과세율",)
 KIND_NAMES = ("연금소득공제_한도", "사적연금_분리과세_기준", "사적연금_분리과세율", "연금수령_원천징수율",
               "기타소득_분리과세_기준", "기타소득_원천징수율", "기타소득_필요경비의제_60", "기타소득_필요경비의제_80",
               "주택임대_분리과세_기준", "주택임대_분리과세", "추계_배율", "추계_복식부기_기준경비율_비율",
@@ -301,7 +302,9 @@ def compute(*, params, income=0, expense=0, wage_income=0, other_income=0, inter
     rental_limit = k["주택임대_분리과세_기준"]["amount"]
 
     options = []
-    private_choices = ("종합", "분리") if private_pension else ("없음",)
+    # 기준 초과 사적연금의 15% 분리과세 선택은 2023-01-01 신설: 그 전에는 종합과세만 된다.
+    over_without_option = private_pension > pension_threshold and k.get("사적연금_분리과세율") is None
+    private_choices = (("종합",) if over_without_option else ("종합", "분리")) if private_pension else ("없음",)
     misc_choices = ("종합", "분리") if 0 < misc_amount <= k["기타소득_분리과세_기준"]["amount"] else (
         ("종합",) if misc_amount else ("없음",))
     rental_choices = ("종합", "분리") if 0 < rental_income <= rental_limit else (("종합",) if rental_income else ("없음",))
@@ -401,9 +404,16 @@ def compute(*, params, income=0, expense=0, wage_income=0, other_income=0, inter
 async def load_parameters(as_of: date | None = None) -> Parameters:
     financial = await financial_income_tax.load_parameters(as_of)
     rows = {name: await get_deduction("소득세", name, as_of=as_of) for name in DEDUCTION_NAMES}
-    kinds = {name: await get_deduction("소득세", name, as_of=as_of) for name in KIND_NAMES}
+    kinds = {name: await get_deduction("소득세", name, as_of=as_of) for name in KIND_NAMES if name not in OPTIONAL_KINDS}
     if any(row is None for row in kinds.values()):
         raise CalculationError("missing_tax_data")
+    for name in OPTIONAL_KINDS:
+        try:
+            kinds[name] = await get_deduction("소득세", name, as_of=as_of)
+        except CalculationError as exc:
+            if exc.code != "missing_tax_data":
+                raise
+            kinds[name] = None   # 그 기준일에 없던 선택지(사적연금 15% 분리과세는 2023년부터)
     kinds["연금소득공제"] = await get_brackets("소득세", "연금소득공제", as_of=as_of)
     wage_bands = await get_brackets("소득세", "근로소득공제", as_of=as_of)
     credit_bands = await get_brackets("소득세", "근로소득세액공제", as_of=as_of)

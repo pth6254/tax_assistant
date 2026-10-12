@@ -78,6 +78,8 @@ def compute(*, params, sales, purchases=0, exempt_sales=0, is_simplified=False, 
     card_cap_left = max(0, params.card_cap - card_credit_used)
     card_credit = min(truncate_won(card_sales, params.card_rate), card_cap_left) if card_credit_eligible else 0
     if is_simplified:
+        if not params.simple_rates or params.simple_input_rate is None:
+            raise CalculationError("missing_tax_data")   # 2021-07-01 개편 전 간이과세 계산 방식은 수록하지 않았다
         if business_type not in params.simple_rates:
             raise CalculationError("unsupported_condition")
         if zero_rated_sales or common_purchases or deemed_purchases or non_deductible_purchases:
@@ -147,24 +149,27 @@ def compute(*, params, sales, purchases=0, exempt_sales=0, is_simplified=False, 
 
 
 async def load_parameters(as_of: date | None = None) -> Parameters:
-    rows = {name: await get_deduction("부가가치세", name, as_of=as_of)
-            for name in (CARD, SIMPLE_INPUT, EXEMPTION, SIMPLE_RATES, E_FILING)}
-    try:
-        rows[DEEMED] = await get_deduction("부가가치세", DEEMED, as_of=as_of)
-    except CalculationError as exc:
-        if exc.code != "missing_tax_data":
-            raise
-        rows[DEEMED] = None
+    rows = {name: await get_deduction("부가가치세", name, as_of=as_of) for name in (CARD, EXEMPTION, E_FILING)}
+    # 간이과세 부가가치율·매입세액공제율은 2021-07-01 개편 뒤의 표만 있다. 그 전 간이과세자는 계산하지 않고(calculate가
+    # 멈춘다), 의제매입세액은 그 기준일에 없던 경우 공제하지 않는다.
+    for name in (SIMPLE_INPUT, SIMPLE_RATES, DEEMED):
+        try:
+            rows[name] = await get_deduction("부가가치세", name, as_of=as_of)
+        except CalculationError as exc:
+            if exc.code != "missing_tax_data":
+                raise
+            rows[name] = None
     brackets = await get_brackets("부가가치세", "default", as_of=as_of)
     rates = ((rows[SIMPLE_RATES] or {}).get("condition") or {}).get("rates")
-    if not brackets or not rates:
+    if not brackets:
         raise CalculationError("missing_tax_data")
     used = [r for r in [*rows.values(), *brackets] if r]
     return Parameters(
         vat_rate=Decimal(str(require_value(brackets[0], "rate"))),
         card_rate=Decimal(str(require_value(rows[CARD], "rate"))),
         card_cap=int(require_value(rows[CARD], "max_amount")),
-        simple_rates=rates, simple_input_rate=Decimal(str(require_value(rows[SIMPLE_INPUT], "rate"))),
+        simple_rates=rates,
+        simple_input_rate=Decimal(str(require_value(rows[SIMPLE_INPUT], "rate"))) if rows[SIMPLE_INPUT] else None,
         exemption_threshold=int(require_value(rows[EXEMPTION], "amount")),
         deemed=(rows[DEEMED] or {}).get("condition") or None,
         e_filing_credit=int(require_value(rows[E_FILING], "amount")),
