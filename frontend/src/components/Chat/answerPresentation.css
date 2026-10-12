@@ -71,6 +71,8 @@
 .verification-issues li span:last-child { color: var(--text-muted); }
 .verification-panel .verification-sources > details { border: 1px solid var(--border); padding: 10px 12px; border-radius: 6px; background: var(--surface); margin: 8px 0; }
 .verification-sources pre { max-height: 360px; overflow-y: auto; font: inherit; font-size: 12px; padding: 10px; background: var(--bg); border-radius: 4px; }
+.verification-sources .verification-quotes { list-style: none; padding-left: 0; margin: 6px 0; }
+.verification-sources .verification-quotes blockquote { border-left: 3px solid var(--accent2); padding: 6px 10px; background: var(--bg); color: var(--text); font-size: 12.5px; }
 @media (max-width: 600px) {
   .assistant-message .markdown-bubble { font-size: 15px; }
   .assistant-message .markdown-bubble h2 { font-size: 18px; }

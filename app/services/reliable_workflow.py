@@ -23,6 +23,7 @@ class Refinement(Contract):
 
 
 MAX_GAP_REFERENCES = 4
+ANSWER_TIMEOUT_SEC = 420
 
 
 def gap_references(issue, context, judge):
@@ -143,7 +144,8 @@ async def answer_context(query, context, user_id, search, on_event=None):
         return await attach_event_versions(context_from_records(
             [*context.records, *extra.records], plan=context.plan, coverage=merged_coverage))
     try:
-        async with asyncio.timeout(240):
+        # First round, one repair search (40 s) and the retry round, with some slack.
+        async with asyncio.timeout(ANSWER_TIMEOUT_SEC):
             return await generate_verified_answer(query, context, repair=repair, on_progress=on_event)
     except TimeoutError:
         return "답변의 근거 검사를 제한 시간 안에 마치지 못했습니다. 질문을 나누어 다시 시도해 주세요.", {

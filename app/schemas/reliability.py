@@ -82,7 +82,7 @@ class AnswerClaim(Contract):
 
 
 class AnswerDraft(Contract):
-    claims: list[AnswerClaim] = Field(default_factory=list, max_length=32)
+    claims: list[AnswerClaim] = Field(default_factory=list)
 
 
 class ClaimJudgment(Contract):

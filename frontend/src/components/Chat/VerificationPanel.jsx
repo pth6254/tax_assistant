@@ -70,9 +70,15 @@ export default function VerificationPanel({ verification, loading, progress, onC
       {citations.length > 0 && <div className="verification-sources">
         <strong>대조한 조문</strong>
         {citations.map((source, index) => source.text ? <details key={source.evidence_id || index}>
-          <summary>{source.origin === 'user_document' ? '[사용자 문서]' : `[${source.label}]`} {source.law_name || source.source} {source.reference} — 사용한 원문</summary>
+          <summary>{source.origin === 'user_document' ? '[사용자 문서]' : `[${source.label}]`} {source.law_name || source.source} {source.reference} — {source.quotes?.length ? `답변이 인용한 부분 ${source.quotes.length}곳` : '사용한 원문'}</summary>
           <p>{source.effective_from ? `자료 시행일: ${source.effective_from}` : '자료 시행일 미확인'} {source.location}</p>
-          <pre tabIndex={0} aria-label="답변에 사용한 원문" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{source.text}</pre>
+          {source.quotes?.length > 0 && <ul className="verification-quotes" aria-label="답변이 인용한 원문">
+            {source.quotes.map(quote => <li key={quote}><blockquote style={{ margin: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{quote}</blockquote></li>)}
+          </ul>}
+          {source.quotes?.length > 0 ? <details>
+            <summary>조문 전체 보기</summary>
+            <pre tabIndex={0} aria-label="답변에 사용한 원문" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{source.text}</pre>
+          </details> : <pre tabIndex={0} aria-label="답변에 사용한 원문" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{source.text}</pre>}
         </details> : <button key={`${source.law_name}-${source.reference}-${index}`}
           type="button" onClick={() => onCitationClick?.(source.law_name, source.reference)}>
           [{source.label}] {source.law_name} {source.reference} 원문 열기
