@@ -226,8 +226,9 @@ async def retrieve_issues(plan, query, user_id, search, *, on_progress=None, sco
                     known = {r.id for r in records}
                     records += [r for r in map(record_from_result, extra)
                                 if r.law_name == PROCEDURE_LAW and r.id not in known][:PROCEDURE_RESULTS]
-                except Exception:
-                    pass  # The issue's own search still stands.
+                except Exception as exc:
+                    # The issue's own search still stands.
+                    logger.warning("framework-act search unavailable (%s)", type(exc).__name__)
             if not any(is_official(r) for r in records) and config.TAVILY_API_KEY:
                 # Web snippets only discover references. A verified local original
                 # must be obtained before anything can become answer evidence.
@@ -242,8 +243,9 @@ async def retrieve_issues(plan, query, user_id, search, *, on_progress=None, sco
                                 record = record_from_result(result)
                                 if is_official(record):
                                     records.append(record)
-                except Exception:
-                    pass  # Discovery failure is not evidence that a law is absent.
+                except Exception as exc:
+                    # Discovery failure is not evidence that a law is absent.
+                    logger.warning("web discovery unavailable (%s)", type(exc).__name__)
         return issue.id, records, {"status": "candidates" if any(is_official(r) for r in records) else "missing",
                                    "attempts": attempts, "error": error,
                                    "evidence_ids": [r.id for r in records]}

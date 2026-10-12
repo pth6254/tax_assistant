@@ -11,6 +11,9 @@ from pydantic import Field
 from app.services.llm_client import call_llm_structured
 import asyncio
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class RefinedQuery(Contract):
@@ -126,8 +129,9 @@ async def answer_context(query, context, user_id, search, on_event=None):
             if len(queries) != len(refined.queries) or not set(queries).issubset({i.id for i in issues}):
                 raise ValueError("invalid_refinement")
             issues = [i.model_copy(update={"question": queries.get(i.id, i.question)}) for i in issues]
-        except Exception:
-            pass
+        except Exception as exc:
+            # The repair still searches with the issue's own question and the named articles.
+            logger.warning("repair query refinement unavailable (%s)", type(exc).__name__)
         # An article the judges name together with its statute is looked up exactly,
         # whichever law the issue itself is filed under.
         issues = [i.model_copy(update={"question": " ".join([i.question, *refs])}) if (

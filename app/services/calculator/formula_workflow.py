@@ -206,14 +206,16 @@ async def collect_sources(query, history, search, user_id):
         try:
             status, context = await lookup(LawLookupRequest(**item.model_dump()))
             return list(context.records) if status == 'ok' and hasattr(context, 'records') else []
-        except Exception:
+        except Exception as exc:
+            logger.warning('formula article lookup unavailable (%s)', type(exc).__name__)
             return []
     async def retrieval():
         try:
             found = await search(research.queries, 'ALL', user_id=user_id, original_query=query,
                                  official_only=True, issue_mode=True)
             return [record_from_result(r) for r in found]
-        except Exception:
+        except Exception as exc:
+            logger.warning('formula evidence search unavailable (%s)', type(exc).__name__)
             return []
     batches = await asyncio.gather(*(article(a) for a in research.articles), retrieval())
     records = list({r.id: r for batch in batches for r in batch if is_official(r)}.values())

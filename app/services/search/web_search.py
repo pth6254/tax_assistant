@@ -1,8 +1,11 @@
 import asyncio
+import logging
 
 import httpx
 
 from config import TAVILY_API_KEY
+
+logger = logging.getLogger(__name__)
 
 _TAVILY_URL = "https://api.tavily.com/search"
 _DOMAINS    = ["nts.go.kr", "law.go.kr", "moef.go.kr"]
@@ -27,7 +30,8 @@ async def tavily_search(queries: list[str]) -> str:
                 f"[출처: {r.get('url', '?')}]\n{r.get('content', '')[:500]}"
                 for r in resp.json().get("results", [])
             ]
-        except Exception:
+        except Exception as exc:
+            logger.warning("[WEB] Tavily search unavailable (%s)", type(exc).__name__)
             return []
 
     async with httpx.AsyncClient(timeout=30.0) as client:
