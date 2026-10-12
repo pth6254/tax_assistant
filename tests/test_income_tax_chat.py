@@ -132,7 +132,10 @@ async def test_chat_answer_is_the_calculator_output(monkeypatch, stored_figures)
     monkeypatch.setattr(formula_workflow, 'calculate_reference', formula)
     ctx, _, _, calc = await chat._fetch_rag_and_web_context(FINANCIAL, uuid4(), str(uuid4()), history_override=[])
     answer, report = await chat._answer_evidence_context(FINANCIAL, ctx, calc, 'unused')
-    assert calc.tool == 'income_tax' and answer == calc.context
+    # The answer is the same calculation laid out as a conclusion and a table.
+    assert calc.tool == 'income_tax' and answer == chat.format_calculation_answer(calc)
+    assert f"{calc.result.final_tax:,}원**" in answer.splitlines()[0] and '| 항목 | 금액 |' in answer
+    assert all(f"| {step.label} | {step.amount:,}원 |" in answer for step in calc.result.steps if '|' not in step.label)
     assert report['checks']['calculation'] == 'checked'
 
 

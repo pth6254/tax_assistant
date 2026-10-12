@@ -364,6 +364,7 @@ async def _stated_calculation(tool, title, stated, on_event, texts=()):
         return None
     # Assumptions lead the result: they change the amounts as much as the inputs do.
     run.context = "\n".join(["계산에 쓴 가정:", *[f"- {item}" for item in stated.assumptions], "", run.context])
+    run.assumptions = tuple(stated.assumptions)
     result = ToolRun(tool, "ok", "", run)
     _emit_result(result, stated.params, on_event)
     return result

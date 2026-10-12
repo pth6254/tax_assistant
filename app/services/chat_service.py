@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import AsyncGenerator
 
 from config import MEMORY_TURNS
-from app.services.calculator.engine import CALCULATORS, CalcRun
+from app.services.calculator.engine import CALCULATORS, CalcRun, format_calculation_answer
 from app.services.chat_history import history_entry
 from app.services.tools.planner import run_tools_for_query
 from app.services.evidence import EvidenceContext
@@ -360,7 +360,7 @@ async def _answer_evidence_context(query, context, calc_run, user_id, on_progres
     # Exact tools return the actual snapshot, with no generative paraphrase.
     from app.services.evidence import is_official
     if calc_run:
-        return calc_run.context, {"schema_version": "2.0", "status": "checked", "citations": [],
+        return format_calculation_answer(calc_run), {"schema_version": "2.0", "status": "checked", "citations": [],
             "checks": {"citation": "not_assessed", "calculation": "checked", "legal_application": "not_assessed"},
             "note": "사용자 입력을 대조한 계산기의 결과입니다. 법적 적용 요건은 별도 확인이 필요합니다."}
     records = [r for r in context.records if is_official(r) or r.origin == "user_document"]

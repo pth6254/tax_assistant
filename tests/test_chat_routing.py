@@ -142,3 +142,21 @@ async def test_a_date_before_the_stored_tables_is_reported_not_replaced_by_today
     result = await planner._stated_calculation("income_tax", "종합소득세", stated, None,
                                                texts=["2010년 귀속 연봉 5천만원 소득세 얼마였어?"])
     assert result.error_code == "tax_date_unavailable" and "2010-12-31" in result.context
+
+
+def test_a_calculator_answer_is_a_conclusion_then_a_table():
+    from app.services.calculator.engine import format_calculation_answer
+    result = CalculationResult(tax_type="증여세", steps=[TaxStep(label="증여재산가액", amount=300_000_000),
+                                                       TaxStep(label="공제(직계|성인)", amount=50_000_000),
+                                                       TaxStep(label="납부할 세액", amount=38_800_000)],
+                               taxable_income=250_000_000, calculated_tax=40_000_000, final_tax=38_800_000,
+                               effective_rate=0.129, source_articles=["상속세 및 증여세법 제53조"], notes=["참고 사항"],
+                               basis=TaxBasis(queried_on="2026-10-12", effective_dates=[]))
+    answer = format_calculation_answer(CalcRun("ctx", "gift", {}, result=result, assumptions=("성인으로 보았습니다.",)))
+    lines = answer.splitlines()
+    assert lines[0] == "말씀하신 조건에서 **증여세 납부할 세액은 38,800,000원**으로 계산됩니다."
+    assert "| 항목 | 금액 |" in lines and "| 증여재산가액 | 300,000,000원 |" in lines
+    assert r"| 공제(직계\|성인) | 50,000,000원 |" in lines
+    assert "- 성인으로 보았습니다." in lines and "- 적용 세법 기준일: 2026-10-12" in lines
+    refund = result.model_copy(update={"final_tax": -1_000_000, "tax_type": "부가가치세"})
+    assert "환급받을 세액은 1,000,000원" in format_calculation_answer(CalcRun("ctx", "vat", {}, result=refund))
