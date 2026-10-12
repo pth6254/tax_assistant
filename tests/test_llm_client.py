@@ -137,6 +137,9 @@ async def test_each_task_selects_its_model_and_reuses_matching_provider(monkeypa
     monkeypatch.setattr(llm_client, "create_llm_provider", factory)
     set_task(monkeypatch, "tool_selection", model="openai/gpt-5-nano", reasoning_effort="minimal")
     set_task(monkeypatch, "query_classification", model="openai/gpt-5-nano", reasoning_effort="minimal")
+    # The answer model is set here, not read from the developer's .env (CI has none).
+    set_task(monkeypatch, "answer", model="openai/gpt-6-luna", reasoning_effort="low")
+    set_task(monkeypatch, "citation_extraction", model="openai/gpt-6-luna", reasoning_effort="low")
 
     assert await llm_client.call_llm([], purpose="tool_selection") == "route"
     assert await llm_client.call_llm([], purpose="query_classification") == "route"

@@ -6,8 +6,15 @@ conftest.py — pytest 공통 픽스처
 """
 import os
 
+import dotenv
+
+# Unit tests see the same settings on every machine. The developer's .env (real database,
+# paid model keys) is never loaded, so a test passes here only if it passes in CI.
+dotenv.load_dotenv = lambda *args, **kwargs: False
 os.environ.setdefault("JWT_SECRET", "test-secret-key-for-pytest-only")
-os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5433/tax_db")
+# Nothing listens on port 1: an unmocked database access fails at once instead of
+# silently reading the development database.
+os.environ["DATABASE_URL"] = "postgresql://postgres:postgres@127.0.0.1:1/unit_tests_have_no_database"
 os.environ.setdefault("OLLAMA_BASE_URL", "http://localhost:11434")
 os.environ.setdefault("LAW_API_KEY", "test-law-api-key")
 os.environ.setdefault("TAVILY_API_KEY", "")
