@@ -264,6 +264,8 @@ async def retrieve_issues(plan, query, user_id, search, *, on_progress=None, sco
     coverage = {key: state for key, _, state in rows}
     issues = [issue for issue in plan.issues if issue.kind == "analysis"]
     owners = [issue for issue in (scope_issues or plan.issues) if issue.kind == "analysis"]
+    if on_progress:
+        on_progress({"type": "verification", "status": "assessing"})
     assessments = await assess_issues(issues, by_issue, scope_issues=owners)
     for key, assessment in assessments.items():
         coverage[key].update(assessment)

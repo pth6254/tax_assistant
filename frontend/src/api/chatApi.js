@@ -39,6 +39,7 @@ export const streamChat = async (query, conversationId, onChunk, onDone, onCalc,
         else if (event.type === 'calc') onCalc?.({ tool: event.tool, params: event.params })
         else if (event.type === 'chunk') onChunk(event.text)
         else if (event.type === 'replace') onReplace?.(event.text)
+        else if (event.type === 'draft') onReplace?.(event.text, 'draft')
         else if (event.type === 'error') throw new Error(event.message || '응답 생성에 실패했습니다.')
       }
     }

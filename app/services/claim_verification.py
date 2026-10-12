@@ -1088,6 +1088,17 @@ async def generate_issue(query, issue, context, on_progress=None, feedback=None)
         return AnswerDraft(), {}, None, None, type(exc).__name__
 
 
+def first_round_answer(results, issues, context, query, mode):
+    """The answer made of the claims the first round released, or '' when none passed."""
+    draft = AnswerDraft.model_construct(claims=[c for i in issues for c in results[i.id][0].claims])
+    checks = {key: errors for row in results.values() for key, errors in row[1].items()}
+    judges = [row[2] for row in results.values() if row[2]]
+    judge = JudgeReport(claims=[j for value in judges for j in value.claims],
+                        missing_issue_ids=sorted({key for value in judges for key in value.missing_issue_ids})) if judges else None
+    released, _ = release_claims(draft, checks, judge, context.plan, mode=mode, coverage=context.coverage)
+    return render_structured_answer(released, context, query) if any(c.kind != "fact" for c in released) else ""
+
+
 @traceable(name="answer_release", run_type="chain",
            process_inputs=lambda inputs: {"question_hash": digest(str(inputs.get("query", "")))},
            process_outputs=lambda output: {"verification": output[1]}, tags=["tax-assistant", "reliability-v2"])
@@ -1137,6 +1148,17 @@ async def generate_verified_answer(query, context, *, repair=None, on_progress=N
                                   "already_released": [c.text for c in passed],
                                   "error": error or generation_error}
     if missing and repair:
+        if on_progress:
+            # A repair round takes another search, generation and Judge. What already passed every
+            # check is shown now; the repair only adds claims, so the final answer keeps it.
+            on_progress({"type": "verification", "status": "repairing", "issue_ids": sorted(missing)})
+            try:
+                shown = first_round_answer(results, issues, context, query, mode)
+            except Exception as exc:  # A preview must never cost the answer itself.
+                logger.warning("first-round preview unavailable (%s)", type(exc).__name__)
+                shown = ""
+            if shown:
+                on_progress({"type": "draft", "text": shown})
         # Repairs cannot discard accepted claims or consume the whole response budget.
         search_missing = {key for key in missing if results[key][4] == 'no_accepted_evidence' or
                           results[key][2] and (results[key][2].missing_issue_ids or any(

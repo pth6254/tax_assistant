@@ -3,6 +3,7 @@ import { streamChat } from '../api/chatApi'
 import { getMessages, selectAnswerVersion } from '../api/conversationsApi'
 import { mergeTool, interruptTools } from '../components/Chat/toolState'
 import { errorMessage } from '../api/http'
+import { streamText } from '../components/Chat/answerProgress'
 
 export const useChat = (conversationId) => {
   const [messages, setMessages] = useState([])
@@ -49,16 +50,16 @@ export const useChat = (conversationId) => {
       setMessages(prev => prev.map(m => m.id === id ? change(m) : m))
     }
     setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'user', content: query },
-      { id, role: 'assistant', content: '', tools: [], status: 'streaming', query }])
+      { id, role: 'assistant', content: '', tools: [], status: 'streaming', query, startedAt: Date.now() }])
     setLoading(true)
     try {
       await streamChat(query, conversationId,
-        chunk => update(m => ({ ...m, content: m.content + chunk })),
+        chunk => update(m => streamText(m, 'chunk', chunk)),
         () => { if (request.current === controller) onDone?.() },
         calc => update(m => ({ ...m, calc })),
         event => update(m => ({ ...m, tools: mergeTool(m.tools, event) })),
         controller.signal,
-        text => update(m => ({ ...m, content: text })),
+        (text, kind) => update(m => streamText(m, kind || 'replace', text)),
         undefined,
         event => update(m => ({ ...m, verificationLoading: Boolean(event.status), verificationProgress: event.status,
           verification: event.data || m.verification })))
@@ -84,16 +85,17 @@ export const useChat = (conversationId) => {
       setMessages(prev => prev.map(m => m.message_id === message.message_id ? change(m) : m))
     }
     update(m => ({ ...m, originalContent: m.content, originalTools: m.tools,
-      originalVerification: m.verification, verification: undefined, content: '', tools: [], status: 'streaming', error: undefined }))
+      originalVerification: m.verification, verification: undefined, content: '', draft: false, tools: [], status: 'streaming', error: undefined,
+      startedAt: Date.now() }))
     setLoading(true)
     try {
       await streamChat(null, conversationId,
-        chunk => update(m => ({ ...m, content: m.content + chunk })),
+        chunk => update(m => streamText(m, 'chunk', chunk)),
         () => { if (request.current === controller) onDone?.() },
         calc => update(m => ({ ...m, calc })),
         event => update(m => ({ ...m, tools: mergeTool(m.tools, event) })),
         controller.signal,
-        text => update(m => ({ ...m, content: text })),
+        (text, kind) => update(m => streamText(m, kind || 'replace', text)),
         { expected_message_id: message.message_id, expected_version: message.answer_version || 1 },
         event => update(m => ({ ...m, verificationLoading: Boolean(event.status), verificationProgress: event.status,
           verification: event.data || m.verification })))

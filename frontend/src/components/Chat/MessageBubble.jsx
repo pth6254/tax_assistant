@@ -82,7 +82,7 @@ export default function MessageBubble({ message, onCitationClick, onOpenCalculat
         <summary>조회·계산 내역 · {tools.length}건</summary>
         {toolCards}
       </details>}
-      <VerificationPanel verification={message.verification} loading={message.verificationLoading} progress={message.verificationProgress} onCitationClick={onCitationClick} />
+      <VerificationPanel verification={message.verification} loading={message.verificationLoading} progress={message.verificationProgress} startedAt={message.startedAt} onCitationClick={onCitationClick} />
       {message.status === 'stopped' && <Notice tone="info">생성을 중지했습니다. 표시된 내용은 미완성이고 저장되지 않았을 수 있습니다.</Notice>}
       {message.status === 'error' && <Notice onRetry={onRetry}>{message.error}</Notice>}
       {message.status === 'stopped' && onRetry && <button className="button secondary" onClick={onRetry}>같은 질문 다시 보내기</button>}

@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import { issueLabel } from './issueLabel.js'
+import { progressParts } from './answerProgress.js'
 
 const CHECKS = {
   citation: { checked: '인용 내용과 확보한 원문을 대조했습니다.', failed: '인용 근거를 확인하지 못했습니다.',
@@ -7,8 +9,15 @@ const CHECKS = {
     not_applicable: '계산기를 사용하지 않았습니다.' },
 }
 
-const PROGRESS = { planning: '질문의 요청과 쟁점을 확인하고 있습니다…', retrieving: '쟁점별 근거를 찾고 있습니다…',
-  generating: '확보한 근거로 답변을 작성하고 있습니다…', checking: '답변의 근거와 조건을 대조하고 있습니다…' }
+function useElapsedSeconds(startedAt) {
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    if (!startedAt) return undefined
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [startedAt])
+  return startedAt ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0
+}
 
 const STATES = { checked: '근거 대조', limited: '일부 확인 필요', withheld: '답변 보류',
   not_assessed: '검토 범위 미확인' }
@@ -32,8 +41,12 @@ function FormulaDetails({ calculation }) {
   </details>
 }
 
-export default function VerificationPanel({ verification, loading, progress, onCitationClick }) {
-  if (loading) return <p className="verification-progress" role="status">{PROGRESS[progress] || PROGRESS.checking}</p>
+export default function VerificationPanel({ verification, loading, progress, startedAt, onCitationClick }) {
+  const seconds = useElapsedSeconds(loading ? startedAt : null)
+  if (loading) {
+    const { step, elapsed } = progressParts(progress, seconds)
+    return <p className="verification-progress"><span role="status">{step}</span><span aria-hidden="true">{elapsed}</span></p>
+  }
   if (!verification) return null
   const { status, checks = {}, citations = [], note } = verification
   const title = status === 'withheld' ? '답변 보류 사유' : '근거 및 확인 사항'

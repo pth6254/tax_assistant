@@ -53,3 +53,43 @@ def test_the_panel_receives_the_exact_passages_each_source_backs():
     quotes = claims.cited_passages(record, released, [record, copy])
     assert quotes == ['① 첫째 요건을 충족해야 한다.', '② 둘째 예외를 둔다.']   # text order, both copies
     assert claims.cited_passages(record, [], [record]) == []
+
+
+@pytest.mark.asyncio
+async def test_claims_that_passed_are_shown_before_a_repair_round(monkeypatch):
+    from tests.test_scoped_answers import supported
+    ctx = two_issues()
+    events = []
+
+    async def generate(messages, schema, **kwargs):
+        return wire_claim(__import__('json').loads(messages[1]['content'])['plan']['issues'][0]['id'])
+
+    async def judge(query, draft, context):
+        return (supported(draft), None) if context.plan.issues[0].id == 'I1' else (None, 'TimeoutError')
+
+    async def repair(missing, report):
+        return ctx
+
+    monkeypatch.setattr(claims, 'call_llm_structured', generate)
+    monkeypatch.setattr(claims, 'judge_claims', judge)
+    answer, report = await claims.generate_verified_answer('질문', ctx, repair=repair, on_progress=events.append)
+    kinds = [e.get('status') or e['type'] for e in events]
+    retry = len(kinds) - 1 - kinds[::-1].index('generating')   # I2 is generated again after the preview
+    assert kinds.index('repairing') < kinds.index('draft') < retry
+    draft = next(e for e in events if e['type'] == 'draft')['text']
+    assert '조건을 충족하면' in draft and '조건을 충족하면' in answer   # the final answer keeps what was shown
+
+
+@pytest.mark.asyncio
+async def test_no_preview_when_nothing_passed(monkeypatch):
+    ctx = two_issues()
+    events = []
+
+    async def judge(query, draft, context):
+        return None, 'TimeoutError'
+
+    monkeypatch.setattr(claims, 'call_llm_structured', lambda *a, **k: __import__('asyncio').sleep(0, wire_claim('I1')))
+    monkeypatch.setattr(claims, 'judge_claims', judge)
+    await claims.generate_verified_answer('질문', ctx, repair=lambda *a: __import__('asyncio').sleep(0, ctx),
+                                          on_progress=events.append)
+    assert 'draft' not in [e['type'] for e in events]
