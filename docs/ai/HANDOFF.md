@@ -12,6 +12,8 @@
 CI가 실제로 녹색이 되는지는 다음 푸시에서 확인해야 한다. 이미지는 이 기록 시점 재빌드돼 Alembic `20261012_0023`(소유자 외래 키)이 적용돼 있다.
 수치는 [CURRENT_STATUS.md](CURRENT_STATUS.md), 결정은 [DECISIONS.md](DECISIONS.md). 커밋은 `main`에 직접 하고 푸시는 요청이 있을 때만 한다.
 이전 인계 문단은 아래 "2026-10-10~12 인계 요약"으로 내렸다.
+**보안 조치 필요**: `JWT_SECRET` 실제 값이 README 예시로 04-15부터 공개돼 있었다. README는 고쳤고 커밋 전 비밀값 검사(훅·CI)를 더했지만,
+`.env`의 `JWT_SECRET`은 새 값으로 바꿔야 한다(CURRENT_STATUS "비밀값 유출 점검").
 
 ### 다음 작업
 

@@ -21,6 +21,10 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
+      # API 키·비밀값이 커밋에 들어가지 않았는지 (값은 출력하지 않음)
+      - name: Secret check
+        run: python scripts/check_secrets.py
+
       # 문법 오류(과거 chat_service.py에 한글 'ㅇ'가 섞여 서버가 안 뜨던 사고 재발 방지)
       - name: Compile check
         run: python -m compileall app evaluation scripts alembic main.py config.py -q

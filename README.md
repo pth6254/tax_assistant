@@ -633,7 +633,7 @@ tax-assistant/
 DATABASE_URL=postgresql://postgres:postgres@localhost:5433/tax_db
 
 # JWT
-JWT_SECRET=your-long-random-secret-here
+JWT_SECRET=replace-with-a-long-random-secret   # 생성: python -c "import secrets; print(secrets.token_urlsafe(48))"
 JWT_EXPIRE_MIN=1440
 
 # 생성 LLM: OpenRouter GPT-6 Luna 유료 모델 (키는 실제 .env에만 입력)
@@ -892,7 +892,9 @@ npm run dev
 
 > 테스트 도구는 `requirements-dev.txt`에 있습니다(서비스 이미지는 `requirements.txt`만 설치). 테스트는 개발자의 `.env`를 읽지 않고
 > DB에 연결하지 않으므로 어느 PC에서나 CI와 같은 결과가 나옵니다(`tests/conftest.py`).
-> `.github/workflows/ci.yml`이 push/PR마다 컴파일 검사(`compileall`)와 전체 테스트를 자동 실행합니다.
+> `.github/workflows/ci.yml`이 push/PR마다 비밀값 검사·컴파일 검사(`compileall`)·전체 테스트를 자동 실행합니다.
+> 커밋 전에 API 키나 `.env`의 비밀값(`*KEY*`·`*SECRET*`·`*PASSWORD*`·`*TOKEN*`)이 섞이면 막으려면 clone마다 한 번
+> `sh dev/install-git-hooks.sh`를 실행합니다(`scripts/check_secrets.py --staged`, 값은 출력하지 않음).
 
 ### 전체 테스트 실행
 

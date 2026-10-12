@@ -111,6 +111,11 @@ docker exec tax_backend pytest -q
 - DB 스키마 변경은 수동 SQL 적용이 아니라 Alembic revision으로 작성한다.
 - 데이터 전체 재수집, 삭제, 대규모 백필처럼 기존 상태를 바꾸는 작업은 범위를 확인한 후 실행한다.
 
+## 비밀값
+
+- API 키·비밀번호·`JWT_SECRET` 같은 실제 값은 `.env`에만 두고 README·예시·테스트·문서에 쓰지 않는다. 예시는 `replace-with-…`·`xxxx` 형태로 쓴다.
+- 커밋 전 `scripts/check_secrets.py`(pre-commit 훅·CI)가 알려진 키 형식과 로컬 `.env` 값의 포함을 막는다. 훅은 `sh dev/install-git-hooks.sh`로 설치한다.
+
 ## 작업 종료 규칙
 
 - 구현과 관련 테스트를 완료한다. `git diff --check`를 실행한다.
