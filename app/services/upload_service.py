@@ -98,8 +98,8 @@ async def process_upload(
 ) -> dict:
     """Extract supported formats, classify, embed, then atomically replace stored chunks."""
     t0 = time.perf_counter()
-    logger.info("[UPLOAD] 시작: %s (%.1fKB) | 업로더: %s",
-                filename, len(file_bytes) / 1024, uploader_email)
+    logger.info("[UPLOAD] 시작: %s (%.1fKB) | 사용자 id=%s",
+                filename, len(file_bytes) / 1024, user_id)
 
     # OCR and ZIP/XML parsing are blocking; keep them off the event loop.
     try:
