@@ -1,14 +1,26 @@
-from pydantic import BaseModel, EmailStr, Field
+from typing import Annotated
+
+from pydantic import AfterValidator, BaseModel, EmailStr, Field
+
+
+def _fits_bcrypt(value: str) -> str:
+    # bcrypt reads 72 bytes; a longer password would be silently cut (a Korean letter is 3 bytes).
+    if len(value.encode("utf-8")) > 72:
+        raise ValueError("비밀번호는 72바이트(영문 72자, 한글 24자) 이하여야 합니다.")
+    return value
+
+
+NewPassword = Annotated[str, Field(min_length=8, max_length=72), AfterValidator(_fits_bcrypt)]
 
 
 class SignupRequest(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=1, max_length=72)
+    password: NewPassword
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=1)
+    password: str = Field(min_length=1, max_length=1024)
 
 
 class UserResponse(BaseModel):
@@ -28,7 +40,7 @@ class ProfileUpdateRequest(BaseModel):
 
 class PasswordChangeRequest(BaseModel):
     current_password: str
-    new_password: str = Field(min_length=8, max_length=72)
+    new_password: NewPassword
 
 
 class DeleteAccountRequest(BaseModel):

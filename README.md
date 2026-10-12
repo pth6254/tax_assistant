@@ -890,13 +890,15 @@ npm run dev
 
 ## 9. 테스트
 
-> pytest·pytest-asyncio는 `requirements.txt`에 포함되어 있어 별도 설치가 필요 없습니다.
+> 테스트 도구는 `requirements-dev.txt`에 있습니다(서비스 이미지는 `requirements.txt`만 설치). 테스트는 개발자의 `.env`를 읽지 않고
+> DB에 연결하지 않으므로 어느 PC에서나 CI와 같은 결과가 나옵니다(`tests/conftest.py`).
 > `.github/workflows/ci.yml`이 push/PR마다 컴파일 검사(`compileall`)와 전체 테스트를 자동 실행합니다.
 
 ### 전체 테스트 실행
 
 ```bash
-docker exec tax_backend pytest -q
+pip install -r requirements-dev.txt   # 처음 한 번
+python -m pytest -q
 ```
 
 백엔드 구현 변경 후 현재 코드로 이미지를 재빌드하고 실행합니다. 프런트엔드 변경은 `frontend/`에서

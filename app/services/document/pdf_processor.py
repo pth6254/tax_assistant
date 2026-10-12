@@ -5,10 +5,8 @@ services/document/pdf_processor.py — PDF 텍스트 추출 및 청크 분할
 일반 문서는 토큰 슬라이딩 윈도우로 분할한다. 토큰 윈도우가 조문 중간을
 자르면 잘린 반쪽 청크의 임베딩 품질이 떨어지기 때문.
 """
-import io
 import re
 
-import PyPDF2
 import tiktoken
 
 from config import CHUNK_OVERLAP, CHUNK_SIZE
@@ -17,16 +15,6 @@ from config import CHUNK_OVERLAP, CHUNK_SIZE
 _ARTICLE_BOUNDARY_RE = re.compile(r"(?=제\d+(?:조|조의\d+)\()")
 # 이 개수 이상 조문 경계가 감지되면 법령류 문서로 판단
 _MIN_ARTICLES_FOR_STRUCTURED_SPLIT = 5
-
-
-def extract_text_from_pdf(file_bytes: bytes) -> str:
-    """PDF 바이트 → 전체 텍스트 추출."""
-    reader = PyPDF2.PdfReader(io.BytesIO(file_bytes))
-    return "\n".join(
-        page.extract_text().strip()
-        for page in reader.pages
-        if page.extract_text()
-    )
 
 
 def _split_tokens(text: str, enc) -> list[str]:

@@ -5,6 +5,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        INSTALL_DEV: "true"
     container_name: tax_law_history_indexer
     init: true
     restart: "on-failure:3"

@@ -3,7 +3,7 @@ routers/auth.py — 인증 엔드포인트
 POST /api/auth/signup
 POST /api/auth/login
 """
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Request, Response
 
 from app.schemas.auth import LoginRequest, SignupRequest
 from app.services import auth_service
@@ -18,8 +18,8 @@ async def signup(body: SignupRequest):
 
 
 @router.post("/login")
-async def login(body: LoginRequest, response: Response):
-    data = await auth_service.login(body.email, body.password)
+async def login(body: LoginRequest, request: Request, response: Response):
+    data = await auth_service.login(body.email, body.password, request.client.host if request.client else None)
     set_auth_cookie(response, data["access_token"])
     return {"user": data["user"]}
 

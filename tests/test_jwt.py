@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
-from jose import jwt
+import jwt
 
 from app.core.security import create_access_token
 from config import JWT_ALGORITHM, JWT_SECRET
