@@ -8,7 +8,7 @@ from langchain_core.messages import SystemMessage
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompt_values import ChatPromptValue
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.runnables import RunnableGenerator, RunnableLambda
+from langchain_core.runnables import RunnableLambda
 from pydantic import BaseModel
 
 Result = TypeVar("Result", bound=BaseModel)
@@ -66,20 +66,3 @@ def structured_chain(prompt, generate, model: type[Result], *, name: str):
     return (text_chain(prompt, generate, name=name) | output_parser(model)).with_config(
         run_name=name, tags=["tax-assistant"], metadata={"prompt_version": "1"},
     )
-
-
-def streaming_chain(
-    prompt: ChatPromptTemplate,
-    stream: Callable[[list[dict]], AsyncIterator[str]],
-    *, name: str,
-):
-    async def generate(inputs: AsyncIterator[list[dict]]) -> AsyncIterator[str]:
-        async for messages in inputs:
-            async for token in stream(messages):
-                yield token
-
-    return (
-        prompt.with_config(run_name=f"{name}_prompt")
-        | RunnableLambda(to_provider_messages, name="provider_messages")
-        | RunnableGenerator(generate, name=f"{name}_stream")
-    ).with_config(run_name=name, tags=["tax-assistant"], metadata={"prompt_version": "1"})

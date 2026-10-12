@@ -5,11 +5,11 @@ import pytest
 from unittest.mock import AsyncMock, patch
 
 from app.schemas.law import HybridSearchResult, LawArticleDetail
+from app.services.evidence import context_from_records, record_from_result
 from app.services.search.hybrid_search_service import (
     _lookup_referenced_article,
     _prepend_direct_hit,
     _search_documents,
-    format_hybrid_context,
     hybrid_search,
 )
 
@@ -28,7 +28,10 @@ def _make_result(**kwargs) -> HybridSearchResult:
     return HybridSearchResult(**defaults)
 
 
-# ── format_hybrid_context ────────────────────────────────────────
+# ── 검색 결과를 모델에 주는 근거 문자열 ─────────────────────────────
+
+def format_hybrid_context(results):
+    return str(context_from_records(record_from_result(r) for r in results))
 
 def test_format_hybrid_context_empty():
     assert format_hybrid_context([]) == "관련 문서를 찾지 못했습니다."

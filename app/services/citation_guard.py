@@ -1,26 +1,21 @@
 """
-services/citation_guard.py — 답변 인용·수치 검증 후처리
+services/citation_guard.py — 주장에 적힌 법령 인용의 실재 확인
 
-LLM이 생성한 최종 답변에서 법령 인용([법률]/[시행령]/[시행규칙] 법령명 제N조)과
-계산기 핵심 수치를 추출하여, 실제로 검색된 근거(RAG 컨텍스트 + 계산기 결과)에
-존재하는지 사후 검증한다.
-
-실서비스의 근거는 EvidenceContext의 서버 레코드로 대조한다. 미검증 인용은
-공개 전에 차단한다. 문자열 출처 파싱은 검수된 과거 평가 fixture 호환용이다.
+주장 문장의 법령 인용([법률]/[시행령]/[시행규칙] 법령명 제N조 …)이 그 주장이 연결한 공식 근거
+레코드(EvidenceContext)의 같은 법령·조문과, 항·호·목까지 실제로 일치하는지 확인한다.
+claim_verification의 reference_mismatch 검사가 이 결과를 쓴다.
 """
 import re
 from dataclasses import dataclass
-from app.services.evidence import EvidenceContext, is_official
 
+from app.services.evidence import EvidenceContext, is_official
 from app.services.law.reference_parser import (
     InvalidLawReference, extract_law_reference, normalize_article_no, parse_law_reference,
 )
 from app.services.law.structure_parser import resolve_reference_target
 
-# evaluation/fixed_context_answer.py 프롬프트의 "근거 출처 목록" 형식과 동일한 패턴.
-# 조문번호는 공백 변형을 허용한다 — qwen 계열 모델이 "제 50 조", "제 59 조의 4"처럼
-# 숫자 주변에 공백을 섞어 출력하는 경우가 많아, 엄격한 "제\d+조" 패턴은 실제 답변의
-# 인용 대부분을 놓쳐 검증이 조용히 무력화된다 (생성 품질 측정에서 발견된 실측 사례).
+# 조문번호는 공백 변형을 허용한다 — 모델이 "제 50 조", "제 59 조의 4"처럼 숫자 주변에 공백을
+# 섞어 쓰는 경우가 많아, 엄격한 "제\d+조" 패턴은 인용 대부분을 놓쳐 검증이 조용히 무력화된다.
 _CITATION_RE = re.compile(
     r"\[(법률|시행령|시행규칙)\]\s*([^\n\[]+?)\s*"
     r"(제\s*\d+\s*조(?:\s*의\s*\d+)?"
@@ -28,7 +23,6 @@ _CITATION_RE = re.compile(
     r"(?:\s*제\s*\d+\s*호(?:\s*의\s*\d+)?)?"
     r"(?:\s*[가-하]\s*목)?)"
 )
-_SOURCE_RE = re.compile(r"(?m)^\[출처:\s*(.+)\]\s*$")
 _SOURCE_LABELS = {
     "법률": "법률", "대통령령": "시행령", "총리령": "시행규칙", "부령": "시행규칙",
 }
@@ -38,23 +32,6 @@ def _source_label(category: str) -> str | None:
     if category.endswith("부령"):
         return "시행규칙"
     return _SOURCE_LABELS.get(category)
-
-
-def _official_source_markers(context: str) -> list[re.Match[str]]:
-    if isinstance(context, EvidenceContext):
-        return [r for r in context.records if is_official(r) and _source_label(r.category)]
-    markers = []
-    for marker in _SOURCE_RE.finditer(context):
-        fields = [part.strip() for part in marker.group(1).split("|")]
-        if len(fields) >= 3:
-            category = fields[-1].split("(", 1)[0].replace("📌", "").strip()
-            if _source_label(category):
-                markers.append(marker)
-    return markers
-
-
-# calc_context(format_calculation_context)가 만드는 "- 라벨: 1,234,567원" 형식
-_MONEY_LINE_RE = re.compile(r"[\d][\d,]*원")
 
 
 @dataclass
@@ -70,55 +47,15 @@ def _normalize(s: str) -> str:
     return re.sub(r"\s+", "", s)
 
 
-def extract_citations(answer: str) -> list[tuple[str, str, str]]:
-    """답변 본문에서 (구분, 법령명, 조문번호) 튜플 목록을 추출한다.
-
-    조문번호는 표준형('제50조')으로 정규화해 반환한다.
-    """
-    return [
-        # 법령명 앞뒤의 마크다운 강조 마커(*, _)와 공백 제거 — 모델이
-        # "**[법률] 소득세법 제50조**"처럼 볼드로 감싸 출력하는 경우가 흔함
-        (label, name.strip(" *_"), normalize_article_no(article))
-        for label, name, article in _CITATION_RE.findall(answer)
-    ]
-
-
-def verify_citations(answer: str, trusted_text: str) -> list[CitationCheck]:
+def verify_citations(answer: str, evidence: EvidenceContext) -> list[CitationCheck]:
     """Match each citation to one official source article and its actual subunit."""
     sources = []
-    if isinstance(trusted_text, EvidenceContext):
-        for record in trusted_text.records:
-            if is_official(record) and _source_label(record.category):
-                reference = extract_law_reference(record.reference)
-                if reference and reference.article_no:
-                    sources.append((_source_label(record.category), _normalize(record.law_name),
-                                    reference.article_no, record.text))
-        markers = []
-    else:
-        # Compatibility for independently reviewed offline fixtures only. Live
-        # retrieval always supplies EvidenceContext, including an empty result.
-        markers = list(_SOURCE_RE.finditer(trusted_text))
-    for index, marker in enumerate(markers):
-        fields = [part.strip() for part in marker.group(1).split("|")]
-        if len(fields) < 3:
-            continue
-        law_name = fields[-2]
-        category = fields[-1].split("(", 1)[0].replace("📌", "").strip()
-        label = _source_label(category)
-        if not label:
-            continue  # User documents and web results are not official law evidence.
-        body = trusted_text[marker.end():markers[index + 1].start() if index + 1 < len(markers) else None]
-        article = None
-        for line in body.splitlines():
-            if line.lstrip().startswith("[") or not line.strip():
-                continue
-            reference = extract_law_reference(line)
+    for record in evidence.records:
+        if is_official(record) and _source_label(record.category):
+            reference = extract_law_reference(record.reference)
             if reference and reference.article_no:
-                article = reference.article_no
-                break
-        if article:
-            sources.append((label, _normalize(law_name), article, body))
-
+                sources.append((_source_label(record.category), _normalize(record.law_name),
+                                reference.article_no, record.text))
     checks = []
     for match in _CITATION_RE.finditer(answer):
         label, law_name, citation = match.groups()
@@ -139,73 +76,3 @@ def verify_citations(answer: str, trusted_text: str) -> list[CitationCheck]:
                 break
         checks.append(CitationCheck(label, law_name, article_no, exists))
     return checks
-
-
-_UNSUPPORTED_ANSWER = (
-    "확인된 공식 법령 근거와 계산 결과로 답변의 내용을 검증하지 못했습니다. "
-    "확인되지 않은 설명은 제공하지 않습니다. 질문의 법령명·조문이나 적용 시점을 구체적으로 알려주세요."
-)
-
-
-def guarded_answer(answer: str, context: str, calc_context: str | None = None,
-                   *, require_law: bool = False) -> str:
-    """Return no generated legal conclusion when its citations or final amount fail checks."""
-    checks = verify_citations(answer, context)
-    has_official_source = bool(_official_source_markers(context))
-    if any(not check.verified for check in checks):
-        return _UNSUPPORTED_ANSWER
-    if (has_official_source or require_law) and not checks and not calc_context:
-        return _UNSUPPORTED_ANSWER
-    if not verify_calc_final_amount(answer, calc_context):
-        return _UNSUPPORTED_ANSWER
-    return answer
-
-
-def verify_calc_final_amount(answer: str, calc_context: str | None) -> bool:
-    """계산기 결과의 마지막 금액(결정세액/합계)이 답변에 그대로 등장하는지 확인한다.
-
-    calc_context가 없으면(계산기 미실행) 검증 대상이 없으므로 True.
-    금액이 재서술(단위 변환 등)될 수 있어 100% 신뢰 지표는 아니지만,
-    실효세율처럼 완전히 다른 숫자를 지어내는 경우를 잡아낸다.
-    """
-    if not calc_context:
-        return True
-    amounts = _MONEY_LINE_RE.findall(calc_context)
-    if not amounts:
-        return False
-    final_amount = amounts[-1]  # format_calculation_context의 마지막 항목 = 결정세액/합계
-    return final_amount in answer
-
-
-def build_citation_footer(
-    answer: str,
-    context: str,
-    calc_context: str | None = None,
-) -> str:
-    """검증 실패 항목이 있으면 경고 각주 문자열을 만든다. 문제 없으면 빈 문자열."""
-    trusted_text = context if not calc_context else f"{context}\n{calc_context}"
-    checks = verify_citations(answer, trusted_text)
-    unverified = [c for c in checks if not c.verified]
-    calc_ok = verify_calc_final_amount(answer, calc_context)
-    # 법령 컨텍스트가 실제로 검색됐는데도([출처: 표시가 있음) 답변에 인용 브래킷이
-    # 하나도 없는 경우 — 모델이 템플릿을 이탈해 근거를 아예 표기하지 않은 사례
-    # (생성 품질 측정에서 발견: temperature 샘플링에 따라 같은 질문도 인용 유무가 갈림).
-    missing_all_citations = "[출처:" in context and not checks
-
-    if not unverified and calc_ok and not missing_all_citations:
-        return ""
-
-    lines = ["\n\n---", "⚠️ **자동 검증 결과, 아래 항목을 확인해주세요 (AI가 생성 중 착오했을 수 있습니다):**"]
-    for c in unverified:
-        lines.append(f"- 검색 자료에서 확인되지 않은 인용: [{c.label}] {c.law_name} {c.article_no}")
-    if not calc_ok:
-        lines.append("- 계산기 결과 금액과 답변 속 서술이 일치하지 않을 수 있습니다. 계산 단계를 다시 확인하세요.")
-    if missing_all_citations:
-        lines.append("- 답변에 법령 조문 인용이 없습니다. 검색된 자료를 직접 확인해주세요.")
-    return "\n".join(lines)
-
-
-def apply_citation_guard(answer: str, context: str, calc_context: str | None = None) -> str:
-    """답변에 검증 각주를 덧붙인 최종 텍스트를 반환한다."""
-    footer = build_citation_footer(answer, context, calc_context)
-    return answer + footer if footer else answer

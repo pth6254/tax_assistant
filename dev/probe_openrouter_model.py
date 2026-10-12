@@ -62,7 +62,6 @@ async def _collect(stream):
 
 async def _pipeline_checks(provider):
     """Synthetic inputs only; schema/argument checks, NOT tax-answer evaluation."""
-    from app.schemas.ai_output import CitationList
     from app.services.law.history_answer import Answer
     from app.services import llm_client
     from app.services.tools.planner import select_tool
@@ -81,8 +80,6 @@ async def _pipeline_checks(provider):
             print(f'tool_selection: {type(exc).__name__}')
             passed = False
         fixtures = (
-            ('citation_schema', CitationList, 'citation_extraction', 2048,
-             '형식 검사입니다. [법률] 소득세법 제1조 한 건만 citations에 기록하세요.'),
             ('history_schema', Answer, 'answer', 4096,
              '형식 검사이며 법률 자료가 아닙니다. 근거 1: 이것은 공개 검증용 예시 문장입니다. '
              'claims에 설명 하나, source=1, quote=이것은 공개 검증용 예시 문장입니다. 를 반환하세요.'),

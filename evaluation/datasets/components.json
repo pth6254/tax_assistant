@@ -100,7 +100,7 @@
       "group": "answer-abstention",
       "split": "dev",
       "stage": "answer",
-      "adapter": "answer_fixed_context",
+      "adapter": "answer_reliable_context",
       "review": {
         "status": "approved",
         "basis": "synthetic_contract",
@@ -111,7 +111,17 @@
       },
       "input": {
         "query": "제공된 자료만으로 제가 받을 수 있는 공제액을 확정해줘.",
-        "context": "평가용 합성 자료: 사용자의 소득, 지출, 가족 정보와 적용 연도가 제공되지 않았습니다. 공제액 계산에 필요한 세율 및 공제 규정도 없습니다."
+        "evidence": [],
+        "plan": {
+          "issues": [
+            {
+              "id": "I1",
+              "request_quote": "제공된 자료만으로 제가 받을 수 있는 공제액을 확정해줘.",
+              "question": "제공된 자료만으로 제가 받을 수 있는 공제액을 확정해줘.",
+              "law": "ALL"
+            }
+          ]
+        }
       },
       "rubric": [
         {

@@ -33,9 +33,6 @@ if OPENROUTER_REQUESTS_PER_MINUTE < 0:
     raise ValueError("OPENROUTER_REQUESTS_PER_MINUTE must be nonnegative")
 if LLM_REMOTE_MAX_TOKENS <= 0:
     raise ValueError("LLM_REMOTE_MAX_TOKENS must be positive")
-LLM_MAX_CONTINUATIONS: int = int(os.getenv("LLM_MAX_CONTINUATIONS", "2"))
-if not 0 <= LLM_MAX_CONTINUATIONS <= 4:
-    raise ValueError("LLM_MAX_CONTINUATIONS must be between 0 and 4")
 LLM_DEVICE: str = os.getenv("LLM_DEVICE", "auto").lower()
 
 # ── Ollama (임베딩 및 기존 생성 LLM 호환) ─────────────────────

@@ -231,7 +231,7 @@ def test_live_flag_restored_after_failure(monkeypatch):
 
 def test_unrequested_generation_is_missing_not_synthetic_success():
     from evaluation.adapters import observe
-    case = answer_case().model_copy(update={'adapter':'answer_fixed_context'})
+    case = answer_case().model_copy(update={'adapter':'answer_reliable_context'})
     assert asyncio.run(observe(case,'live','unused',1,False,1)) == []
 
 
@@ -267,7 +267,7 @@ def test_unknown_candidates_create_review_queue_not_new_gold(tmp_path):
     assert data.fingerprint() == original
 
 
-def test_fixed_context_and_planner_do_not_require_database_snapshot(monkeypatch):
+def test_answer_and_planner_do_not_require_database_snapshot(monkeypatch):
     from evaluation.runner import source_snapshot
     from app import database
     def forbidden():

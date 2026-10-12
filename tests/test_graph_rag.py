@@ -5,7 +5,8 @@ import pytest
 from app.services.graph.index_service import article_key, build_graph
 from app.services.law.relation_extractor import extract_relations
 from app.services.search import graph_search_service as service
-from app.services.search.hybrid_search_service import _row_to_article_result, format_hybrid_context
+from app.services.evidence import context_from_records, record_from_result
+from app.services.search.hybrid_search_service import _row_to_article_result
 from app.schemas.law import LawArticleDetail
 
 
@@ -135,7 +136,7 @@ async def test_expansion_and_stale_target(monkeypatch):
     assert lookup.await_count == 2  # one seed + one target despite duplicate edges
     assert expanded[0] is results[0]
     assert expanded[1].similarity_score == 0
-    assert '관계 검색 보조 근거' in format_hybrid_context(expanded)
+    assert '관계 검색 보조 근거' in str(context_from_records(record_from_result(r) for r in expanded))
     edge['target_key'] = 'obsolete-version'
     assert await service.expand_graph(results) == results
 

@@ -684,7 +684,8 @@
 ## 2026-10-12 — 채팅 답변은 검증된 근거 답변 한 경로로 두고, 대화 상태는 저장된 도구 상태로 읽는다
 
 **결정**: `chat_service`의 단일 프롬프트 생성·사후 인용 guard·출처 제목 교정·인용 누락 보정을 서비스 코드에서 지우고, 일반·SSE 채팅이 같은
-`_answer_turn`을 쓴다. 그 생성 방식은 평가 어댑터 `answer_fixed_context`용으로 `evaluation/fixed_context_answer.py`에만 둔다. 계산기가
+`_answer_turn`을 쓴다. 그 생성 방식은 평가 어댑터 `answer_fixed_context`용으로 `evaluation/fixed_context_answer.py`에만 두었다가, 같은 날 프로젝트 점검에서
+서비스가 쓰지 않는 경로를 평가할 이유가 없어 어댑터·이어쓰기·옛 인용 guard와 그 테스트까지 지웠다(답변 평가는 `answer_reliable_context`). 계산기가
 사실을 되물었는지는 답변 문장이 아니라 저장된 도구 이벤트(`needs_input` + `calculation_inputs_required`)로 판단해 다음 턴을 앞 질문과 합친다.
 과세 사건의 날짜를 말하면 계산기 `as_of`로 넘기고, 세율표에 없는 날짜는 현행 세법으로 바꿔 계산하지 않는다.
 

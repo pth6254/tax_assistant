@@ -2,9 +2,7 @@
 test_chat_service.py — chat_service 단위 테스트 (DB·Ollama 의존 없음)
 """
 from app.services.calculator.engine import CalcRun
-from app.services.ai_pipeline import to_provider_messages
 from app.services.chat_service import _calc_meta, _match_laws_by_keyword
-from evaluation.fixed_context_answer import _COMBINED_PROMPT, FIXED_CONTEXT_TEMPLATE, prompt_values
 
 
 # ── _match_laws_by_keyword — 키워드 매핑 ─────────────────────────
@@ -43,15 +41,6 @@ def test_match_generic_deduction_word_not_special_law():
 def test_polite_ending_does_not_select_liquor_tax():
     assert _match_laws_by_keyword("법인세 처리 방법을 설명해 주세요.") == ["법인세법"]
     assert _match_laws_by_keyword("주세법의 과세 대상을 설명해 주세요.") == ["주세법"]
-
-
-# ── 평가용 고정 근거 답변 프롬프트(answer_fixed_context) ─────────
-
-def test_fixed_context_prompt_puts_the_rules_first_and_the_question_last():
-    msgs = to_provider_messages(FIXED_CONTEXT_TEMPLATE.invoke(prompt_values("소득세 신고 방법", "제55조 [세율] 조문 내용")))
-    assert [m["role"] for m in msgs] == ["system", "user"]
-    assert msgs[0]["content"] == _COMBINED_PROMPT
-    assert "제55조 [세율] 조문 내용" in msgs[-1]["content"] and "소득세 신고 방법" in msgs[-1]["content"]
 
 
 # ── _calc_meta ───────────────────────────────────────────────────

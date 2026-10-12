@@ -1,4 +1,4 @@
-"""Composition, strict output validation and streaming without a model SDK."""
+"""Composition and strict output validation without a model SDK."""
 import asyncio
 import json
 from unittest.mock import AsyncMock
@@ -8,9 +8,13 @@ import pytest
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.exceptions import OutputParserException
 
-from app.schemas.ai_output import CitationList, QueryClassification
+from typing import Literal
+
+from pydantic import Field
+
+from app.schemas.ai_output import AIOutput, NonEmptyText
 from app.services import chat_service
-from app.services.ai_pipeline import chat_prompt, output_parser, streaming_chain, text_chain, to_provider_messages
+from app.services.ai_pipeline import chat_prompt, output_parser, text_chain, to_provider_messages
 from app.services.calculator import engine
 from app.services.tools import planner
 
@@ -44,25 +48,20 @@ async def test_named_chain_supports_local_callbacks_and_plain_callable():
     assert {"test_answer", "test_answer_prompt", "provider_messages", "test_answer_generate"} <= set(names)
 
 
-@pytest.mark.asyncio
-async def test_stream_delivers_first_chunk_before_generation_finishes():
-    release = asyncio.Event()
+class QueryClassification(AIOutput):
+    """A sample strict schema; the parser is shared by every structured model call."""
+    law: NonEmptyText
+    queries: list[NonEmptyText] = Field(min_length=1, max_length=3)
 
-    async def stream(messages):
-        assert messages[-1]["content"] == "hello"
-        yield "first"
-        await release.wait()
-        yield "second"
 
-    chain = streaming_chain(chat_prompt("system", "{query}"), stream, name="test_stream")
-    chunks = chain.astream({"query": "hello"})
-    try:
-        assert await asyncio.wait_for(anext(chunks), timeout=5) == "first"
-        release.set()
-        assert [part async for part in chunks] == ["second"]
-    finally:
-        release.set()
-        await chunks.aclose()
+class Citation(AIOutput):
+    label: Literal["법률", "시행령", "시행규칙"]
+    law_name: NonEmptyText = Field(max_length=30)
+    article_no: str = Field(pattern=r"^제[0-9]{1,4}조(의[0-9]{1,3})?$")
+
+
+class CitationList(AIOutput):
+    citations: list[Citation]
 
 
 @pytest.mark.parametrize("raw", [

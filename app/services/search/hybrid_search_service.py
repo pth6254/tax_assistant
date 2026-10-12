@@ -662,11 +662,6 @@ async def _search_all(
 
 # ── 공개 함수 ────────────────────────────────────────────────────
 
-def format_hybrid_context(results: list[HybridSearchResult]) -> str:
-    """하이브리드 검색 결과를 LLM 컨텍스트 문자열로 포맷한다."""
-    return context_from_records(record_from_result(r) for r in results)
-
-
 async def _lookup_referenced_article(
     query: str, law_filter: str,
 ) -> HybridSearchResult | None:

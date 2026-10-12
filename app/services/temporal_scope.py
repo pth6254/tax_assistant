@@ -61,11 +61,6 @@ def in_force_until(record, today):
         return None
 
 
-def covers(record, interval, today):
-    start, end = effective_date(record), in_force_until(record, today)
-    return start is not None and end is not None and start <= interval[0] and interval[1] <= min(end, today)
-
-
 def overlaps(record, interval, today):
     start, end = effective_date(record), in_force_until(record, today)
     return start is not None and end is not None and start <= interval[1] and interval[0] <= min(end, today)
