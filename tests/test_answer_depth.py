@@ -1,11 +1,8 @@
 """Answer depth: no claim-count cap, consequences planned, cited passages shown (no model call)."""
-import inspect
-
 import pytest
 
 from app.schemas.reliability import AnswerClaim, AnswerDraft, ClaimCitation
 from app.services import claim_verification as claims
-from app.services import question_planning
 from app.services.evidence import record_from_result
 from tests.test_reliability_workflow import source
 from tests.test_scoped_answers import two_issues, wire_claim
@@ -30,15 +27,7 @@ async def test_an_issue_may_release_as_many_claims_as_its_evidence_supports(monk
     assert len(draft.claims) == 9
     assert 'maxItems' not in seen['schema']['properties']['claims']
     assert seen['max_tokens'] == claims.GENERATION_MAX_TOKENS
-    assert '최대 5개' not in claims.SCOPED_GENERATION_PROMPT and '간결하게' not in claims.GENERATION_PROMPT
-    assert '세무 효과' in claims.SCOPED_GENERATION_PROMPT and '사후 조치' in claims.SCOPED_GENERATION_PROMPT
     AnswerDraft(claims=[AnswerClaim(id=f'C{n}', issue_id='I1', text='a', kind='fact') for n in range(40)])
-
-
-def test_the_planner_adds_the_taxes_that_follow_from_the_treatment():
-    """Prompt contract only; whether the model follows it needs a live run."""
-    planner = inspect.getsource(question_planning.plan_question)
-    assert '바로 따라오는 다른 세목' in planner and '최대 2개' in planner
 
 
 def test_the_panel_receives_the_exact_passages_each_source_backs():

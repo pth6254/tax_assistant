@@ -96,4 +96,3 @@ async def test_a_rule_the_server_cannot_complete_is_explained_to_the_second_atte
     _, calc = await workflow.calculate_reference('1,000원 계산해줘', [], 'unused', AsyncMock())
     assert calc is not None and len(sent) == 2
     assert sent[1]['previous_errors'] == [formula_feedback(engine.FormulaError('missing_prepaid_or_balance'))]
-    assert 'prepaid와 balance는 반드시 함께 쓰거나 둘 다 빼세요' in workflow.PLAN_PROMPT

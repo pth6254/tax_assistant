@@ -133,7 +133,5 @@ def test_split_claims_keep_the_supported_proposition_while_a_bundle_loses_both()
     assert [c.id for c in released] == ['C1'] and rejected == {'C2': ['semantic_check_not_passed']}
 
 
-def test_generation_asks_for_single_proposition_claims_and_retries_say_how_to_split():
-    # The per-issue prompt is the one generate_issue sends.
-    assert '법적 명제 하나' in claims.SCOPED_GENERATION_PROMPT and '서로 다른 주장으로 나누세요' in claims.SCOPED_GENERATION_PROMPT
+def test_a_retry_after_a_semantic_failure_says_how_to_split_the_claim():
     assert '별도 주장으로 나누며' in claims.FIX_HINTS['semantic_check_not_passed']

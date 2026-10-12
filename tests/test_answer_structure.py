@@ -87,7 +87,9 @@ async def test_generation_is_told_what_the_other_issues_own(monkeypatch):
 
 
 def test_planner_generation_and_judge_share_one_rule_for_applying_the_users_facts():
-    """Prompt contracts only: whether the model follows them needs a live run."""
+    """The one prompt-wording test kept: these instructions stop invented facts from being judged as
+    supported. Form and coverage wording is not tested by text; whether a model follows any of it
+    needs a live run."""
     import inspect
     from app.services import question_planning
     planner = inspect.getsource(question_planning.plan_question)
