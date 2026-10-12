@@ -189,6 +189,6 @@ async def delete_conversation(conv_id: str, user: dict = Depends(verify_token)):
     pool = await get_pool()
     async with pool.acquire() as conn:
         cid = await require_conversation_owner(conn, conv_id, user["id"])
-        await conn.execute("DELETE FROM chat_logs    WHERE conversation_id = $1", cid)
+        # Messages and their answer versions follow by ON DELETE CASCADE (Alembic 0023).
         await conn.execute("DELETE FROM conversations WHERE id = $1", cid)
     return {"message": "대화가 삭제되었습니다."}
