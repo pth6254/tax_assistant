@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Annotated, Literal
 from pydantic import BaseModel, Field
 
@@ -45,7 +46,13 @@ class PenaltyOption(BaseModel):
         0, description="복식부기의무자·법인의 수입금액(입력하면 무신고가산세 수입금액 기준 하한 적용)")
 
 
-class IncomeTaxRequest(PenaltyOption):
+class TaxRequest(PenaltyOption):
+    """여섯 세목 계산기 공통: 가산세 옵션과 적용 세법 기준일."""
+    as_of: date | None = Field(
+        None, description="적용 세법 기준일(비우면 오늘): 귀속연도 말일, 양도일, 증여일, 상속개시일, 퇴직일, 과세기간 말일")
+
+
+class IncomeTaxRequest(TaxRequest):
     """종합소득세(금융소득 종합과세 포함). 금액은 연간 원 단위이고, 없는 소득은 0."""
     income: NonNegativeInt = Field(0, description="사업소득 총수입금액")
     expense: NonNegativeInt = Field(0, description="사업소득 필요경비")
@@ -107,7 +114,7 @@ class FinancialIncomeTaxRequest(BaseModel):
     withheld: bool = Field(True, description="금융소득이 국내에서 원천징수되었는지")
 
 
-class CapitalGainsRequest(PenaltyOption):
+class CapitalGainsRequest(TaxRequest):
     """국내 등기 부동산 1건의 양도. 기간은 만 연수(1년 6개월이면 1)."""
     transfer_price: NonNegativeInt = Field(description="양도가액(실지거래가액)")
     acquisition_price: NonNegativeInt = Field(description="취득가액(실지거래가액)")
@@ -133,7 +140,7 @@ class CapitalGainsRequest(PenaltyOption):
     prior_same_year_tax: NonNegativeInt = Field(0, description="같은 해 먼저 양도한 자산의 산출세액(자산별 세율)")
 
 
-class InheritanceRequest(PenaltyOption):
+class InheritanceRequest(TaxRequest):
     """거주자 사망에 따른 상속 전체의 상속세. 금액은 원 단위."""
     estate_value: NonNegativeInt = Field(description="상속재산가액(보험금·퇴직금 등 간주상속재산, 추정상속재산 포함)")
     debts: NonNegativeInt = Field(0, description="상속인이 승계한 채무와 공과금 합계")
@@ -160,7 +167,7 @@ class InheritanceRequest(PenaltyOption):
     reported_taxable: NonNegativeInt = Field(0, description="과소신고: 기한 안에 처음 신고한 과세표준(신고세액공제 계산)")
 
 
-class GiftTaxRequest(PenaltyOption):
+class GiftTaxRequest(TaxRequest):
     """증여 1건의 증여세. 증여자 기준으로 관계를 고르고, 금액은 원 단위."""
     gift_amount: NonNegativeInt = Field(description="증여재산가액(시가 등 평가액)")
     relation: Literal["배우자", "직계존비속", "기타친족", "기타"] = Field(
@@ -180,7 +187,7 @@ class GiftTaxRequest(PenaltyOption):
     reported_taxable: NonNegativeInt = Field(0, description="과소신고: 기한 안에 처음 신고한 과세표준(신고세액공제 계산)")
 
 
-class VatRequest(PenaltyOption):
+class VatRequest(TaxRequest):
     """과세기간 1회 신고분 부가가치세. 일반과세자는 공급가액, 간이과세자는 공급대가(부가가치세 포함)로 입력."""
     sales: NonNegativeInt = Field(description="총매출(과세·영세율·면세 포함). 간이과세자는 공급대가")
     purchases: NonNegativeInt = Field(
@@ -205,7 +212,7 @@ class VatRequest(PenaltyOption):
         0, description="과소신고: 처음 신고한 영세율 과세표준(영세율과세표준 신고불성실가산세)")
 
 
-class RetirementTaxRequest(PenaltyOption):
+class RetirementTaxRequest(TaxRequest):
     """퇴직소득세(2020년 이후 퇴직). 근속연수는 1년 미만을 1년으로 올린 정산근속연수."""
     retirement_pay: NonNegativeInt = Field(description="과세대상 퇴직급여(퇴직금·퇴직연금 일시금, 비과세 제외)")
     service_years: Annotated[int, Field(ge=1, strict=True)] = Field(description="정산근속연수(1년 미만은 1년)")

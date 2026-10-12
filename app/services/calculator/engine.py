@@ -38,6 +38,8 @@ class CalcRun:
 def format_calculation_context(result: CalculationResult) -> str:
     """계산 결과를 LLM 컨텍스트 문자열로 포맷한다."""
     lines = [f"세목: {result.tax_type}"]
+    if result.basis:
+        lines.append(f"적용 세법 기준일: {result.basis.queried_on}")
     lines += [f"- {s.label}: {s.amount:,}원" for s in result.steps]
     lines.append(f"- 실효세율: {result.effective_rate * 100:.2f}%")
     if result.source_articles:
@@ -50,10 +52,10 @@ async def run_calculation(tool: str, params: dict) -> CalcRun:
     """검증된 입력으로 계산한다. 실패는 호출 계층에서 처리한다."""
     schema, calculator_module = CALCULATORS[tool]
     req = schema.model_validate(params, strict=True, extra="forbid")
-    resolved_params = req.model_dump()
-    result = await calculator_module.calculate(**resolved_params)
+    result = await calculator_module.calculate(**req.model_dump())
+    # The prefill params travel as JSON (a date as its ISO string).
     return CalcRun(
         context=format_calculation_context(result),
         tool=tool,
-        params=resolved_params,
+        params=req.model_dump(mode="json"),
     )

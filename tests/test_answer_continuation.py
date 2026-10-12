@@ -85,32 +85,15 @@ async def test_stream_exhaustion_raises_and_does_not_repeat_errors(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_completed_continuation_is_saved_once(monkeypatch):
-    monkeypatch.setattr(chat_service, "_fetch_rag_and_web_context", AsyncMock(return_value=("", "웹 검색 생략", [], None)))
-    responses = [LLMGenerationIncomplete("length", "답변 전반"), " 후반"]
-    async def generate(*args, **kwargs):
-        response = responses.pop(0)
-        if isinstance(response, Exception):
-            raise response
-        return response
-    monkeypatch.setattr(chat_service, "call_llm", generate)
-    monkeypatch.setattr(chat_service, "_append_source_list_if_missing", AsyncMock(side_effect=lambda answer, _: answer))
-    monkeypatch.setattr(chat_service, "_correct_source_titles", AsyncMock(side_effect=lambda answer: answer))
-    monkeypatch.setattr(chat_service, "guarded_answer", lambda answer, *args, **kwargs: answer)
+async def test_unfinished_generation_is_never_saved(monkeypatch):
+    from app.services.evidence import context_from_records
+    monkeypatch.setattr(chat_service, "_fetch_rag_and_web_context",
+                        AsyncMock(return_value=(context_from_records([]), "웹 검색 생략", [], None)))
+    monkeypatch.setattr(chat_service, "_answer_evidence_context",
+                        AsyncMock(side_effect=LLMGenerationIncomplete("length", "partial")))
     save = AsyncMock()
     monkeypatch.setattr(chat_service, "_save_history", save)
-    answer, _ = await chat_service.process_chat("질문", str(uuid4()), "test-user")
-    assert answer == "답변 전반 후반"
-    assert save.await_count == 1 and save.call_args.args[2] == answer
-
-
-@pytest.mark.asyncio
-async def test_unfinished_continuation_is_never_saved(monkeypatch):
-    monkeypatch.setattr(chat_service, "_fetch_rag_and_web_context", AsyncMock(return_value=("", "웹 검색 생략", [], None)))
-    monkeypatch.setattr(chat_service, "call_llm", AsyncMock(side_effect=LLMGenerationIncomplete("length", "partial")))
-    save = AsyncMock()
-    monkeypatch.setattr(chat_service, "_save_history", save)
-    with pytest.raises(LLMGenerationIncomplete, match="repeated_content"):
+    with pytest.raises(LLMGenerationIncomplete):
         await chat_service.process_chat("질문", str(uuid4()), "test-user")
     save.assert_not_awaited()
 

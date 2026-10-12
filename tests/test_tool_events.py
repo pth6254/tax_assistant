@@ -24,17 +24,15 @@ async def test_planner_emits_real_lifecycle_without_identity(monkeypatch):
 @pytest.mark.asyncio
 async def test_stream_emits_progress_before_preparation_finishes_and_saves_terminal(monkeypatch):
     release = asyncio.Event()
-    async def prepare(*args, on_tool_event):
+    from app.services.evidence import context_from_records
+    async def prepare(*args, on_tool_event, **kwargs):
         on_tool_event({"type": "tool", "id": "primary", "tool": "document_search", "status": "running"})
         await release.wait()
         on_tool_event({"type": "tool", "id": "primary", "tool": "document_search", "status": "ok", "context": "자료"})
-        return "자료", "웹 검색 생략", [], None
-    async def tokens(*args, **kwargs):
-        yield "답변"
+        return context_from_records([]), "웹 검색 생략", [], None
     monkeypatch.setattr(chat_service, "_fetch_rag_and_web_context", prepare)
-    monkeypatch.setattr(chat_service, "_stream_llm_skip_think", tokens)
-    monkeypatch.setattr(chat_service, "_append_source_list_if_missing", AsyncMock(side_effect=lambda a, _: a))
-    monkeypatch.setattr(chat_service, "guarded_answer", lambda answer, *args, **kwargs: answer)
+    monkeypatch.setattr(chat_service, "_answer_evidence_context",
+                        AsyncMock(return_value=("답변", {"status": "checked", "citations": []})))
     save = AsyncMock()
     monkeypatch.setattr(chat_service, "_save_history", save)
     stream = chat_service.stream_chat_response("내 문서", str(uuid4()), str(uuid4()))
@@ -42,7 +40,7 @@ async def test_stream_emits_progress_before_preparation_finishes_and_saves_termi
     release.set()
     remaining = [e async for e in stream]
     assert remaining[0]["status"] == "ok"
-    assert [event['type'] for event in remaining[1:]] == ['verification', 'chunk', 'verification']
+    assert [event['type'] for event in remaining[1:]] == ['chunk', 'verification']
     assert [e["status"] for e in save.call_args.kwargs["tools"]] == ["ok"]
 
 

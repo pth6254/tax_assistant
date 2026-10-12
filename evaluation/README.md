@@ -142,7 +142,7 @@ CI의 계약 테스트 gate와 실제 서비스 품질 gate는 구분한다.
 | 컨텍스트 | `recorded`: 실제 입력 직전 trace를 가져와 필수 근거 보존·잘림·길이 검사 |
 | 계산 | `progressive_tax`: 합성 구간 산술; `calculator`: 실제 계산 모듈·입력 스키마와 수치/오류 계약 비교 |
 | 도구 선택 | `tool_selection`: 실제 planner의 도구명·인자 비교. 도구 실행/사용자 문서 조회는 하지 않음 |
-| 답변 | `answer_fixed_context`: 고정 근거로 실제 생성/인용 guard 실행. 의미·근거성은 인간 루브릭 판정 |
+| 답변 | `answer_fixed_context`: 고정 근거로 예전 단일 프롬프트 생성(`fixed_context_answer.py`)과 인용 guard 실행. 서비스 채팅은 이 경로를 쓰지 않는다(2026-10-12 삭제). `answer_reliable_context`가 서비스와 같은 검증 답변 경로. 의미·근거성은 인간 루브릭 판정 |
 | 권한·안전·성능 | `recorded`: API/부하 테스트 관측 자료의 상태·호출 여부·정보 유출·시간/크기 계약 검사 |
 
 `recorded`는 실제 관측 JSON을 `score` 명령에 제공하는 어댑터다. 입력의 기대 값을 관측 결과로

@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { FORMS, buildFormFromParams, QUESTION_BUILDERS } from '../src/components/Calculator/forms.js'
 
-const NO_PENALTY = { penalty_type: '없음', reported_tax: 0, is_negligent: false, days_late: 0, filed_within_months: 0, penalty_revenue: 0 }
+const NO_PENALTY = { penalty_type: '없음', reported_tax: 0, is_negligent: false, days_late: 0, filed_within_months: 0, penalty_revenue: 0, as_of: null }
 
 test('the gift tab sends every fact the calculator needs', () => {
   const form = { ...FORMS.gift.defaults, gift_amount: '20000', prior_gifts_10y: '10000', prior_gift_tax: '700',
@@ -30,4 +30,11 @@ test('a chat gift calculation opens the tab with its values and the follow-up re
   const question = QUESTION_BUILDERS.gift(form, { final_tax: 29_100_000 })
   assert.match(question, /인수 채무 20000만원/)
   assert.match(question, /29,100,000원/)
+})
+
+test('a chat calculation dated to the gift opens the tab with that law date', () => {
+  const form = buildFormFromParams('gift', { gift_amount: 300_000_000, relation: '배우자', as_of: '2023-05-01' })
+  assert.equal(form.as_of, '2023-05-01')
+  assert.equal(FORMS.gift.toPayload(form).as_of, '2023-05-01')
+  assert.equal(FORMS.gift.toPayload({ ...form, as_of: '' }).as_of, null)
 })

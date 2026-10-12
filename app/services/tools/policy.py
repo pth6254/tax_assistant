@@ -290,6 +290,7 @@ def check_proposal(tool, params, query, history, *, calculation_intent=False):
     values = request.model_dump()
     if values.get("penalty_type") == "없음" and not any(values.get(k) for k in PENALTY_OPTION_FIELDS[1:]):
         values = {k: v for k, v in values.items() if k not in PENALTY_OPTION_FIELDS}
-    proofs = {key: input_proof(key, value, texts) for key, value in values.items()}
+    # An unset optional value (as_of: today's law) asserts nothing about the user's facts.
+    proofs = {key: input_proof(key, value, texts) for key, value in values.items() if value is not None}
     missing = [key for key, proof in proofs.items() if proof is None]
     return not missing, "unconfirmed_inputs:" + ",".join(missing), proofs

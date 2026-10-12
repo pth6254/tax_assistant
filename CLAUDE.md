@@ -28,7 +28,8 @@
 | 근거·주장 공개 검사 | [evidence.py](app/services/evidence.py), [claim_verification.py](app/services/claim_verification.py) (검사 등록표 `CHECKS`) |
 | 사건일과 시행본 비교·사건 당시 조문 | [temporal_scope.py](app/services/temporal_scope.py), [historical_evidence.py](app/services/historical_evidence.py) |
 | 참고 계산 | [formula_workflow.py](app/services/calculator/formula_workflow.py) |
-| 채팅 계산 경로(해석기 순서·금액 후속 질문·6개 세목 모델 선택 생략) | [planner.py](app/services/tools/planner.py) (`run_tools_for_query`, `followup_question`, `calculator_in_scope`) |
+| 채팅 한 턴(과거 법령·도구·근거 답변·저장, 일반·SSE 공통) | [chat_service.py](app/services/chat_service.py) (`_answer_turn`, `_fetch_rag_and_web_context`), [chat_history.py](app/services/chat_history.py) |
+| 채팅 계산 경로(해석기 순서·금액 후속 질문·되묻기 답·6개 세목 모델 선택 생략·과세 사건 날짜) | [planner.py](app/services/tools/planner.py) (`run_tools_for_query`, `answered_calculation`, `followup_question`, `calculator_in_scope`), [tax_date.py](app/services/calculator/tax_date.py) |
 | 종합소득세(금융소득 포함) 계산기·채팅 입력 해석 | [income_tax.py](app/services/calculator/income_tax.py), [financial_income_tax.py](app/services/calculator/financial_income_tax.py), [income_tax_inputs.py](app/services/calculator/income_tax_inputs.py) |
 | 양도소득세 계산기·채팅 입력 해석 | [capital_gains.py](app/services/calculator/capital_gains.py), [capital_gains_inputs.py](app/services/calculator/capital_gains_inputs.py) |
 | 증여세 계산기·채팅 입력 해석 | [gift_tax.py](app/services/calculator/gift_tax.py), [gift_inputs.py](app/services/calculator/gift_inputs.py) |

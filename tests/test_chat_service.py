@@ -1,75 +1,10 @@
 """
 test_chat_service.py — chat_service 단위 테스트 (DB·Ollama 의존 없음)
 """
-import pytest
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
-
 from app.services.calculator.engine import CalcRun
 from app.services.ai_pipeline import to_provider_messages
-from app.services.chat_service import (
-    _append_source_list_if_missing,
-    _correct_source_titles,
-    _FINAL_PROMPT_TEMPLATE,
-    _final_prompt_values,
-    _calc_meta,
-    _match_laws_by_keyword,
-    _COMBINED_PROMPT,
-)
-
-_CONTEXT = (
-    "[출처: 소득세법 | 소득세법 | 📌 법률 (law)]\n"
-    "제55조 [세율]\n소득세는 다음 각 호의 세율을 적용한다..."
-)
-
-
-@pytest.mark.asyncio
-async def test_source_titles_use_stored_current_law_titles():
-    answer = (
-        "## 📋 근거 출처 목록\n"
-        "[법률] 소득세법 제101조 - 양도소득의 부당 Lerer계산\n"
-        "[법률] 상속세 및 증여세법 제35조 - 저가 얡수 또는 고가 얡도에 따른 이익의 증여\n"
-        "[시행령] 소득세법 시행령 제167조 - 얡도소득의 부당 Lerer계산\n"
-        "[시행령] 소득세법 시행령 제98조 - 부당 Lerer계산의 부인\n"
-    )
-    titles = {
-        ("소득세법", "제101조"): ("법률", "양도소득의 부당행위계산"),
-        ("상속세 및 증여세법", "제35조"): ("법률", "저가 양수 또는 고가 양도에 따른 이익의 증여"),
-        ("소득세법 시행령", "제167조"): ("대통령령", "양도소득의 부당행위 계산"),
-        ("소득세법 시행령", "제98조"): ("대통령령", "부당행위계산의 부인"),
-    }
-    async def lookup(law, article):
-        law_type, title = titles[(law, article)]
-        return SimpleNamespace(law_name=law, law_type=law_type, article_title=title)
-    with patch("app.services.chat_service.get_law_article", side_effect=lookup):
-        result = await _correct_source_titles(answer)
-    assert "Lerer" not in result and "얡" not in result
-    for _, title in titles.values():
-        assert title in result
-
-
-@pytest.mark.asyncio
-async def test_source_title_correction_does_not_rewrite_body_or_unknown_article():
-    answer = "## 1. 결론\n원문 표현은 그대로 둡니다.\n## 📋 근거 출처 목록\n[법률] 소득세법 제999조 - 지어낸 제목\n"
-    with patch("app.services.chat_service.get_law_article", new_callable=AsyncMock, return_value=None):
-        result = await _correct_source_titles(answer)
-    assert "원문 표현은 그대로 둡니다." in result
-    assert "[법률] 소득세법 제999조\n" in result
-    assert "지어낸 제목" not in result
-
-
-@pytest.mark.asyncio
-async def test_source_title_correction_handles_citations_on_one_line():
-    answer = "## 📋 근거 출처 목록\n[법률] 소득세법 제101조 - 부당 Lerer계산 [시행령] 소득세법 시행령 제98조 - 부당 Lerer계산의 부인"
-    async def lookup(law, article):
-        if article == "제101조":
-            return SimpleNamespace(law_name=law, law_type="법률", article_title="양도소득의 부당행위계산")
-        return SimpleNamespace(law_name=law, law_type="대통령령", article_title="부당행위계산의 부인")
-    with patch("app.services.chat_service.get_law_article", side_effect=lookup):
-        result = await _correct_source_titles(answer)
-    assert result.count("[법률]") == 1 and result.count("[시행령]") == 1
-    assert "Lerer" not in result
-    assert "[시행령] 소득세법 시행령 제98조 - 부당행위계산의 부인" in result
+from app.services.chat_service import _calc_meta, _match_laws_by_keyword
+from evaluation.fixed_context_answer import _COMBINED_PROMPT, FIXED_CONTEXT_TEMPLATE, prompt_values
 
 
 # ── _match_laws_by_keyword — 키워드 매핑 ─────────────────────────
@@ -110,66 +45,13 @@ def test_polite_ending_does_not_select_liquor_tax():
     assert _match_laws_by_keyword("주세법의 과세 대상을 설명해 주세요.") == ["주세법"]
 
 
-# ── 실제 최종 답변 템플릿 ────────────────────────────────────────
+# ── 평가용 고정 근거 답변 프롬프트(answer_fixed_context) ─────────
 
-@pytest.fixture
-def render_final_messages():
-    def render(query, context, web_results, history, calc_run=None):
-        values = _final_prompt_values(query, context, web_results, history, calc_run)
-        return to_provider_messages(_FINAL_PROMPT_TEMPLATE.invoke(values))
-    return render
-
-def test_final_prompt_first_is_system_prompt(render_final_messages):
-    msgs = render_final_messages("질문", "법령자료", "웹결과", [])
-    assert msgs[0]["role"] == "system"
+def test_fixed_context_prompt_puts_the_rules_first_and_the_question_last():
+    msgs = to_provider_messages(FIXED_CONTEXT_TEMPLATE.invoke(prompt_values("소득세 신고 방법", "제55조 [세율] 조문 내용")))
+    assert [m["role"] for m in msgs] == ["system", "user"]
     assert msgs[0]["content"] == _COMBINED_PROMPT
-
-
-def test_final_prompt_last_is_user_with_query(render_final_messages):
-    msgs = render_final_messages("소득세 신고 방법", "법령자료", "웹결과", [])
-    assert msgs[-1]["role"] == "user"
-    assert "소득세 신고 방법" in msgs[-1]["content"]
-
-
-def test_final_prompt_contains_rag_context(render_final_messages):
-    msgs = render_final_messages("질문", "제55조 [세율] 조문 내용", "웹결과", [])
-    assert "제55조 [세율] 조문 내용" in msgs[-1]["content"]
-
-
-def test_final_prompt_contains_web_results(render_final_messages):
-    msgs = render_final_messages("질문", "법령자료", "Tavily 웹 검색 결과", [])
-    assert "Tavily 웹 검색 결과" in msgs[-1]["content"]
-
-
-def test_final_prompt_skips_web_placeholder(render_final_messages):
-    """웹검색이 생략된 경우 '웹 검색 생략' 플레이스홀더는 프롬프트에 넣지 않는다."""
-    msgs = render_final_messages("질문", "법령자료", "웹 검색 생략", [])
-    assert "웹 검색 생략" not in msgs[-1]["content"]
-
-
-def test_final_prompt_includes_calc_context(render_final_messages):
-    calc = CalcRun(context="세목: 소득세\n- 결정세액: 5,895,000원", tool="income_tax", params={"income": 50000000})
-    msgs = render_final_messages("질문", "법령자료", "웹 검색 생략", [], calc)
-    assert "결정세액: 5,895,000원" in msgs[-1]["content"]
-    assert "세금 계산기 결과" in msgs[-1]["content"]
-
-
-def test_final_prompt_history_inserted_between(render_final_messages):
-    history = [
-        {"role": "user",      "content": "이전 질문"},
-        {"role": "assistant", "content": "이전 답변"},
-    ]
-    msgs = render_final_messages("새 질문", "법령자료", "웹결과", history)
-    contents = [m["content"] for m in msgs]
-    assert "이전 질문" in contents
-    assert "이전 답변" in contents
-    assert msgs[0]["role"] == "system"
-    assert msgs[-1]["role"] == "user"
-
-
-def test_final_prompt_empty_history_two_messages(render_final_messages):
-    msgs = render_final_messages("질문", "법령자료", "웹 검색 생략", [])
-    assert len(msgs) == 2  # system + user
+    assert "제55조 [세율] 조문 내용" in msgs[-1]["content"] and "소득세 신고 방법" in msgs[-1]["content"]
 
 
 # ── _calc_meta ───────────────────────────────────────────────────
@@ -181,60 +63,3 @@ def test_calc_meta_none_when_no_calc():
 def test_calc_meta_returns_tool_and_params():
     calc = CalcRun(context="...", tool="gift", params={"gift_amount": 300000000})
     assert _calc_meta(calc) == {"tool": "gift", "params": {"gift_amount": 300000000}}
-
-
-# ── _append_source_list_if_missing — 인용 누락 보정 (structured output) ──
-
-@pytest.mark.asyncio
-async def test_source_list_appended_when_answer_has_no_citation():
-    """인용 없는 답변 + 검증 가능한 structured 추출 결과 → 출처 목록 섹션이 붙는다."""
-    structured = AsyncMock(return_value={"citations": [
-        {"label": "법률", "law_name": "소득세법", "article_no": "제55조"},
-    ]})
-    with patch("app.services.chat_service.call_llm_structured", structured):
-        result = await _append_source_list_if_missing("세율은 6~45%입니다.", _CONTEXT)
-    assert "## 📋 근거 출처 목록" in result
-    assert "[법률] 소득세법 제55조" in result
-
-
-@pytest.mark.asyncio
-async def test_source_list_skipped_when_answer_already_cited():
-    """이미 인용이 있는 답변은 보정 LLM 호출 자체가 실행되지 않는다 (지연 0)."""
-    structured = AsyncMock()
-    answer = "[법률] 소득세법 제55조에 따라 과세됩니다."
-    with patch("app.services.chat_service.call_llm_structured", structured):
-        result = await _append_source_list_if_missing(answer, _CONTEXT)
-    assert result == answer
-    structured.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_source_list_filters_hallucinated_citation():
-    """structured 추출이 컨텍스트에 없는 조문을 반환하면 채택하지 않는다 (환각 차단)."""
-    structured = AsyncMock(return_value={"citations": [
-        {"label": "법률", "law_name": "부가가치세법", "article_no": "제999조"},
-    ]})
-    answer = "관련 규정에 따라 과세됩니다."
-    with patch("app.services.chat_service.call_llm_structured", structured):
-        result = await _append_source_list_if_missing(answer, _CONTEXT)
-    assert result == answer
-
-
-@pytest.mark.asyncio
-async def test_source_list_unchanged_on_structured_call_failure():
-    """보정 호출이 실패해도 원본 답변은 그대로 반환된다."""
-    structured = AsyncMock(side_effect=Exception("ollama down"))
-    answer = "세율은 6~45%입니다."
-    with patch("app.services.chat_service.call_llm_structured", structured):
-        result = await _append_source_list_if_missing(answer, _CONTEXT)
-    assert result == answer
-
-
-@pytest.mark.asyncio
-async def test_source_list_skipped_when_no_law_context():
-    """검색된 법령 자료가 없으면(잡담 등) 보정을 시도하지 않는다."""
-    structured = AsyncMock()
-    with patch("app.services.chat_service.call_llm_structured", structured):
-        result = await _append_source_list_if_missing("안녕하세요!", "관련 문서를 찾지 못했습니다.")
-    assert result == "안녕하세요!"
-    structured.assert_not_awaited()

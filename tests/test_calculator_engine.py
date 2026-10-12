@@ -186,7 +186,7 @@ async def test_run_calculation_routes_to_vat():
         zero_rated_sales=0, common_purchases=0, non_deductible_purchases=0, deemed_purchases=0, card_sales=0,
         card_credit_eligible=True, card_credit_used=0, e_filing=False, prepaid_tax=0, reported_zero_rated_sales=0,
         penalty_type="없음",
-        reported_tax=0, is_negligent=False, days_late=0, filed_within_months=0, penalty_revenue=0,
+        reported_tax=0, is_negligent=False, days_late=0, filed_within_months=0, penalty_revenue=0, as_of=None,
     )
 
 

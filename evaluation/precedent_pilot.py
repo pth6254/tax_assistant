@@ -74,7 +74,6 @@ async def collect(query):
     # Use a fresh non-existent user: no access to any user's uploaded documents.
     with patch.object(chat, '_fetch_history', AsyncMock(return_value=[])), \
          patch.object(chat, '_save_history', AsyncMock()), \
-         patch.object(chat, 'TAVILY_API_KEY', ''), \
          patch.object(chat, 'hybrid_search', search), \
          patch.object(chat, '_fetch_rag_and_web_context', context):
         try:

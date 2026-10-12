@@ -96,7 +96,6 @@ async def observe_chat(question, *, timeout=420):
         with tracing_context(enabled=False), \
              patch.object(chat, '_fetch_history', AsyncMock(return_value=[])), \
              patch.object(chat, '_save_history', AsyncMock()), \
-             patch.object(chat, 'TAVILY_API_KEY', ''), \
              patch.object(chat, 'hybrid_search', search), \
              patch.object(chat, '_fetch_rag_and_web_context', context), \
              patch.object(claims, 'generate_issue', generate):

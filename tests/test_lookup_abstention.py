@@ -20,7 +20,7 @@ async def test_lookup_failure_never_generates_or_searches(monkeypatch,tool,statu
     save=AsyncMock()
     monkeypatch.setattr(chat,'_save_history',save)
     blocked={}
-    for name in ('_generate_answer','_stream_llm_skip_think','_append_source_list_if_missing','hybrid_search','tavily_search'):
+    for name in ('_answer_evidence_context','prepare_context','hybrid_search'):
         blocked[name]=AsyncMock(side_effect=AssertionError('must not call'))
         monkeypatch.setattr(chat,name,blocked[name])
     if stream:

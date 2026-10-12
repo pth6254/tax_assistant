@@ -35,6 +35,10 @@ const PENALTY_FIELDS = [
 
 const REAL_ESTATE = ['주택', '토지·건물', '분양권', '조합원입주권', '기타자산']
 
+// 적용 세법 기준일: 비우면 오늘 시행 세법. 과거 귀속연도·양도일 등은 그날의 세율표로 계산한다.
+const DATE_FIELD = { key: 'as_of', label: '적용 세법 기준일', type: 'date', required: false,
+  hint: '비우면 오늘 · 귀속연도 말일, 양도일, 증여일, 상속개시일, 퇴직일, 과세기간 말일 · 세율표는 2024-01-01 이후만 수록' }
+
 const penaltyPayload = (f) => {
   const type = f.penalty_type || '없음'
   return {
@@ -100,11 +104,13 @@ const FORMS = {
       { key: 'sincere_business',      label: '성실사업자',            type: 'checkbox', hint: '근로소득이 없을 때 표준세액공제 12만원(아니면 7만원)' },
       { key: 'other_tax_credits',     label: '그 밖의 세액공제 합계', unit: '만원', required: false, hint: '자녀·연금계좌·보험료·의료비·교육비·기부금 등' },
       { key: 'prepaid_tax',           label: '기납부세액',            unit: '만원', required: false, hint: '근로소득 원천징수·중간예납 등 · 이자·배당 원천징수는 자동 추정' },
+      DATE_FIELD,
       ...PENALTY_FIELDS,
     ],
     defaults: { personal_deduction_count: '1', withheld: true, business_method: '장부', misc_expense_rule: '60%', penalty_type: '없음' },
     toPayload: (f) => ({
       ...penaltyPayload(f),
+      as_of: f.as_of || null,
       income:                   toWon(f.income),
       expense:                  (f.business_method || '장부') === '장부' ? toWon(f.expense) : 0,
       business_method:          f.business_method || '장부',
@@ -170,11 +176,13 @@ const FORMS = {
       { key: 'residence_years',   label: '거주기간',    unit: '년',   required: false, hint: '보유기간 중 거주한 만 연수' },
       { key: 'acquired_in_adjusted_area', label: '취득 당시 조정대상지역', type: 'checkbox', hint: '1주택 비과세에 2년 거주 요건이 붙음' },
       { key: 'multi_home_surcharge', label: '다주택 중과', type: 'select', options: ['없음', '2주택', '3주택이상'], hint: '조정대상지역 중과 대상일 때만 선택' },
+      DATE_FIELD,
       ...PENALTY_FIELDS,
     ],
     defaults: { asset_type: '주택', multi_home_surcharge: '없음', stock_market: '국내비상장', penalty_type: '없음' },
     toPayload: (f) => ({
       ...penaltyPayload(f),
+      as_of: f.as_of || null,
       transfer_price:    toWon(f.transfer_price),
       non_business_land: f.asset_type === '토지·건물' && !!f.non_business_land,
       unregistered:      REAL_ESTATE.includes(f.asset_type || '주택') && !!f.unregistered,
@@ -220,12 +228,14 @@ const FORMS = {
       { key: 'skipped_generation_assets', label: '손자녀 등 상속분',   unit: '만원', required: false, hint: '세대생략 30% 할증' },
       { key: 'skipped_generation_minor', label: '손자녀 미성년',       type: 'checkbox', hint: '20억원 초과 시 40%' },
       { key: 'filed_on_time',      label: '기한 내 신고',           type: 'checkbox', hint: '신고세액공제 3%' },
+      DATE_FIELD,
       ...PENALTY_FIELDS,
       { key: 'reported_taxable', label: '처음 신고한 과세표준', unit: '만원', required: false, hint: '과소신고: 신고세액공제는 이 부분에만' },
     ],
     defaults: { has_spouse: true, filed_on_time: true, penalty_type: '없음' },
     toPayload: (f) => ({
       ...penaltyPayload(f),
+      as_of: f.as_of || null,
       estate_value:          toWon(f.estate_value),
       debts:                 toWon(f.debts),
       spouse_inheritance:    f.has_spouse === false ? 0 : toWon(f.spouse_inheritance),
@@ -264,12 +274,14 @@ const FORMS = {
       { key: 'prior_gift_tax',      label: '이전 증여 산출세액',     unit: '만원', required: false, hint: '모르면 비워 두면 추정' },
       { key: 'deduction_used_10y',  label: '이미 쓴 증여재산공제',   unit: '만원', required: false, hint: '합산하지 않은 다른 증여에 쓴 같은 관계 공제' },
       { key: 'filed_on_time',       label: '기한 내 신고',          type: 'checkbox', hint: '신고세액공제 3%' },
+      DATE_FIELD,
       ...PENALTY_FIELDS,
       { key: 'reported_taxable', label: '처음 신고한 과세표준', unit: '만원', required: false, hint: '과소신고: 신고세액공제는 이 부분에만' },
     ],
     defaults: { relation: '직계존비속', filed_on_time: true, penalty_type: '없음' },
     toPayload: (f) => ({
       ...penaltyPayload(f),
+      as_of: f.as_of || null,
       gift_amount:         toWon(f.gift_amount),
       relation:            f.relation || '직계존비속',
       is_minor:            f.relation === '직계존비속' && !!f.is_minor,
@@ -304,12 +316,14 @@ const FORMS = {
       { key: 'card_credit_used', label: '올해 이미 받은 카드공제', unit: '만원', required: false },
       { key: 'prepaid_tax',   label: '예정고지·미환급세액', unit: '만원', required: false },
       { key: 'e_filing',      label: '전자신고(1만원 공제)', type: 'checkbox' },
+      DATE_FIELD,
       ...PENALTY_FIELDS,
       { key: 'reported_zero_rated_sales', label: '처음 신고한 영세율 매출', unit: '만원', required: false, hint: '과소신고: 덜 신고한 영세율 매출의 0.5% 가산세' },
     ],
     defaults: { business_type: '소매업', card_credit_eligible: true, penalty_type: '없음' },
     toPayload: (f) => ({
       ...penaltyPayload(f),
+      as_of: f.as_of || null,
       sales:         toWon(f.sales),
       purchases:     toWon(f.purchases),
       exempt_sales:  f.is_simplified ? 0 : toWon(f.exempt_sales),
@@ -334,11 +348,13 @@ const FORMS = {
       { key: 'service_years',  label: '근속연수',     unit: '년',   required: true, hint: '1년 미만은 1년으로 올림 · 중간정산 시 중복기간 제외' },
       { key: 'prepaid_tax',    label: '원천징수된 세액', unit: '만원', required: false },
       { key: 'pension_transfer', label: '연금계좌(IRP)로 옮긴 금액', unit: '만원', required: false, hint: '그 몫의 퇴직소득세는 연금으로 받을 때까지 미뤄짐' },
+      DATE_FIELD,
       ...PENALTY_FIELDS,
     ],
     defaults: { penalty_type: '없음' },
     toPayload: (f) => ({
       ...penaltyPayload(f),
+      as_of: f.as_of || null,
       retirement_pay: toWon(f.retirement_pay),
       service_years:  toInt(f.service_years, 1),
       prepaid_tax:    toWon(f.prepaid_tax),

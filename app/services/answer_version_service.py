@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from fastapi import HTTPException
 from config import MEMORY_TURNS
 
+from app.services.chat_history import history_entry
 from app.services.chat_revision_service import last_turn
 from app.services.conversation_service import require_conversation_owner
 
@@ -31,14 +32,7 @@ async def prepare_regeneration(conn, conversation_id, user_id, message_id, expec
     earlier = await conn.fetch(
         'SELECT message FROM chat_logs WHERE conversation_id=$1 AND id<$2 ORDER BY id DESC LIMIT $3',
         cid, user_message_id, MEMORY_TURNS * 2)
-    history = []
-    for row in reversed(earlier):
-        msg = _message(row['message'])
-        entry = {'role': msg['role'], 'content': msg['content']}
-        for tool in msg.get('tools', []):
-            if tool.get('tool') == 'history_lookup' and tool.get('history_context'):
-                entry['history_context'] = tool['history_context']
-        history.append(entry)
+    history = [history_entry(row['message']) for row in reversed(earlier)]
     return cid, Regeneration(message_id, expected_version, query, history)
 
 

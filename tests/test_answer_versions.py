@@ -107,10 +107,6 @@ def test_regeneration_provider_error_is_reported_without_false_done(client, auth
 async def test_regeneration_stream_commits_after_final_chunk(monkeypatch):
     from app.services import chat_service
 
-    class Chain:
-        async def astream(self, _values):
-            yield 'fresh answer'
-
     conn = AsyncMock()
     acquire = MagicMock(__aenter__=AsyncMock(return_value=conn),
                         __aexit__=AsyncMock(return_value=False))
@@ -119,21 +115,20 @@ async def test_regeneration_stream_commits_after_final_chunk(monkeypatch):
     monkeypatch.setattr(chat_service, 'get_pool', AsyncMock(return_value=pool))
     monkeypatch.setattr(chat_service, 'needs_history', lambda _query: False)
     monkeypatch.setattr(chat_service, 'history_route', lambda _query, _history: None)
+    from app.services.evidence import context_from_records
     monkeypatch.setattr(chat_service, '_fetch_rag_and_web_context',
-                        AsyncMock(return_value=('', '', [], None)))
-    monkeypatch.setattr(chat_service, 'streaming_chain', lambda *args, **kwargs: Chain())
-    monkeypatch.setattr(chat_service, '_append_source_list_if_missing', AsyncMock(side_effect=lambda answer, _: answer))
-    monkeypatch.setattr(chat_service, '_correct_source_titles', AsyncMock(side_effect=lambda answer: answer))
-    monkeypatch.setattr(chat_service, 'guarded_answer', lambda answer, *args, **kwargs: answer)
+                        AsyncMock(return_value=(context_from_records([]), '', [], None)))
+    monkeypatch.setattr(chat_service, '_answer_evidence_context',
+                        AsyncMock(return_value=('fresh answer', {'status': 'checked', 'citations': []})))
     commit = AsyncMock(return_value=2)
     regen = Regeneration(4, 1, 'question', [])
     with patch('app.services.answer_version_service.commit_regeneration', commit):
         events = [event async for event in chat_service.stream_chat_response(
             'question', str(uuid.uuid4()), str(uuid.uuid4()), regeneration=regen)]
-    assert [event['type'] for event in events] == ['verification', 'chunk', 'verification']
-    assert events[1]['text'] == 'fresh answer'
+    assert [event['type'] for event in events] == ['chunk', 'verification']
+    assert events[0]['text'] == 'fresh answer'
     assert commit.await_args.args[2:] == (regen, 'fresh answer', [])
-    assert commit.await_args.kwargs['verification'] == events[2]['data']
+    assert commit.await_args.kwargs['verification'] == events[1]['data']
 
 
 @pytest.mark.asyncio

@@ -127,15 +127,14 @@ async def live(case, user_id):
         answer, verification = await generate_verified_answer(case.input['query'], context)
         return {'answer': answer, 'context': str(context), 'verification': verification}
     if case.adapter == 'answer_fixed_context':
-        from app.services.chat_service import (_FINAL_PROMPT_TEMPLATE, _generate_answer,
-                                               _final_prompt_values)
+        from evaluation.fixed_context_answer import FIXED_CONTEXT_TEMPLATE, generate, prompt_values
         from app.services.ai_pipeline import text_chain
         from app.services.answer_verification import verify_answer
         from app.services.citation_guard import extract_citations
         # Isolate generation from retrieval, history persistence, web search and tool execution.
         context = case.input['context']
-        raw_answer = await text_chain(_FINAL_PROMPT_TEMPLATE, _generate_answer, name='evaluation_fixed_context').ainvoke(
-            _final_prompt_values(case.input['query'], context, '', []))
+        raw_answer = await text_chain(FIXED_CONTEXT_TEMPLATE, generate, name='evaluation_fixed_context').ainvoke(
+            prompt_values(case.input['query'], context))
         answer, verification = verify_answer(raw_answer, context,
                                              require_law=bool(case.input.get('require_law', False)))
         return {'answer': answer, 'raw_answer': raw_answer, 'verification': verification,

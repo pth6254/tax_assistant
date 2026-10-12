@@ -4,7 +4,7 @@ from app.services.search.query_constraints import extract_constraints
 from app.services.tax_laws import KNOWN_LAWS
 from app.services.question_planning import plan_question, retrieve_issues
 from app.services.historical_evidence import attach_event_versions
-from app.services.tools.planner import run_tools_for_query
+from app.services.tools.planner import run_tools_for_query, self_contained
 from app.services.claim_verification import generate_verified_answer
 from app.schemas.reliability import QuestionPlan
 from app.schemas.reliability import Contract, strict_schema
@@ -69,10 +69,13 @@ async def prepare_context(query, laws, user_id, history, search, on_event=None):
             continue
         def tool_event(event):
             progress(event | {"id": issue.id, "issue_id": issue.id, "scope": "issue"})
+        # A quote that names its tax and amount stands alone; adding the whole question would let
+        # another issue's facts ("…양도세도") steer this one to the wrong calculator.
+        issue_history = history if self_contained(issue.request_quote) else [*history, {"role": "user", "content": query}]
         try:
             async with asyncio.timeout(45):
                 tool = await run_tools_for_query(issue.request_quote, user_id=user_id,
-                                                history=[*history, {"role": "user", "content": query}], on_event=tool_event)
+                                                history=issue_history, on_event=tool_event)
         except TimeoutError:
             coverage[issue.id] = {"status": "failed", "error": "tool_timeout", "evidence_ids": []}
             continue

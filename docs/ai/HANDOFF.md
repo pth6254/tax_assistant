@@ -10,7 +10,8 @@
 신탁수익권), 퇴직소득세를 더한 뒤 계산기를 세목·과세 단위별 6개로 묶었고(가산세는 각 계산기 옵션, 가상자산은 종합소득세 항목),
 범위 밖이던 항목(연금계좌 과세이연·입주권 비과세·비교과세·간주임대료·종교인소득·영세율 가산세)과 상담 유형까지 맞췄다(아래 2026-10-11
 기록 세 개). 채팅 계산 질문은 세목별 결정적 해석기가 받고, 6개 세목은 모델 도구 선택을 부르지 않는다(10-11 채팅 점검, 새 입력의 채팅 해석 포함).
-남은 일은 공식 계산 사례 대조, 웹 화면 직접 조작 확인, (선택) 취득세·종합부동산세다. 세목마다 "공식 사례 수집 → `compute` → 채팅 해석 → 테스트" 순서로 하고 실모델 호출 없이 끝낸다.
+10-12에 되묻기 답의 계산 이어가기, 복합 질문 쟁점 분리, 과세 사건 날짜(`as_of`), 레거시 생성 경로 삭제와 일반·SSE 공통 `_answer_turn`을 했다.
+남은 일은 공식 계산 사례 대조, 웹 화면 직접 조작 확인, 2024년 전 세율표(필요하면), (선택) 취득세·종합부동산세다. 세목마다 "공식 사례 수집 → `compute` → 채팅 해석 → 테스트" 순서로 하고 실모델 호출 없이 끝낸다.
 
 **이전 상태(10-08)**: 세 작업(날짜+법령명 질문의 경로, 질문 사실에의 적용 지시, 사건 당시 법령 버전 연결)이 `main`(`4ca5af3`,
 `bf3c83a`, 문서 커밋)에 커밋되고 이미지로 재빌드돼 서비스에 반영돼 있다. 원격 `origin/main`은 `c2affff`로, 푸시하지 않았다.
@@ -42,6 +43,21 @@
 
 - `evaluation/runs/auto-evaluation-20261004/`: `pipeline-v2/cards/`(고정 카드), `rejudge-final/`(저장 답변 재판정), `live-final/`(새 실제 실행), `verification-final.json`, `langsmith-readback-final.json`. LangSmith Dataset/Experiment ID는 아래 2026-10-04 기록에 있다.
 - 컨테이너를 재생성하거나 다른 환경으로 인계할 때 이 폴더를 호스트에서 따로 보존한다.
+
+## 2026-10-12 채팅 tool calling·답변 라우팅 구조 점검·수정
+
+사용자 요청("채팅 tool calling 구조 체크하고 채팅 답변 라우팅 관련해서도 구조 체크해서 …", 이어서 "전부 다"). 결정은
+[DECISIONS.md](DECISIONS.md)의 10-12 항목.
+
+**변경**: `chat_history.py`(저장 메시지 → history, `calculator_request`), `planner.py`(`answered_calculation`, `self_contained`, `_texts`,
+날짜 적용과 `tax_date_unavailable`, "얼마였어"), `tax_date.py`(과세 사건 날짜), `schemas/calculator.py`(`TaxRequest.as_of`), `engine.py`(기준일 표시,
+JSON 프리필 params), `reliable_workflow.py`(쟁점 history), `chat_service.py`(레거시 삭제, `_answer_turn`·`_store`, 되묻기 문구),
+`answer_version_service.py`, `evaluation/fixed_context_answer.py`·`adapters.py`·`auto_pipeline.py`·`precedent_pilot.py`, `dev/probe_chat_routing.py`
+(유료 1회, 6개 세목 밖 질문으로 변경), 계산기 화면 "적용 세법 기준일", 새 `tests/test_chat_routing.py`.
+
+**검증**: [CURRENT_STATUS.md](CURRENT_STATUS.md)의 10-12 항목. 실모델 호출 없음.
+
+**남은 것**: 실모델로 검증 답변 문장 확인(유료), 2024년 전 세율표는 수록하지 않음, `docs/ai/` 9월 조사 문서에는 삭제한 함수 이름이 당시 기록으로 남아 있음.
 
 ## 2026-10-11 채팅 계산기 tool calling 점검·수정
 

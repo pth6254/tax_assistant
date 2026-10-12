@@ -109,6 +109,8 @@ def _residence_years(text, holding):
     if LIVED_THROUGHOUT.search(text) and holding is not None:
         return holding
     patterns = [r"(?<!비)거주\s*(?:기간\s*)?(?:은|는|이|:)?\s*" + YEARS,
+                # "10년 보유·거주", "10년 보유하고 거주": one period for both.
+                YEARS + r"\s*(?:동안\s*)?보유\s*(?:·|,|/|및|와|하고|하며|하면서)\s*(?:실)?거주",
                 YEARS + r"\s*(?:\d+\s*개월\s*)?(?:동안\s*|간\s*)?(?:거주|실거주|살았|살고|살다)"]
     values = {int(m.group(1)) for p in patterns for m in re.finditer(p, text)}
     if len(values) > 1:

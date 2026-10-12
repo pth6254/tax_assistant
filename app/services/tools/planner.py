@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from dataclasses import replace
+from types import SimpleNamespace
 
 from app.schemas.tool_call import ToolSelection
 from app.services.ai_pipeline import chat_prompt, structured_chain
@@ -27,7 +28,7 @@ _TAX_AMOUNT_QUESTION = re.compile(
     r"(?:은|는|이|가|을|를|까지)?"
     # "가산세 포함 얼마야", "가산세까지 합치면 얼마야": the total is still the asked amount.
     r"(?:\s*(?:포함(?:해서|하면|한|해)?|합쳐서|합치면|합하면|더해서|더하면|모두|전부|다\s*해서|총))*"
-    r"\s*얼마(?:나)?\s*(?:야|예요|인가|인지|입니까|나와|나오|내|납부|부과|되|정도|[?!]*$)"
+    r"\s*얼마(?:나)?\s*(?:야|예요|인가|인지|입니까|나와|나오|내|납부|부과|되|정도|였|이었|[?!]*$)"
 )
 # Facts each calculator needs, asked in Korean when the question cannot be read into its inputs.
 CALCULATOR_FACTS = {
@@ -113,6 +114,10 @@ async def select_tool(query: str, history: list[dict] | None = None) -> tuple[st
 
 
 async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] | None = None, on_event=None) -> ToolRun | None:
+    # "거주 10년이야" right after the calculator asked for it answers that question: read it
+    # together with the question it completes, as if both had been asked at once.
+    if (answered := answered_calculation(query, history)) is not None:
+        query, history = answered
     # A changed amount after an actual calculation is a follow-up; "그럼" alone is not.
     calculation_followup = is_calculation_followup(query, history)
     if not has_tool_intent(query) and not calculation_followup:
@@ -215,6 +220,29 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
     return result
 
 
+ASKS_BACK = re.compile(r"\?|뭐|무엇|어떻게|왜|요건|설명|알려\s*(?:줘|주세요)|궁금")
+
+
+def answered_calculation(query, history):
+    """(question + answers, earlier history) when this turn answers the calculator's question, else None.
+
+    The marker is the stored tool status (`calculator_request`), never the assistant's prose. A turn that
+    asks something of its own leaves the calculation, and answers to several questions in a row are joined.
+    """
+    if not history or not history[-1].get("calculator_request") or ASKS_BACK.search(query):
+        return None
+    parts, end = [query], len(history) - 1
+    while end >= 1 and history[end].get("calculator_request") and history[end - 1].get("role") == "user":
+        parts.insert(0, str(history[end - 1].get("content", "")))
+        end -= 2
+    return "\n".join(parts), history[:end + 1]
+
+
+def self_contained(quote):
+    """An issue quote that names its tax and states an amount needs no other part of the question."""
+    return bool(_AMOUNT_RE.search(quote)) and any(re.search(p, quote, re.I) for p in CALC_TAX.values())
+
+
 def followup_question(query, history):
     """"그럼 7천만원이면?": the previous question with its one amount replaced, or a ToolRun asking which amount."""
     previous = next((m.get("content", "") for m in reversed(history or []) if m.get("role") == "user"), "")
@@ -294,7 +322,12 @@ def _with_penalty(stated, facts_query, history):
                    assumptions=[*stated.assumptions, *option.assumptions])
 
 
-async def _stated_calculation(tool, title, stated, on_event):
+def _texts(query, history):
+    """The user turns a reader sees: the last two before this one, then this one."""
+    return [str(m.get("content", "")) for m in (history or []) if m.get("role") == "user"][-2:] + [query]
+
+
+async def _stated_calculation(tool, title, stated, on_event, texts=()):
     """Run a calculator on inputs read from the question; None when it cannot be used.
 
     `stated` is a reader's StatedInputs, its MissingInputs (facts that decide the tax and are
@@ -304,6 +337,13 @@ async def _stated_calculation(tool, title, stated, on_event):
     from app.services.calculator.errors import CalculationError
     if stated is None:
         return None
+    from app.services.calculator.tax_date import stated_tax_date
+    dated = None if hasattr(stated, "labels") else stated_tax_date(tool, list(texts))
+    if dated and dated[0] == "ambiguous":
+        stated = SimpleNamespace(labels=[f"어느 날짜 기준인지({dated[1]}가 둘 이상 나옵니다)"])
+    elif dated:
+        # The law in force on the taxed event, not today's, decides the amounts.
+        stated = replace(stated, params={**stated.params, "as_of": dated[0]}, assumptions=[*stated.assumptions, dated[1]])
     if hasattr(stated, "labels"):
         result = ToolRun(tool, "needs_input", f"{title}를 계산하려면 다음 사실을 알려주세요: " + ", ".join(stated.labels) + ".",
                          error_code="calculation_inputs_required")
@@ -315,6 +355,12 @@ async def _stated_calculation(tool, title, stated, on_event):
         run = await run_calculation(tool, stated.params)
     except (CalculationError, ValueError, KeyError, TypeError) as exc:
         logger.info("%s calculator not used (%s)", tool, type(exc).__name__)
+        if dated and getattr(exc, "code", None) == "missing_tax_data":
+            # The stated date predates the stored rate tables: say so instead of using today's law.
+            result = ToolRun(tool, "error", f"{title} 계산기에는 {dated[0].isoformat()} 시점의 세율·공제 자료가 없습니다. "
+                             "날짜를 빼고 물으시면 오늘 시행 세법으로 계산합니다.", error_code="tax_date_unavailable")
+            _emit_result(result, {}, on_event)
+            return result
         return None
     # Assumptions lead the result: they change the amounts as much as the inputs do.
     run.context = "\n".join(["계산에 쓴 가정:", *[f"- {item}" for item in stated.assumptions], "", run.context])
@@ -334,31 +380,36 @@ async def income_calculation(query, history, on_event=None, facts_query=None):
         logger.info("Income tax calculator not used (%s)", exc.code)
         return None
     stated = stated_income_tax_inputs(query, history, basic_deduction=int(row["amount"]))
-    return await _stated_calculation("income_tax", "종합소득세", _with_penalty(stated, facts_query, history), on_event)
+    return await _stated_calculation("income_tax", "종합소득세", _with_penalty(stated, facts_query, history), on_event,
+                                     texts=_texts(facts_query or query, history))
 
 
 async def capital_gains_calculation(query, history, on_event=None, facts_query=None):
     """양도소득세 계산기 결과, a request for the facts it must not assume, or None for the model path."""
     from app.services.calculator.capital_gains_inputs import stated_capital_gains_inputs
-    return await _stated_calculation("capital_gains", "양도소득세", _with_penalty(stated_capital_gains_inputs(query, history), facts_query, history), on_event)
+    return await _stated_calculation("capital_gains", "양도소득세", _with_penalty(stated_capital_gains_inputs(query, history), facts_query, history), on_event,
+                                     texts=_texts(facts_query or query, history))
 
 
 async def gift_calculation(query, history, on_event=None, facts_query=None):
     """증여세 계산기 결과, a request for the facts it must not assume, or None for the model path."""
     from app.services.calculator.gift_inputs import stated_gift_inputs
-    return await _stated_calculation("gift", "증여세", _with_penalty(stated_gift_inputs(query, history), facts_query, history), on_event)
+    return await _stated_calculation("gift", "증여세", _with_penalty(stated_gift_inputs(query, history), facts_query, history), on_event,
+                                     texts=_texts(facts_query or query, history))
 
 
 async def inheritance_calculation(query, history, on_event=None, facts_query=None):
     """상속세 계산기 결과, a request for the facts it must not assume, or None for the model path."""
     from app.services.calculator.inheritance_inputs import stated_inheritance_inputs
-    return await _stated_calculation("inheritance", "상속세", _with_penalty(stated_inheritance_inputs(query, history), facts_query, history), on_event)
+    return await _stated_calculation("inheritance", "상속세", _with_penalty(stated_inheritance_inputs(query, history), facts_query, history), on_event,
+                                     texts=_texts(facts_query or query, history))
 
 
 async def vat_calculation(query, history, on_event=None, facts_query=None):
     """부가가치세 계산기 결과, a request for the facts it must not assume, or None for the model path."""
     from app.services.calculator.vat_inputs import stated_vat_inputs
-    return await _stated_calculation("vat", "부가가치세", _with_penalty(stated_vat_inputs(query, history), facts_query, history), on_event)
+    return await _stated_calculation("vat", "부가가치세", _with_penalty(stated_vat_inputs(query, history), facts_query, history), on_event,
+                                     texts=_texts(facts_query or query, history))
 
 
 async def penalty_calculation(query, history, on_event=None):
@@ -370,14 +421,16 @@ async def penalty_calculation(query, history, on_event=None):
 async def retirement_calculation(query, history, on_event=None, facts_query=None):
     """퇴직소득세 계산기 결과, a request for the facts it must not assume, or None for the model path."""
     from app.services.calculator.retirement_inputs import stated_retirement_inputs
-    return await _stated_calculation("retirement", "퇴직소득세", _with_penalty(stated_retirement_inputs(query, history), facts_query, history), on_event)
+    return await _stated_calculation("retirement", "퇴직소득세", _with_penalty(stated_retirement_inputs(query, history), facts_query, history), on_event,
+                                     texts=_texts(facts_query or query, history))
 
 
 async def virtual_asset_calculation(query, history, on_event=None, facts_query=None):
     """가상자산소득(종합소득세 계산기의 분리과세 항목) 결과, a request for missing facts, or None."""
     from app.services.calculator.virtual_asset_inputs import stated_virtual_asset_inputs
     stated = _with_penalty(stated_virtual_asset_inputs(query, history), facts_query, history)
-    return await _stated_calculation("income_tax", "가상자산 소득세", stated, on_event)
+    return await _stated_calculation("income_tax", "가상자산 소득세", stated, on_event,
+                                     texts=_texts(facts_query or query, history))
 
 
 def _emit_result(result, params, callback):

@@ -91,6 +91,8 @@ export default function CalculatorScreen({ initial, onInitialConsumed, onAskAbou
               : <><label htmlFor={'calc-' + field.key}>{field.label}{field.required && <span className="required"> *</span>}</label>
                 <div className="input-with-unit">{field.type === 'select'
                   ? <select id={'calc-' + field.key} value={form[field.key] || field.options[0]} onChange={e => change(field.key, e.target.value)}>{!field.options.includes(form[field.key]) && form[field.key] && <option value={form[field.key]} disabled>미지원 조건 — 변경 필요</option>}{field.options.map(v => <option key={v}>{v}</option>)}</select>
+                  : field.type === 'date'
+                  ? <input id={'calc-' + field.key} type="date" value={form[field.key] || ''} onChange={e => change(field.key, e.target.value)} aria-describedby={field.hint ? field.key + '-hint' : undefined} />
                   : <input ref={i === 0 ? firstInput : undefined} id={'calc-' + field.key} type="number" min="0" step={field.unit === '만원' ? '0.0001' : field.unit === '%' ? '0.1' : '1'} value={form[field.key] ?? ''} onChange={e => change(field.key, e.target.value)} placeholder={field.required ? '필수 입력' : '0'} required={field.required} aria-describedby={field.hint ? field.key + '-hint' : undefined} />}
                   {field.unit && <span>{field.unit}</span>}</div>{field.hint && <p className="field-hint" id={field.key + '-hint'}>{field.hint}</p>}</>}
           </div>)}

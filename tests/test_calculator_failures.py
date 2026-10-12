@@ -97,15 +97,14 @@ async def test_api_safe_failure_contract():
 @pytest.mark.asyncio
 @pytest.mark.parametrize('streaming', [False, True])
 async def test_failed_calculation_bypasses_llm_and_preserves_failure(monkeypatch, streaming):
-    async def prepare(*args, on_tool_event):
+    async def prepare(*args, on_tool_event, **kwargs):
         on_tool_event({'type': 'tool', 'id': 'primary', 'tool': 'income_tax',
                        'status': 'error', 'context': '세율 데이터 확인 필요',
                        'error_code': 'missing_tax_data', 'retryable': False})
         return '', '', [], None
     monkeypatch.setattr(chat_service, '_fetch_rag_and_web_context', prepare)
     generate = AsyncMock(side_effect=AssertionError('LLM must not run'))
-    monkeypatch.setattr(chat_service, '_generate_answer', generate)
-    monkeypatch.setattr(chat_service, '_stream_llm_skip_think', generate)
+    monkeypatch.setattr(chat_service, '_answer_evidence_context', generate)
     save = AsyncMock()
     monkeypatch.setattr(chat_service, '_save_history', save)
     args = ('계산', str(uuid4()), str(uuid4()))
