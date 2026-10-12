@@ -22,7 +22,7 @@ const assert = require('node:assert/strict')
       if (path === '/api/calculator/income-tax') return route.fulfill({
         status: calculatorFailure ? 503 : 200,
         json: calculatorFailure ? { detail: { code: 'missing_tax_data', message: '세율 데이터 확인 필요', retryable: false } }
-          : { tax_type: '소득세', steps: [], taxable_income: 0, calculated_tax: 0, final_tax: 0, effective_rate: 0, source_articles: [] },
+          : { tax_type: '종합소득세', steps: [], taxable_income: 0, calculated_tax: 0, final_tax: 0, effective_rate: 0, source_articles: [] },
       })
       if (path === '/api/auth/login') body = { user: { id: 'test', email: 'portfolio@example.test' } }
       else if (path === '/api/documents') body = []
@@ -50,7 +50,7 @@ const assert = require('node:assert/strict')
       }
       await route.fulfill({ json: body })
     })
-    await page.goto(process.env.UI_TEST_URL || 'http://127.0.0.1:4173')
+    await page.goto(process.env.UI_TEST_URL || 'http://localhost:3001')
     await page.locator('input[type=email]').fill('portfolio@example.test')
     await page.locator('input[type=password]').fill('test-password')
     await page.getByRole('button', { name: '로그인', exact: true }).last().click()
@@ -73,13 +73,17 @@ const assert = require('node:assert/strict')
     await page.getByRole('button', { name: '계산기에서 조건 바꾸기 →' }).click()
     const values = await page.locator('input').evaluateAll(inputs => inputs.map(input => input.value))
     assert.ok(values.some(value => value.replaceAll(',', '') === '5000')) // UI 단위: 만원
+    // The prefilled amount sits in whichever field the chat read it into; clear that one.
+    const numbers = page.locator('input[type=number]')
+    const prefilled = numbers.nth((await numbers.evaluateAll(inputs => inputs.map(input => input.value)))
+      .findIndex(value => value.replaceAll(',', '') === '5000'))
     await page.getByRole('button', { name: '계산하기', exact: true }).click()
     await page.getByText('종합소득세 계산 결과', { exact: true }).waitFor()
-    await page.locator('input[type=number]').first().fill('')
+    await prefilled.fill('')
     assert.equal(await page.getByText('종합소득세 계산 결과', { exact: true }).count(), 0)
-    await page.getByRole('button', { name: '계산하기', exact: true }).click()
-    await page.getByRole('alert').waitFor()
-    await page.locator('input[type=number]').first().fill('5000')
+    // Every income field is optional since the income kinds were added (2026-10-11), so an empty
+    // form is not a client-side error; the server failure below is the error path checked here.
+    await prefilled.fill('5000')
     calculatorFailure = true
     await page.getByRole('button', { name: '계산하기', exact: true }).click()
     await page.getByText('세율 데이터 확인 필요', { exact: true }).waitFor()

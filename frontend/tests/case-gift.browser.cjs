@@ -60,7 +60,9 @@ const assert = require('node:assert/strict')
     await page.getByRole('button', { name: '상담 만들기' }).click()
     for (const [kind, answer] of [['number', '10000'], ['select', '직계존비속'],
       ['select', 'false'], ['number', '0']]) {
-      const field = page.locator('#case-next-answer')
+      // The next question replaces the field; wait until it is the expected kind before typing.
+      const field = page.locator((kind === 'select' ? 'select' : 'input') + '#case-next-answer')
+      await field.waitFor()
       if (kind === 'select') await field.selectOption(answer)
       else await field.fill(answer)
       await page.getByRole('button', { name: '저장하고 다음 질문' }).click()

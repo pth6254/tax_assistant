@@ -4,6 +4,11 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 ;(async () => {
+  if (!process.env.UI_FORMULA_JSON) {
+    // Needs a saved, actually generated answer (a paid run); without one there is nothing to show.
+    console.log('SKIP: set UI_FORMULA_JSON to a saved formula answer to run this check')
+    return
+  }
   const result = JSON.parse(fs.readFileSync(process.env.UI_FORMULA_JSON, 'utf8'))
   const formula = result.verification.formula_calculation
   assert.ok(formula?.execution, 'Fixture must contain a verified formula calculation')

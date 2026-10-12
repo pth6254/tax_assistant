@@ -1257,7 +1257,7 @@ planning/retrieving/generating/checking 진행 상태와 공개 검사 후 본�
 
 프런트엔드의 `ToolCallCard`는 법령 원문 뷰어·문서 발췌문·계산기 조건 변경을 연결합니다. 도구 본문은 HTML로 해석하지 않습니다.
 대화 전환 시 요청을 취소하고, 완료 신호 없이 연결이 끊기면 실행 중 카드는 '연결 중단'으로 표시합니다.
-프런트 검증: `cd frontend` 후 `npm test`, `npm run build`. 선택적 Edge headless UI 검증은 서비스 또는 preview 서버를 실행한 뒤 `node tests/profile.browser.cjs`, `node tests/tools.browser.cjs` 및 `node tests/workspace.browser.cjs`로 수행합니다(Playwright 필요, 별도 설치 위치는 `PLAYWRIGHT_MODULE`, 테스트 URL은 `UI_TEST_URL`). 프로필 테스트는 데스크톱·모바일 카드 잘림과 합성 프로필 저장·비밀번호 변경을 검증합니다. 합성 API만 사용하며 실제 사용자 데이터를 변경하지 않습니다.
+프런트 검증: `cd frontend` 후 `npm test`, `npm run build`. Edge headless UI 검증은 서비스(기본 `http://localhost:3001`, 다른 주소는 `UI_TEST_URL`)를 실행한 뒤 `npm run test:browser`로 `tests/*.browser.cjs` 8개를 한 번에 수행합니다(Playwright 필요, 별도 설치 위치는 `PLAYWRIGHT_MODULE`). `formula.browser.cjs`는 저장된 실제 답변 JSON(`UI_FORMULA_JSON`)이 있을 때만 실행하고 없으면 건너뜁니다. 프로필 테스트는 데스크톱·모바일 카드 잘림과 합성 프로필 저장·비밀번호 변경을 검증합니다. 합성 API만 사용하며 실제 사용자 데이터를 변경하지 않습니다.
 
 프런트엔드는 문서형 채팅·접이식 내비게이션·모바일 원문 패널을 제공합니다. 생성 중지, 대화 조회 재시도, 조·항·호·목 원문 강조, 계산 조건/결과 분리, 사용자 문서 목록·업로드·삭제를 지원합니다. 문서의 ‘검색 준비 완료’는 활성 임베딩 컬럼에 모든 청크 벡터가 저장되어 있다는 뜻이며 검색 정확도 인증은 아닙니다. 계산 기준일을 서버가 제공하지 않는 경우 ‘정보 없음’으로 표시하며 임의의 적용 연도를 제시하지 않습니다.
 
