@@ -44,3 +44,15 @@ async def test_zero_disables_pacing(monkeypatch):
         raise AssertionError('must not wait')
     monkeypatch.setattr(pacing, 'sleep', fail)
     await pacing.wait_for_slot(('endpoint', 'model', 'digest'), 0)
+
+
+def test_only_openrouter_free_variants_are_paced():
+    # OpenRouter caps ":free" variants at 20 requests a minute; paid models have no platform cap,
+    # so pacing them only made parallel issue calls wait (3.3 s apart at 18/min).
+    from app.services.inference.llm.openai_compatible import OpenAICompatibleLLMProvider
+    from config import OPENROUTER_REQUESTS_PER_MINUTE
+
+    def provider(model):
+        return OpenAICompatibleLLMProvider("https://openrouter.ai/api/v1", "key", model, 10, False, "openrouter")
+    assert provider("meta-llama/llama-3.3-70b-instruct:free").requests_per_minute == OPENROUTER_REQUESTS_PER_MINUTE > 0
+    assert provider("openai/gpt-6-luna").requests_per_minute == 0

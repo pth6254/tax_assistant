@@ -28,9 +28,12 @@ OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 LLM_TIMEOUT_SEC: float = float(os.getenv("LLM_TIMEOUT_SEC", "180"))
 # Paid/remote providers always have an output budget (including reasoning tokens).
 LLM_REMOTE_MAX_TOKENS: int = int(os.getenv("LLM_REMOTE_MAX_TOKENS", "8192"))
+# OpenRouter caps only the free ":free" model variants (20 requests per minute); paid models have no
+# platform request cap. Pacing every paid call to 18/min made parallel issue calls wait 3.3 s each.
 OPENROUTER_REQUESTS_PER_MINUTE: int = int(os.getenv("OPENROUTER_REQUESTS_PER_MINUTE", "18"))
-if OPENROUTER_REQUESTS_PER_MINUTE < 0:
-    raise ValueError("OPENROUTER_REQUESTS_PER_MINUTE must be nonnegative")
+OPENROUTER_PAID_REQUESTS_PER_MINUTE: int = int(os.getenv("OPENROUTER_PAID_REQUESTS_PER_MINUTE", "0"))
+if OPENROUTER_REQUESTS_PER_MINUTE < 0 or OPENROUTER_PAID_REQUESTS_PER_MINUTE < 0:
+    raise ValueError("OPENROUTER_REQUESTS_PER_MINUTE values must be nonnegative")
 if LLM_REMOTE_MAX_TOKENS <= 0:
     raise ValueError("LLM_REMOTE_MAX_TOKENS must be positive")
 LLM_DEVICE: str = os.getenv("LLM_DEVICE", "auto").lower()

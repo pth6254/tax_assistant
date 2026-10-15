@@ -1317,10 +1317,11 @@ planning/retrieving/generating/checking 진행 상태와 공개 검사 후 본�
 원문 구간 ID를 서버가 정확한 발췌로 연결합니다. 하위 호 목록이 누락된 조문은 동일 법령번호·시행일의
 보관 XML 해시를 확인해 읽기 전용으로 복구합니다.
 
-OpenRouter 요청은 `OPENROUTER_REQUESTS_PER_MINUTE=18` 기본값으로 간격을 둡니다. 확인된 계정의
-분당 20회 제한 안에서 계획·생성·Judge·재시도 호출이 같은 계정/모델 한도를 공유합니다.
-이 제한은 현재 단일 API 프로세스 안에서 적용되므로, 여러 worker나 외부 평가 프로세스를 동시에
-실행할 때에는 계정 전체 호출량을 별도로 관리해야 합니다.
+OpenRouter의 분당 요청 제한(20회)은 무료 `:free` 모델에만 있고 유료 모델에는 플랫폼 제한이 없습니다(2026-10-15 공식 문서 확인).
+그래서 `:free` 모델만 `OPENROUTER_REQUESTS_PER_MINUTE=18` 간격을 두고, 유료 모델(GPT-6 Luna)은 기본적으로 간격을 두지 않습니다
+(`OPENROUTER_PAID_REQUESTS_PER_MINUTE=0`, 필요하면 양수로 설정). 예전에는 유료 호출도 분당 18회로 묶여 병렬 쟁점 호출이 3.3초씩
+기다렸습니다. 공급자가 429를 주면 `Retry-After`가 4초 이하일 때만 다시 시도합니다. 모델 호출마다 `LLM call … seconds=… paced=…`
+로그로 걸린 시간과 그중 간격 대기 시간을 남깁니다. 이 간격은 단일 API 프로세스 안에서만 적용됩니다.
 
 `ANSWER_JUDGE_MODE=shadow`가 기본입니다. 공개 검사는 `claim_verification.CHECKS`에서 확정 검사(block)와
 추정 검사(signal)로 나뉩니다. 단어로 의미를 추정하는 검사는 `CLAIM_SIGNAL_GATE=judge`(기본)에서 Judge가 확인할

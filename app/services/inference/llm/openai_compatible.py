@@ -3,6 +3,7 @@ import json
 import logging
 import math
 import hashlib
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -12,7 +13,7 @@ import httpx
 
 from app.services.inference.llm.errors import LLMGenerationIncomplete, LLMRequestError
 from app.services.inference.llm.policy import EXTRACTION_PURPOSES, llm_purpose
-from config import LLM_REMOTE_MAX_TOKENS, OPENROUTER_REQUESTS_PER_MINUTE
+from config import LLM_REMOTE_MAX_TOKENS, OPENROUTER_PAID_REQUESTS_PER_MINUTE, OPENROUTER_REQUESTS_PER_MINUTE
 from app.services.inference.llm.pacing import wait_for_slot
 
 logger = logging.getLogger(__name__)
@@ -82,13 +83,16 @@ class OpenAICompatibleLLMProvider:
             raise LLMRequestError("llm_provider_error", "AI 제공자 요청에 실패했습니다. 잠시 후 다시 시도해 주세요.")
 
     @asynccontextmanager
-    async def _response(self, payload: dict):
+    async def _response(self, payload: dict, timing: dict | None = None):
         """Retry only rejected HTTP 429, never a started stream or timeout."""
         try:
             async with asyncio.timeout(self.timeout):
                 for attempt in range(3):
                     if self.provider == 'openrouter':
-                        await wait_for_slot(self._pacing_key, OPENROUTER_REQUESTS_PER_MINUTE)
+                        started = time.monotonic()
+                        await wait_for_slot(self._pacing_key, self.requests_per_minute)
+                        if timing is not None:
+                            timing['paced'] = timing.get('paced', 0.0) + time.monotonic() - started
                     async with self._client.stream("POST", "chat/completions", json=payload) as response:
                         delay = self._retry_delay(response, attempt) if response.status_code == 429 else None
                         if response.status_code != 429 or attempt == 2 or delay is None:
@@ -102,8 +106,12 @@ class OpenAICompatibleLLMProvider:
         except httpx.TransportError as exc:
             raise LLMRequestError("llm_connection_error", "AI 제공자와 연결이 끊겼습니다. 잠시 후 다시 시도해 주세요.") from exc
 
-    def _record_usage(self, data: dict) -> None:
+    def _record_usage(self, data: dict, seconds: float | None = None, paced: float = 0.0) -> None:
         usage = data.get("usage")
+        if seconds is not None:
+            # How long each step's model call took, and how much of it was local pacing.
+            logger.info("LLM call provider=%s model=%s purpose=%s seconds=%.1f paced=%.1f",
+                        self.provider, self.model, llm_purpose.get(), seconds, paced)
         if not isinstance(usage, dict):
             return
         # Numeric metadata only: no prompts, answers, API keys or provider bodies.
@@ -119,11 +127,17 @@ class OpenAICompatibleLLMProvider:
         """Provider-reported totals only; a missing cost is not zero cost."""
         return dict(self._usage_totals)
 
+    @property
+    def requests_per_minute(self) -> int:
+        """Pacing applies to OpenRouter's free variants, which are capped; paid models are not."""
+        return OPENROUTER_REQUESTS_PER_MINUTE if self.model.endswith(":free") else OPENROUTER_PAID_REQUESTS_PER_MINUTE
+
     async def _json_response(self, payload: dict) -> dict:
-        async with self._response(payload) as response:
+        started, timing = time.monotonic(), {}
+        async with self._response(payload, timing) as response:
             await response.aread()
             data = response.json()
-            self._record_usage(data)
+            self._record_usage(data, time.monotonic() - started, timing.get('paced', 0.0))
             return data
 
     @staticmethod
