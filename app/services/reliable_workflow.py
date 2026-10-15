@@ -41,68 +41,101 @@ def gap_references(issue, context, judge):
     return named_articles(texts)[:MAX_GAP_REFERENCES]
 
 
+MAX_TOOL_ISSUES = 4
+
+
+async def run_issue_tool(issue, query, user_id, history, search, progress):
+    """One planned tool issue: (records it produced, its coverage entry, demote to analysis?)."""
+    def tool_event(event):
+        progress(event | {"id": issue.id, "issue_id": issue.id, "scope": "issue"})
+    # A quote that names its tax and amount stands alone; adding the whole question would let
+    # another issue's facts ("…양도세도") steer this one to the wrong calculator.
+    issue_history = history if self_contained(issue.request_quote) else [*history, {"role": "user", "content": query}]
+    try:
+        async with asyncio.timeout(45):
+            tool = await run_tools_for_query(issue.request_quote, user_id=user_id,
+                                            history=issue_history, on_event=tool_event)
+    except TimeoutError:
+        return [], {"status": "failed", "error": "tool_timeout", "evidence_ids": []}, False
+    demote = False
+    if tool and tool.tool == 'formula_calculation':
+        from app.services.calculator.formula_workflow import calculate_reference
+        from app.services.tools.executor import ToolRun
+        formula_context, calculation = await calculate_reference(
+            issue.request_quote, [*history, {"role": "user", "content": query}], user_id, search, tool_event)
+        # Without a released numeric plan the request is still answered from verified rules,
+        # as in standalone chat.
+        demote = calculation is None
+        tool = ToolRun('formula_calculation', 'ok' if calculation else 'not_found',
+                       formula_context, calculation, error_code=None if calculation else 'formula_not_verified')
+    found = list(tool.context.records) if tool and isinstance(tool.context, EvidenceContext) else []
+    entry = {"status": "candidates" if tool and tool.status == "ok" else "failed",
+             "error": tool.error_code if tool else "no_tool_needed",
+             "message": str(tool.context) if tool and tool.status != "ok" else "",
+             "evidence_ids": [r.id for r in found]}
+    if tool and tool.calculation:
+        entry["calculation"] = {"tool": tool.calculation.tool,
+                                "params": tool.calculation.params,
+                                "context": tool.calculation.context,
+                                # What the answer shows: a conclusion and a table, as in a single question.
+                                "answer": format_calculation_answer(tool.calculation),
+                                "tax_type": tool.calculation.result.tax_type if tool.calculation.result else None}
+        if tool.calculation.verification:
+            entry["calculation"]["verification"] = tool.calculation.verification
+    return found, entry, demote
+
+
 async def prepare_context(query, laws, user_id, history, search, on_event=None):
     def progress(event):
         if on_event:
             on_event(event)
     progress({"type": "verification", "status": "planning"})
     plan = await plan_question(query, laws, history)
-    context = await retrieve_issues(plan, query, user_id, search, on_progress=progress)
-    context = await attach_event_versions(context)
+    # Tools run only after validating against the original user spans. At most one tool per
+    # planned issue, and the plan has a fixed maximum size.
+    tool_issues = [issue for issue in plan.issues if issue.kind != "analysis"]
+    allowed, over_budget = tool_issues[:MAX_TOOL_ISSUES], tool_issues[MAX_TOOL_ISSUES:]
+    # A tool that depends on no other issue does not wait for the evidence search; calculations
+    # and the search run at the same time instead of one after the other.
+    independent = [issue for issue in allowed if not issue.depends_on]
+    dependent = [issue for issue in allowed if issue.depends_on]
+
+    async def evidence():
+        found = await retrieve_issues(plan, query, user_id, search, on_progress=progress)
+        return await attach_event_versions(found)
+
+    retrieval = asyncio.create_task(evidence())
+    try:
+        early = await asyncio.gather(*(run_issue_tool(issue, query, user_id, history, search, progress)
+                                       for issue in independent))
+        context = await retrieval
+    finally:
+        if not retrieval.done():
+            retrieval.cancel()
+            await asyncio.gather(retrieval, return_exceptions=True)
     records = list(context.records)
     coverage = dict(context.coverage)
-    tool_count = 0
-    # Tools run only after validating against the original user spans. At most
-    # one tool per planned issue, and the plan has a fixed maximum size.
-    for issue in plan.issues:
-        if issue.kind == "analysis":
-            continue
-        tool_count += 1
-        if tool_count > 4:
-            coverage[issue.id] = {"status": "failed", "error": "tool_budget", "evidence_ids": []}
-            continue
+    demoted = set()
+    for issue, (found, entry, demote) in zip(independent, early):
+        records.extend(found)
+        coverage[issue.id] = entry
+        if demote:
+            demoted.add(issue.id)
+    for issue in dependent:
         if any(coverage.get(dep, {}).get("status") in {"missing", "failed"} for dep in issue.depends_on):
             coverage[issue.id] = {"status": "failed", "error": "dependency_unavailable", "evidence_ids": []}
             continue
-        def tool_event(event):
-            progress(event | {"id": issue.id, "issue_id": issue.id, "scope": "issue"})
-        # A quote that names its tax and amount stands alone; adding the whole question would let
-        # another issue's facts ("…양도세도") steer this one to the wrong calculator.
-        issue_history = history if self_contained(issue.request_quote) else [*history, {"role": "user", "content": query}]
-        try:
-            async with asyncio.timeout(45):
-                tool = await run_tools_for_query(issue.request_quote, user_id=user_id,
-                                                history=issue_history, on_event=tool_event)
-        except TimeoutError:
-            coverage[issue.id] = {"status": "failed", "error": "tool_timeout", "evidence_ids": []}
-            continue
-        if tool and tool.tool == 'formula_calculation':
-            from app.services.calculator.formula_workflow import calculate_reference
-            from app.services.tools.executor import ToolRun
-            formula_context, calculation = await calculate_reference(
-                issue.request_quote, [*history, {"role": "user", "content": query}], user_id, search, tool_event)
-            if calculation is None:
-                # Preserve the original request and explain verified rules when
-                # the numeric plan cannot be released, as in standalone chat.
-                plan.issues = [item.model_copy(update={"kind": "analysis"}) if item.id == issue.id else item
-                               for item in plan.issues]
-            tool = ToolRun('formula_calculation', 'ok' if calculation else 'not_found',
-                           formula_context, calculation, error_code=None if calculation else 'formula_not_verified')
-        found = list(tool.context.records) if tool and isinstance(tool.context, EvidenceContext) else []
+        found, entry, demote = await run_issue_tool(issue, query, user_id, history, search, progress)
         records.extend(found)
-        coverage[issue.id] = {"status": "candidates" if tool and tool.status == "ok" else "failed",
-                              "error": tool.error_code if tool else "no_tool_needed",
-                              "message": str(tool.context) if tool and tool.status != "ok" else "",
-                              "evidence_ids": [r.id for r in found]}
-        if tool and tool.calculation:
-            coverage[issue.id]["calculation"] = {"tool": tool.calculation.tool,
-                                                "params": tool.calculation.params,
-                                                "context": tool.calculation.context,
-                                                # What the answer shows: a conclusion and a table, as in a single question.
-                                                "answer": format_calculation_answer(tool.calculation),
-                                                "tax_type": tool.calculation.result.tax_type if tool.calculation.result else None}
-            if tool.calculation.verification:
-                coverage[issue.id]["calculation"]["verification"] = tool.calculation.verification
+        coverage[issue.id] = entry
+        if demote:
+            demoted.add(issue.id)
+    for issue in over_budget:
+        coverage[issue.id] = {"status": "failed", "error": "tool_budget", "evidence_ids": []}
+    if demoted:
+        # Applied after the search finished, so it never changes the plan the search is reading.
+        plan.issues = [item.model_copy(update={"kind": "analysis"}) if item.id in demoted else item
+                       for item in plan.issues]
     return context_from_records(records, plan=plan, coverage=coverage)
 
 
@@ -140,7 +173,7 @@ async def answer_context(query, context, user_id, search, on_event=None):
                                   assumptions=context.plan.assumptions,
                                   missing_inputs=context.plan.missing_inputs)
         extra = await retrieve_issues(retry_plan, query, user_id, search, on_progress=on_event,
-                                      scope_issues=context.plan.issues)
+                                      scope_issues=context.plan.issues, assess=False)
         merged_coverage = context.coverage | extra.coverage
         for issue_id, state in context.coverage.items():
             if state.get('formula_diagnostics'):

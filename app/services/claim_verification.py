@@ -1115,7 +1115,8 @@ async def generate_verified_answer(query, context, *, repair=None, on_progress=N
               "evidence_checks": evidence_checks,
               "checks": {"citation": "not_assessed", "calculation": "not_applicable", "legal_application": "not_assessed"}}
     results = {}
-    semaphore = asyncio.Semaphore(3)
+    # Four issues at once: the usual plan size. Paid OpenRouter calls are no longer paced (2026-10-15).
+    semaphore = asyncio.Semaphore(4)
     async def run(issue, feedback=None):
         async with semaphore:
             result = await generate_issue(query, issue, context, on_progress, feedback)

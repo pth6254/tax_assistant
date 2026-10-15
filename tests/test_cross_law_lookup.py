@@ -63,8 +63,9 @@ async def test_repair_search_names_the_missing_article(monkeypatch):
         seen['repair'] = repair
         return 'answer', {}
 
-    async def retrieve(plan, query, user_id, search, on_progress=None, scope_issues=None):
+    async def retrieve(plan, query, user_id, search, on_progress=None, scope_issues=None, assess=True):
         seen["scope"] = scope_issues
+        seen['assess'] = assess
         seen['plan'] = plan
         return context_from_records([], plan=plan, coverage=ctx.coverage)
 
@@ -76,6 +77,7 @@ async def test_repair_search_names_the_missing_article(monkeypatch):
     question = seen['plan'].issues[0].question
     assert '소득세법 제81조의5' in question and question.startswith('가산세 중복 적용')
     assert seen['plan'].issues[0].law == '국세기본법'  # the issue itself keeps its law
+    assert seen['assess'] is False   # the repaired claims are judged next; no second sufficiency check
 
 
 def test_gap_articles_are_read_even_when_a_word_precedes_the_statute_name():

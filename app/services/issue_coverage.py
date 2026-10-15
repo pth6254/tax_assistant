@@ -92,7 +92,8 @@ async def assess_issues(issues, records_by_issue, scope_issues=None):
                             for r in _budget_records(records)]})
     if not payload:
         return decisions
-    semaphore = asyncio.Semaphore(3)
+    # Four issues at once: the usual plan size. Paid OpenRouter calls are no longer paced (2026-10-15).
+    semaphore = asyncio.Semaphore(4)
 
     async def assess_one(item):
         issue_id = item["issue_id"]

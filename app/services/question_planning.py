@@ -196,9 +196,15 @@ async def plan_question(query, laws, history=None):
         return fallback_plan(query, laws)
 
 
-async def retrieve_issues(plan, query, user_id, search, *, on_progress=None, scope_issues=None):
-    """Retrieve and assess each analysis issue without losing its tax scope."""
-    semaphore = asyncio.Semaphore(2)
+async def retrieve_issues(plan, query, user_id, search, *, on_progress=None, scope_issues=None, assess=True):
+    """Retrieve and assess each analysis issue without losing its tax scope.
+
+    `assess=False` returns the search results without the model's sufficiency check and its retry.
+    The repair round uses it: its claims are judged right after, and the check only relabels the
+    issue while costing one or two more model calls in sequence.
+    """
+    # Four issues at once: the usual plan size. Paid OpenRouter calls are no longer paced (2026-10-15).
+    semaphore = asyncio.Semaphore(4)
     framework_issue = any(i.law == PROCEDURE_LAW and i.kind == "analysis" for i in (scope_issues or plan.issues))
     async def retrieve(issue):
         if on_progress:
@@ -264,6 +270,9 @@ async def retrieve_issues(plan, query, user_id, search, *, on_progress=None, sco
         await asyncio.gather(*tasks, return_exceptions=True)
     by_issue = {key: records for key, records, _ in rows}
     coverage = {key: state for key, _, state in rows}
+    if not assess:
+        return context_from_records([r for records in by_issue.values() for r in records],
+                                    plan=plan, coverage=coverage)
     issues = [issue for issue in plan.issues if issue.kind == "analysis"]
     owners = [issue for issue in (scope_issues or plan.issues) if issue.kind == "analysis"]
     if on_progress:
