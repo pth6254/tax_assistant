@@ -43,6 +43,9 @@ jobs:
           python scripts/evaluate.py validate --dataset evaluation/datasets/contracts.json
           python scripts/evaluate.py validate --dataset evaluation/datasets/retrieval.json
           python scripts/evaluate.py validate --dataset evaluation/datasets/components.json
+        # Validation loads app modules, and config.py refuses to start without a JWT secret.
+        env:
+          JWT_SECRET: ci-test-secret-not-a-real-key
 
       - name: Run deterministic evaluation contracts (not tax accuracy)
         run: python scripts/evaluate.py run --split all --output evaluation/runs/ci-contracts

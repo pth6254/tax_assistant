@@ -30,4 +30,8 @@ def test_a_value_from_the_real_env_is_refused_even_if_it_reads_like_an_example(t
 
 
 def test_the_repository_holds_no_secret_now():
+    import shutil
+    import pytest
+    if not shutil.which("git") or not (Path(__file__).parent.parent / ".git").exists():
+        pytest.skip("needs a git checkout (CI and development clones have one)")
     assert check.main([]) == 0
