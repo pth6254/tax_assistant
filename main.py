@@ -41,6 +41,16 @@ async def _warm_search_index():
                                              type(error).__name__)
 
 
+async def _expire_guest_accounts(interval_sec: float = 3600):
+    from app.services.auth_service import delete_expired_guests
+    while True:
+        try:
+            await delete_expired_guests()
+        except Exception as error:   # the next hour tries again
+            logging.getLogger(__name__).warning('trial account cleanup unavailable (%s)', type(error).__name__)
+        await asyncio.sleep(interval_sec)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup
@@ -54,8 +64,12 @@ async def lifespan(app: FastAPI):
     if config.SEARCH_LEXICAL_BACKEND == 'bm25':
         # Build the read-only lexical index in the background; health stays available.
         warmup = asyncio.create_task(_warm_search_index())
+    cleanup = asyncio.create_task(_expire_guest_accounts()) if config.GUEST_ENABLED else None
     yield
     # shutdown
+    if cleanup:
+        cleanup.cancel()
+        await asyncio.gather(cleanup, return_exceptions=True)
     await close_bm25_index()
     if warmup:
         await asyncio.gather(warmup, return_exceptions=True)

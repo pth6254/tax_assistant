@@ -159,3 +159,17 @@ async def test_a_trial_account_cannot_upload_or_change_the_account():
         await verify_member(request("guest-abc@guest.invalid"))
     assert error.value.status_code == 403
     assert (await verify_member(request("a@example.com")))["id"] == "u1"
+
+
+@pytest.mark.asyncio
+async def test_trial_accounts_expire_after_one_day_by_default():
+    import config
+    seen = []
+
+    class Conn:
+        async def execute(self, sql, *args):
+            seen.append((sql, args))
+    await auth_service.delete_expired_guests(Conn())
+    sql, args = seen[0]
+    assert "@guest.invalid" in sql and "make_interval(days => $1)" in sql
+    assert args == (config.GUEST_RETENTION_DAYS,) and config.GUEST_RETENTION_DAYS == 1

@@ -60,6 +60,22 @@ login_throttle = LoginThrottle()
 guest_throttle = LoginThrottle(per_account=1, per_client=config.GUEST_ACCOUNTS_PER_CLIENT_PER_DAY, window_sec=86400)
 
 
+async def delete_expired_guests(conn=None) -> None:
+    """Trial accounts older than the retention go with everything they own (ON DELETE CASCADE).
+
+    Runs on every new trial account and hourly from the app (main.py), so expired accounts do not
+    wait for the next visitor.
+    """
+    sql = (f"DELETE FROM users WHERE email LIKE '%{GUEST_DOMAIN}' "
+           "AND created_at < now() - make_interval(days => $1)")
+    if conn is not None:
+        await conn.execute(sql, config.GUEST_RETENTION_DAYS)
+        return
+    pool = await get_pool()
+    async with pool.acquire() as fresh:
+        await fresh.execute(sql, config.GUEST_RETENTION_DAYS)
+
+
 async def create_guest(client: str | None) -> dict:
     """A fresh trial account per visitor: no password anyone knows, removed after the retention days."""
     if not config.GUEST_ENABLED:
@@ -71,10 +87,7 @@ async def create_guest(client: str | None) -> dict:
     email = f"guest-{secrets.token_hex(6)}{GUEST_DOMAIN}"
     pool = await get_pool()
     async with pool.acquire() as conn:
-        # Old trial accounts go with everything they own (ON DELETE CASCADE).
-        await conn.execute(
-            f"DELETE FROM users WHERE email LIKE '%{GUEST_DOMAIN}' AND created_at < now() - make_interval(days => $1)",
-            config.GUEST_RETENTION_DAYS)
+        await delete_expired_guests(conn)
         user_id = await conn.fetchval(
             "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id",
             email, hash_password(secrets.token_urlsafe(32)))

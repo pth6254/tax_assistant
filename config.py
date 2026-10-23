@@ -259,7 +259,7 @@ SIGNUP_INVITE_CODE: str = os.getenv("SIGNUP_INVITE_CODE", "")
 GUEST_ENABLED: bool = os.getenv("GUEST_ENABLED", "true").lower() == "true"
 GUEST_DAILY_LIMIT: int = int(os.getenv("GUEST_DAILY_LIMIT", "3"))
 GUEST_ACCOUNTS_PER_CLIENT_PER_DAY: int = int(os.getenv("GUEST_ACCOUNTS_PER_CLIENT_PER_DAY", "3"))
-GUEST_RETENTION_DAYS: int = int(os.getenv("GUEST_RETENTION_DAYS", "7"))
+GUEST_RETENTION_DAYS: int = int(os.getenv("GUEST_RETENTION_DAYS", "1"))
 
 # ── JWT ────────────────────────────────────────────────────────
 JWT_SECRET: str     = os.environ.get("JWT_SECRET", "")
