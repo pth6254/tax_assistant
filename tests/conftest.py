@@ -12,6 +12,10 @@ import dotenv
 # paid model keys) is never loaded, so a test passes here only if it passes in CI.
 dotenv.load_dotenv = lambda *args, **kwargs: False
 os.environ.setdefault("JWT_SECRET", "test-secret-key-for-pytest-only")
+# API tests run against a mocked connection; daily limits have their own tests (test_usage_limits.py).
+os.environ["CHAT_DAILY_LIMIT_PER_USER"] = "0"
+os.environ["CHAT_DAILY_LIMIT_TOTAL"] = "0"
+os.environ["SIGNUP_INVITE_CODE"] = ""
 # Nothing listens on port 1: an unmocked database access fails at once instead of
 # silently reading the development database.
 os.environ["DATABASE_URL"] = "postgresql://postgres:postgres@127.0.0.1:1/unit_tests_have_no_database"

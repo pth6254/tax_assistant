@@ -13,6 +13,7 @@ from app.database import get_pool
 from app.schemas.chat import ChatRequest
 from app.services import chat_service
 from app.services.conversation_service import require_conversation_owner
+from app.services.usage_limits import reserve_question
 from app.services.inference.llm.errors import LLMGenerationIncomplete, LLMRequestError
 from app.core.security import verify_token
 
@@ -34,6 +35,7 @@ async def chat(
         conversation_id = await require_conversation_owner(
             conn, body.conversation_id, user["id"],
         )
+        await reserve_question(conn, user["id"], "question")
 
     tool_events = []
     verification = []
@@ -71,6 +73,7 @@ async def chat_stream(
         conversation_id = await require_conversation_owner(
             conn, body.conversation_id, user["id"],
         )
+        await reserve_question(conn, user["id"], "question")
 
     async def generate():
         try:

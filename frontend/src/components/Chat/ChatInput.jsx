@@ -20,6 +20,6 @@ export default function ChatInput({ onSend, disabled, generating, onStop, librar
       {generating ? <button className="send-button" aria-label="답변 생성 중지" title="답변 생성 중지" onClick={onStop}><Icon name="stop" /></button>
         : <button className="send-button" aria-label="질문 전송" title="질문 전송" disabled={disabled || !draft.trim()} onClick={submit}><Icon name="send" /></button>}
     </div>
-    <p className="composer-help">Enter 전송 · Shift+Enter 줄바꿈 · 답변과 계산 결과는 적용 조건을 확인하세요.</p>
+    <p className="composer-help">Enter 전송 · Shift+Enter 줄바꿈 · 답변은 참고용이며 질문은 외부 AI로 전송됩니다. 개인정보는 입력하지 마세요.</p>
   </div>
 }

@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from app.database import get_pool
 from app.core.security import verify_token
 from app.services.conversation_service import require_conversation_owner
+from app.services.usage_limits import reserve_question
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 logger = logging.getLogger(__name__)
@@ -57,6 +58,7 @@ async def regenerate_answer(conv_id: str, body: RegenerateRequest, user: dict = 
     async with pool.acquire() as conn:
         cid, regeneration = await prepare_regeneration(
             conn, conv_id, user['id'], body.expected_message_id, body.expected_version)
+        await reserve_question(conn, user['id'], 'regeneration')
 
     async def generate():
         try:

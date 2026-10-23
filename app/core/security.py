@@ -62,6 +62,17 @@ def clear_auth_cookie(response: Response) -> None:
     response.delete_cookie(key="access_token")
 
 
+def client_address(request: Request) -> str | None:
+    """The visitor's address. Behind Cloudflare Tunnel every request arrives from the tunnel, so the
+    address Cloudflare reports is used; the frontend port is bound to localhost, so only the tunnel
+    (or this machine) can set that header."""
+    for header in ("cf-connecting-ip", "x-real-ip"):
+        value = request.headers.get(header, "").strip()
+        if value:
+            return value
+    return request.client.host if request.client else None
+
+
 async def verify_token(request: Request) -> dict:
     token = request.cookies.get("access_token")
     if not token:

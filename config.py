@@ -247,6 +247,15 @@ for name, value in {
 # ── 쿠키 보안 ───────────────────────────────────────────────────
 COOKIE_SECURE: bool = os.getenv("COOKIE_SECURE", "false").lower() == "true"
 
+# ── 공유 링크 보호 ──────────────────────────────────────────────
+# Each answer costs 10-20 paid model calls; 0 means no limit (usage_limits.py).
+CHAT_DAILY_LIMIT_PER_USER: int = int(os.getenv("CHAT_DAILY_LIMIT_PER_USER", "20"))
+CHAT_DAILY_LIMIT_TOTAL: int = int(os.getenv("CHAT_DAILY_LIMIT_TOTAL", "0"))
+if CHAT_DAILY_LIMIT_PER_USER < 0 or CHAT_DAILY_LIMIT_TOTAL < 0:
+    raise ValueError("CHAT_DAILY_LIMIT values must be nonnegative")
+# When set, sign-up requires this code, so only the people given it can create accounts.
+SIGNUP_INVITE_CODE: str = os.getenv("SIGNUP_INVITE_CODE", "")
+
 # ── JWT ────────────────────────────────────────────────────────
 JWT_SECRET: str     = os.environ.get("JWT_SECRET", "")
 if not JWT_SECRET:

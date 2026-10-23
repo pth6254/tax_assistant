@@ -16,6 +16,7 @@ NewPassword = Annotated[str, Field(min_length=8, max_length=72), AfterValidator(
 class SignupRequest(BaseModel):
     email: EmailStr
     password: NewPassword
+    invite_code: str = Field(default="", max_length=200)
 
 
 class LoginRequest(BaseModel):

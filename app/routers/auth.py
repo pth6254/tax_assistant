@@ -7,19 +7,19 @@ from fastapi import APIRouter, Request, Response
 
 from app.schemas.auth import LoginRequest, SignupRequest
 from app.services import auth_service
-from app.core.security import clear_auth_cookie, set_auth_cookie
+from app.core.security import clear_auth_cookie, client_address, set_auth_cookie
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.post("/signup", status_code=201)
 async def signup(body: SignupRequest):
-    return await auth_service.signup(body.email, body.password)
+    return await auth_service.signup(body.email, body.password, body.invite_code)
 
 
 @router.post("/login")
 async def login(body: LoginRequest, request: Request, response: Response):
-    data = await auth_service.login(body.email, body.password, request.client.host if request.client else None)
+    data = await auth_service.login(body.email, body.password, client_address(request))
     set_auth_cookie(response, data["access_token"])
     return {"user": data["user"]}
 

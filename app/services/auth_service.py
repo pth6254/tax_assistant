@@ -2,6 +2,7 @@
 services/auth_service.py — 회원가입·로그인·회원관리 비즈니스 로직
 DB 접근과 비밀번호 해싱을 담당합니다.
 """
+import hmac
 import logging
 import time
 import uuid as _uuid
@@ -10,6 +11,7 @@ from collections import defaultdict, deque
 import asyncpg
 from fastapi import HTTPException
 
+import config
 from app.database import get_pool
 from app.core.security import burn_password_check, create_access_token, hash_password, verify_password
 
@@ -54,7 +56,10 @@ class LoginThrottle:
 login_throttle = LoginThrottle()
 
 
-async def signup(email: str, password: str) -> dict:
+async def signup(email: str, password: str, invite_code: str = "") -> dict:
+    if config.SIGNUP_INVITE_CODE and not hmac.compare_digest(
+            invite_code.strip().encode(), config.SIGNUP_INVITE_CODE.encode()):
+        raise HTTPException(status_code=403, detail="초대 코드가 올바르지 않습니다. 서비스를 공유한 분께 확인해 주세요.")
     hashed = hash_password(password)
     pool = await get_pool()
     async with pool.acquire() as conn:

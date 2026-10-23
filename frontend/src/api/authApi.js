@@ -13,12 +13,12 @@ export const login = async (email, password) => {
   return data
 }
 
-export const signup = async (email, password) => {
+export const signup = async (email, password, inviteCode = '') => {
   const res = await fetch('/api/auth/signup', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, invite_code: inviteCode }),
   })
   const data = await res.json()
   if (!res.ok) throw data

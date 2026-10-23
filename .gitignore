@@ -225,3 +225,6 @@ __marimo__/
 node_modules/
 .npm/
 dist/
+
+# Database dumps (dev/backup-db.sh)
+backups/

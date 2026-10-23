@@ -11,8 +11,8 @@ export const useAuth = () => {
     return data
   }
 
-  const signup = async (email, password) => {
-    return await signupApi(email, password)
+  const signup = async (email, password, inviteCode) => {
+    return await signupApi(email, password, inviteCode)
   }
 
   const logout = async () => {
