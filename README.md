@@ -888,6 +888,21 @@ npm run dev
 
 ---
 
+### 지인에게 공유하기(Cloudflare 빠른 터널)
+
+이 PC에서 돌아가는 서비스를 HTTPS 주소로 몇 사람에게 공유하는 방법입니다. PC가 켜져 있고 Docker 서비스와 Ollama가
+실행 중일 때만 접속됩니다.
+
+1. `.env`에 `SIGNUP_INVITE_CODE`(가입 초대 코드), `CHAT_DAILY_LIMIT_PER_USER`(이용자당 하루 질문 수, 기본 20),
+   `CHAT_DAILY_LIMIT_TOTAL`(서비스 전체 하루 질문 수, 0이면 제한 없음), `COOKIE_SECURE=true`, `CHAT_TRACING_ENABLED=false`를 둡니다.
+2. WSL에서 `./dev/docker-up-wsl.sh backend frontend`, Windows에서 Ollama를 실행합니다.
+3. PowerShell에서 `powershell -ExecutionPolicy Bypass -File dev/share-tunnel.ps1`을 실행하고 출력된
+   `https://….trycloudflare.com` 주소와 초대 코드를 공유합니다. 창을 닫으면 공유가 끝나고, 다시 열면 주소가 바뀝니다.
+
+DB(5433)·프런트엔드(3001)·pgAdmin(5050) 포트는 이 PC에서만 열리며 pgAdmin은 `--profile admin`으로만 뜹니다. 질문 한도는 답변이 시작되기
+전에 기록되므로 중단한 답변도 1회로 셉니다(`chat_usage`). 백업은 WSL에서 `./dev/backup-db.sh`(최근 7개 보관, `backups/`). 백업 파일은 같은
+PC에 있으므로 다른 저장소에도 복사해 두세요. 고정 주소가 필요하면 Cloudflare 계정·도메인으로 이름 있는 터널을 만들거나 서버로 옮깁니다.
+
 ## 9. 테스트
 
 > 테스트 도구는 `requirements-dev.txt`에 있습니다(서비스 이미지는 `requirements.txt`만 설치). 테스트는 개발자의 `.env`를 읽지 않고
