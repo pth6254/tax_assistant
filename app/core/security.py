@@ -66,11 +66,28 @@ def client_address(request: Request) -> str | None:
     """The visitor's address. Behind Cloudflare Tunnel every request arrives from the tunnel, so the
     address Cloudflare reports is used; the frontend port is bound to localhost, so only the tunnel
     (or this machine) can set that header."""
-    for header in ("cf-connecting-ip", "x-real-ip"):
-        value = request.headers.get(header, "").strip()
+    # Cloudflare and Vercel each name the visitor; behind Vercel the first X-Forwarded-For entry is
+    # the visitor and later ones are the proxies on the way (Tailscale Funnel, nginx).
+    for header in ("cf-connecting-ip", "x-vercel-forwarded-for", "x-forwarded-for", "x-real-ip"):
+        value = request.headers.get(header, "").split(",")[0].strip()
         if value:
             return value
     return request.client.host if request.client else None
+
+
+GUEST_DOMAIN = "@guest.invalid"   # a reserved name: no real address, and the login form rejects it
+
+
+def is_guest(user: dict) -> bool:
+    return str(user.get("email", "")).endswith(GUEST_DOMAIN)
+
+
+async def verify_member(request: Request) -> dict:
+    """A signed-in account that is not a trial account (uploads, password, account deletion)."""
+    user = await verify_token(request)
+    if is_guest(user):
+        raise HTTPException(status_code=403, detail="체험 계정에서는 사용할 수 없는 기능입니다. 초대 코드로 가입해 주세요.")
+    return user
 
 
 async def verify_token(request: Request) -> dict:

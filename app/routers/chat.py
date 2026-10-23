@@ -16,6 +16,7 @@ from app.services.conversation_service import require_conversation_owner
 from app.services.usage_limits import reserve_question
 from app.services.inference.llm.errors import LLMGenerationIncomplete, LLMRequestError
 from app.core.security import verify_token
+from app.core.sse import HEARTBEAT, with_heartbeat
 
 router = APIRouter(prefix="/api", tags=["chat"])
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ async def chat(
         conversation_id = await require_conversation_owner(
             conn, body.conversation_id, user["id"],
         )
-        await reserve_question(conn, user["id"], "question")
+        await reserve_question(conn, user, "question")
 
     tool_events = []
     verification = []
@@ -73,15 +74,18 @@ async def chat_stream(
         conversation_id = await require_conversation_owner(
             conn, body.conversation_id, user["id"],
         )
-        await reserve_question(conn, user["id"], "question")
+        await reserve_question(conn, user, "question")
 
     async def generate():
         try:
-            async for event in chat_service.stream_chat_response(
+            async for event in with_heartbeat(chat_service.stream_chat_response(
                 query=body.query,
                 conversation_id=str(conversation_id),
                 user_id=user["id"],
-            ):
+            )):
+                if event is HEARTBEAT:
+                    yield HEARTBEAT
+                    continue
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except LLMRequestError as exc:
             yield f"data: {json.dumps(exc.event(), ensure_ascii=False)}\n\n"

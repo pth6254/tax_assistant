@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from fastapi import HTTPException
 
 import config
+from app.core.security import is_guest
 
 KST = ZoneInfo("Asia/Seoul")
 
@@ -19,9 +20,12 @@ def day_start(now: datetime | None = None) -> datetime:
     return datetime.combine(now.date(), time.min, tzinfo=KST)
 
 
-async def reserve_question(conn, user_id, kind: str, *, now: datetime | None = None) -> None:
+async def reserve_question(conn, user: dict, kind: str, *, now: datetime | None = None) -> None:
     """Record one question for today, or refuse with 429 when a daily limit is reached."""
-    per_user, total = config.CHAT_DAILY_LIMIT_PER_USER, config.CHAT_DAILY_LIMIT_TOTAL
+    user_id = user["id"]
+    guest = is_guest(user)
+    per_user = config.GUEST_DAILY_LIMIT if guest else config.CHAT_DAILY_LIMIT_PER_USER
+    total = config.CHAT_DAILY_LIMIT_TOTAL
     since = day_start(now)
     async with conn.transaction():
         # One reservation at a time, so two tabs cannot both take the last question.
@@ -32,7 +36,8 @@ async def reserve_question(conn, user_id, kind: str, *, now: datetime | None = N
             if used >= per_user:
                 raise HTTPException(status_code=429, detail={
                     "code": "daily_question_limit",
-                    "message": f"오늘 질문 한도({per_user}회)를 모두 사용했습니다. 내일 다시 이용해 주세요."})
+                    "message": (f"체험 계정은 하루 {per_user}회까지 질문할 수 있습니다. 내일 다시 이용해 주세요." if guest
+                                else f"오늘 질문 한도({per_user}회)를 모두 사용했습니다. 내일 다시 이용해 주세요.")})
         if total:
             used_all = await conn.fetchval("SELECT count(*) FROM chat_usage WHERE created_at >= $1", since)
             if used_all >= total:

@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from app.database import get_pool
 from app.core.security import verify_token
+from app.core.sse import HEARTBEAT, with_heartbeat
 from app.services.conversation_service import require_conversation_owner
 from app.services.usage_limits import reserve_question
 
@@ -58,11 +59,15 @@ async def regenerate_answer(conv_id: str, body: RegenerateRequest, user: dict = 
     async with pool.acquire() as conn:
         cid, regeneration = await prepare_regeneration(
             conn, conv_id, user['id'], body.expected_message_id, body.expected_version)
-        await reserve_question(conn, user['id'], 'regeneration')
+        await reserve_question(conn, user, 'regeneration')
 
     async def generate():
         try:
-            async for event in stream_chat_response(regeneration.query, str(cid), user['id'], regeneration=regeneration):
+            async for event in with_heartbeat(
+                    stream_chat_response(regeneration.query, str(cid), user['id'], regeneration=regeneration)):
+                if event is HEARTBEAT:
+                    yield HEARTBEAT
+                    continue
                 yield f'data: {json.dumps(event, ensure_ascii=False)}\n\n'
         except LLMRequestError as exc:
             yield f'data: {json.dumps(exc.event(), ensure_ascii=False)}\n\n'

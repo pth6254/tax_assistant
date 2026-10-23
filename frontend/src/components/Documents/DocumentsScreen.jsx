@@ -5,6 +5,7 @@ import { errorMessage } from '../../api/http'
 import DocumentReview from './DocumentReview'
 import { originalPdfUrl } from '../../api/documentReviewApi'
 import './documentUpload.css'
+import { MAX_DOCUMENT_MB } from './uploadValidation'
 
 export default function DocumentsScreen({ library, onAsk }) {
   const input = useRef(null)
@@ -43,7 +44,7 @@ export default function DocumentsScreen({ library, onAsk }) {
         <div className="document-upload-copy">
           <h2>문서를 더해 상담의 맥락을 넓히세요.</h2>
           <p className="muted">파일을 이곳에 끌어놓거나 버튼에서 선택하세요.</p>
-          <p className="small muted">PDF(스캔 OCR 포함) · DOCX · HWPX · PPTX · HTML/HTM · 파일당 최대 50MB</p>
+          <p className="small muted">PDF(스캔 OCR 포함) · DOCX · HWPX · PPTX · HTML/HTM · 파일당 최대 {MAX_DOCUMENT_MB}MB</p>
           <p className="small muted">새 파일은 제목·문단·표 행·페이지 등 확인 가능한 구조로 검색합니다. 구형 HWP와 오피스 문서 안의 이미지 OCR은 지원하지 않습니다.</p>
         </div>
         <input hidden type="file" accept=".pdf,.docx,.hwpx,.pptx,.html,.htm" ref={input}

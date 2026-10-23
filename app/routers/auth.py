@@ -23,6 +23,14 @@ async def login(body: LoginRequest, request: Request, response: Response):
     set_auth_cookie(response, data["access_token"])
     return {"user": data["user"]}
 
+@router.post("/guest")
+async def guest(request: Request, response: Response):
+    """Trial account for visitors without an invite code (few questions a day, see config)."""
+    data = await auth_service.create_guest(client_address(request))
+    set_auth_cookie(response, data["access_token"])
+    return {"user": data["user"]}
+
+
 @router.post("/logout")
 async def logout(response: Response):
     clear_auth_cookie(response)

@@ -95,3 +95,5 @@ button { touch-action:manipulation } .small { font-size:13px } .muted { color:va
 .answer-version-controls .icon-button:disabled { opacity: .35; cursor: not-allowed; }
 
 .service-notice p { margin:0 0 6px; line-height:1.6 }
+.auth-guest { width:100%; margin:0 0 16px }
+.guest-banner { margin:0; padding:8px 16px; background:#fff8e6; border-bottom:1px solid #f0dca8; color:#6b4e00; font-size:13px }

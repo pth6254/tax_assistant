@@ -13,7 +13,10 @@ from fastapi import HTTPException
 
 import config
 from app.database import get_pool
-from app.core.security import burn_password_check, create_access_token, hash_password, verify_password
+import secrets
+
+from app.core.security import (GUEST_DOMAIN, burn_password_check, create_access_token, hash_password,
+                               verify_password)
 
 # Logs name accounts by id only; email addresses are personal data and stay out of them.
 logger = logging.getLogger(__name__)
@@ -54,6 +57,31 @@ class LoginThrottle:
 
 
 login_throttle = LoginThrottle()
+guest_throttle = LoginThrottle(per_account=1, per_client=config.GUEST_ACCOUNTS_PER_CLIENT_PER_DAY, window_sec=86400)
+
+
+async def create_guest(client: str | None) -> dict:
+    """A fresh trial account per visitor: no password anyone knows, removed after the retention days."""
+    if not config.GUEST_ENABLED:
+        raise HTTPException(status_code=403, detail="체험 계정을 사용할 수 없습니다.")
+    try:
+        guest_throttle.check(None, client)
+    except HTTPException:
+        raise HTTPException(status_code=429, detail="오늘 만들 수 있는 체험 계정 수를 넘었습니다. 내일 다시 이용해 주세요.") from None
+    email = f"guest-{secrets.token_hex(6)}{GUEST_DOMAIN}"
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        # Old trial accounts go with everything they own (ON DELETE CASCADE).
+        await conn.execute(
+            f"DELETE FROM users WHERE email LIKE '%{GUEST_DOMAIN}' AND created_at < now() - make_interval(days => $1)",
+            config.GUEST_RETENTION_DAYS)
+        user_id = await conn.fetchval(
+            "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id",
+            email, hash_password(secrets.token_urlsafe(32)))
+    guest_throttle.fail(None, client)   # counts one trial account for this visitor
+    logger.info("[AUTH] 체험 계정 생성 (id=%s)", user_id)
+    token = create_access_token(str(user_id), email)
+    return {"access_token": token, "user": {"id": str(user_id), "email": email, "guest": True}}
 
 
 async def signup(email: str, password: str, invite_code: str = "") -> dict:

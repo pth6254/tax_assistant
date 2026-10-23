@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { login as loginApi, logout as logoutApi, signup as signupApi } from '../api/authApi'
+import { login as loginApi, logout as logoutApi, signup as signupApi, startGuest } from '../api/authApi'
 
 export const useAuth = () => {
   // localStorage 대신 메모리(state)에 저장 — httpOnly 쿠키가 실제 인증 담당
@@ -15,10 +15,16 @@ export const useAuth = () => {
     return await signupApi(email, password, inviteCode)
   }
 
+  const guest = async () => {
+    const data = await startGuest()
+    setUser(data.user)
+    return data
+  }
+
   const logout = async () => {
     await logoutApi()
     setUser(null)
   }
 
-  return { user, login, signup, logout }
+  return { user, login, signup, guest, logout }
 }

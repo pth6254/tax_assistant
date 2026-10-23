@@ -15,7 +15,7 @@ import Icon from './components/ui/Icon'
 import Notice from './components/ui/Notice'
 export default function App() {
   const auth = useAuth()
-  return auth.user ? <Workspace key={auth.user.id || auth.user.email} user={auth.user} onLogout={auth.logout} /> : <AuthScreen onLogin={auth.login} onSignup={auth.signup} />
+  return auth.user ? <Workspace key={auth.user.id || auth.user.email} user={auth.user} onLogout={auth.logout} /> : <AuthScreen onLogin={auth.login} onSignup={auth.signup} onGuest={auth.guest} />
 }
 function Workspace({ user, onLogout }) {
   const [view, setView] = useState('chat'), [collapsed, setCollapsed] = useState(() => window.innerWidth <= 1100)
@@ -49,6 +49,7 @@ function Workspace({ user, onLogout }) {
       collapsed={collapsed} onToggle={() => setCollapsed(c => !c)} error={error} onRetry={refresh} />
     <div className="main-shell">
       <div className="workspace-toolbar"><button className="icon-button" aria-label={collapsed ? '사이드바 펼치기' : '사이드바 접기'} aria-expanded={!collapsed} onClick={() => setCollapsed(c => !c)}><Icon name="menu" /></button><span>나의 세무 작업 공간</span></div>
+      {user.guest && <p className="guest-banner" role="note">체험 계정입니다 · 하루 3회 질문 · 문서 업로드·비밀번호 변경 불가 · 7일 뒤 기록이 삭제됩니다</p>}
       <Notice>{actionError}</Notice>
       <div className="view-host">
         {view === 'documents' ? <DocumentsScreen library={library} onAsk={ask} />

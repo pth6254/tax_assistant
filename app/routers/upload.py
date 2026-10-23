@@ -7,7 +7,7 @@ from urllib.parse import quote
 from app.services import upload_service
 from app.services import document_review_service
 from app.services.document.extractors import SUPPORTED_EXTENSIONS, extension
-from app.core.security import verify_token
+from app.core.security import verify_member, verify_token
 from config import MAX_UPLOAD_MB
 
 router = APIRouter(prefix="/api", tags=["upload"])
@@ -38,7 +38,7 @@ class DocumentReviewUpdate(BaseModel):
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
-    user: dict = Depends(verify_token),
+    user: dict = Depends(verify_member),
 ):
     if not file.filename or extension(file.filename) not in SUPPORTED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="PDF, DOCX, HWPX, PPTX, HTML 파일만 업로드 가능합니다.")

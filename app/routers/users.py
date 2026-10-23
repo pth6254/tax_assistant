@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Response
 
 from app.schemas.auth import DeleteAccountRequest, PasswordChangeRequest, ProfileUpdateRequest, UserResponse
 from app.services import auth_service
-from app.core.security import clear_auth_cookie, verify_token
+from app.core.security import clear_auth_cookie, verify_member, verify_token
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -25,7 +25,7 @@ async def update_profile(body: ProfileUpdateRequest, user: dict = Depends(verify
 
 
 @router.patch("/me/password")
-async def change_password(body: PasswordChangeRequest, user: dict = Depends(verify_token)):
+async def change_password(body: PasswordChangeRequest, user: dict = Depends(verify_member)):
     return await auth_service.change_password(user["id"], body.current_password, body.new_password)
 
 
@@ -33,7 +33,7 @@ async def change_password(body: PasswordChangeRequest, user: dict = Depends(veri
 async def delete_account(
     body: DeleteAccountRequest,
     response: Response,
-    user: dict = Depends(verify_token),
+    user: dict = Depends(verify_member),
 ):
     result = await auth_service.delete_account(user["id"], body.password)
     clear_auth_cookie(response)
