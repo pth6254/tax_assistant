@@ -903,6 +903,17 @@ DB(5433)·프런트엔드(3001)·pgAdmin(5050) 포트는 이 PC에서만 열리�
 전에 기록되므로 중단한 답변도 1회로 셉니다(`chat_usage`). 백업은 WSL에서 `./dev/backup-db.sh`(최근 7개 보관, `backups/`). 백업 파일은 같은
 PC에 있으므로 다른 저장소에도 복사해 두세요. 고정 주소가 필요하면 Cloudflare 계정·도메인으로 이름 있는 터널을 만들거나 서버로 옮깁니다.
 
+### Vercel에 화면 배포하기(백엔드는 이 PC)
+
+화면은 Vercel에서, 백엔드는 이 PC에서 고정 주소(Tailscale Funnel 등)로 엽니다. Vercel이 `/api/*` 요청을 백엔드로 넘겨주므로
+브라우저에는 같은 사이트라서 로그인 쿠키가 그대로 동작합니다(`frontend/vercel.json`).
+
+1. Vercel에서 GitHub 저장소를 가져오고 **Root Directory를 `frontend`**로 지정합니다. 빌드 설정은 `vercel.json`이 정합니다
+   (`npm ci` → `npm run build` → `dist`). 업로드 한도는 `frontend/.env.production`의 `VITE_MAX_UPLOAD_MB=4`입니다.
+2. `frontend/vercel.json`의 `REPLACE-WITH-BACKEND-HOST`를 백엔드 고정 주소(예: `pc-name.tailnet-name.ts.net`)로 바꿔 푸시합니다.
+   바꾸기 전에는 화면만 열리고 로그인 화면에 "데모 서버가 꺼져 있습니다"가 표시됩니다.
+3. 백엔드 `.env`는 `COOKIE_SECURE=true`, `MAX_UPLOAD_MB=4`. 답변 스트림은 15초마다 SSE 주석을 보내 Vercel의 120초 무응답 차단을 피합니다.
+
 ## 9. 테스트
 
 > 테스트 도구는 `requirements-dev.txt`에 있습니다(서비스 이미지는 `requirements.txt`만 설치). 테스트는 개발자의 `.env`를 읽지 않고
