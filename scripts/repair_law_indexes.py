@@ -16,6 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 os.environ['LANGSMITH_TRACING'] = 'false'
 os.environ['LANGCHAIN_TRACING_V2'] = 'false'
 
+import asyncpg
+
 from app.database import close_pool, get_pool
 from app.services.embedding_service import close_http_client, embed_texts_for_storage
 from app.services.law.index_repair import (
@@ -92,7 +94,7 @@ async def main(args):
         selected = plan['items'] if args.limit == 0 else plan['items'][:args.limit]
         for item in selected:
             key = str(item['before']['id'])
-            if state['items'].get(key, {}).get('status') == 'applied':
+            if state['items'].get(key, {}).get('status') in {'applied', 'skipped_duplicate_text'}:
                 continue
             # Recheck the immutable archive and the fixed source identity before
             # spending embedding time; never choose a newer replacement version.
@@ -125,8 +127,18 @@ async def main(args):
                     if old['article']['content_hash'] != item['before']['content_hash']:
                         raise ValueError('repair_backup_conflict')
                 write_json(backup_path, backup)
-            async with pool.acquire() as conn:
-                await apply_repair(conn, prepared, persist)
+            try:
+                async with pool.acquire() as conn:
+                    await apply_repair(conn, prepared, persist)
+            except asyncpg.UniqueViolationError:
+                if plan.get('source') != 'archive':
+                    raise
+                # Another (older) row of this article already holds exactly this text; the transaction rolled
+                # back, the row is left as it was and is resolved by the rebuild from the archive (DATA_STRATEGY P2).
+                state['items'][key] = {'status': 'skipped_duplicate_text', 'after_hash': item['after']['content_hash']}
+                write_json(state_path, state)
+                print(json.dumps({'article_id': int(key), 'status': 'skipped_duplicate_text'}), flush=True)
+                continue
             state['items'][key] = {'status': 'applied', 'after_hash': item['after']['content_hash'],
                                    'clauses': len(prepared.clauses)}
             write_json(state_path, state)

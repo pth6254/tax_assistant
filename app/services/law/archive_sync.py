@@ -109,6 +109,10 @@ async def archive_proposals(conn, *, today: date | None = None, laws=None):
                                for a in parse_articles(snapshot["raw_xml"])}
         return parsed[key]
 
+    # law_articles keeps one row per (law, article, text); a replacement equal to an older row's text would
+    # collide, so it is reported for the rebuild instead of proposed.
+    stored = {(r["law_name"], r["article_no"], r["content_hash"]): r["id"] for r in await conn.fetch(
+        "SELECT id, law_name, article_no, content_hash FROM law_articles")}
     candidates, findings, kinds = [], defaultdict(list), Counter()
     current_keys, laws_seen = set(), {}
     for row in rows:
@@ -131,6 +135,11 @@ async def archive_proposals(conn, *, today: date | None = None, laws=None):
         if kind in {"same_version_wording", "archive_shorter"}:
             findings[kind].append([row["law_name"], row["article_no"]])
         if replacement is None:
+            continue
+        if stored.get((row["law_name"], row["article_no"], digest(replacement.article_text)), row["id"]) != row["id"]:
+            kinds[kind] -= 1
+            kinds["duplicate_text_conflict"] += 1
+            findings["duplicate_text_conflict"].append([row["law_name"], row["article_no"]])
             continue
         chosen = target_version if kind == "newer_version" else version
         after = dict(row) | {"article_title": replacement.article_title, "article_text": replacement.article_text,
