@@ -106,19 +106,31 @@ CITE = re.compile(r"「(?P<law>[^」]+)」\s*(?P<art>제\d+조(?:의\d+)?)")
 EXPLICIT = re.compile(r"「[^」]+」\s*제\d+조")
 
 
-def article(law, art):
-    return {"law": law, "article": art}
+CASES_DOC = ROOT / "datasets" / "embedding_retrieval_cases.md"
+TIER_TITLES = {"colloquial": "일상 표현", "interpretation": "법령해석례", "legacy": "기존 용어 질문"}
 
 
 async def build():
     conn = await asyncpg.connect(config.DATABASE_URL)
     try:
-        current = {(r["law_name"], r["article_no"]) for r in await conn.fetch(
-            "SELECT law_name, article_no FROM law_articles WHERE is_current AND law_type <> '법령해석례'")}
+        rows = await conn.fetch(
+            "SELECT DISTINCT ON (law_name, article_no) law_name, article_no, article_title, effective_date, source_url "
+            "FROM law_articles WHERE is_current AND law_type <> '법령해석례' ORDER BY law_name, article_no, id")
         interpretations = await conn.fetch(
-            "SELECT article_no, article_title FROM law_articles WHERE law_type = '법령해석례' ORDER BY article_no")
+            "SELECT article_no, article_title, source_url FROM law_articles WHERE law_type = '법령해석례' "
+            "ORDER BY article_no")
     finally:
         await conn.close()
+    current = {(r["law_name"], r["article_no"]): r for r in rows}
+
+    def article(law, art):
+        """A label names the current article and the version it was checked against."""
+        label = {"law": law, "article": art}
+        row = current.get((law, art))
+        if row:
+            label |= {"title": row["article_title"] or "", "effective_date": row["effective_date"] or "",
+                      "source_url": row["source_url"] or ""}
+        return label
 
     cases, skipped = [], {}
 
@@ -146,7 +158,8 @@ async def build():
         cases.append({"id": f"int-{row['article_no']}", "tier": "interpretation", "query": match["issue"],
                       "required": [article(*cites[0])], "acceptable": [article(*a) for a in others],
                       "explicit_reference": bool(EXPLICIT.search(match["issue"])),
-                      "source": f"법제처 법령해석 {row['article_no']}, first cited article"})
+                      "source": f"법제처 법령해석 {row['article_no']}, first cited article",
+                      "source_url": row["source_url"] or ""})
 
     seen_queries = set()
     for case in json.loads(LEGACY.read_text(encoding="utf-8"))["cases"]:
@@ -169,15 +182,50 @@ async def build():
         tiers[case["tier"]] = tiers.get(case["tier"], 0) + 1
     dataset = {
         "name": "embedding-retrieval",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "description": "Statute-article retrieval set for comparing embedding models and the hybrid search. "
-                       "Labels are not reviewed by a tax expert; see evaluation/build_embedding_set.py.",
+                       "Labels are not reviewed by a tax expert; see evaluation/EMBEDDING_RETRIEVAL_SET.md.",
         "tiers": tiers,
         "skipped": skipped,
         "cases": cases,
     }
     OUTPUT.write_text(json.dumps(dataset, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    CASES_DOC.write_text(cases_markdown(dataset), encoding="utf-8")
     print(json.dumps({"output": str(OUTPUT), "tiers": tiers, "skipped": skipped}, ensure_ascii=False))
+
+
+def cell(text) -> str:
+    return str(text).replace("|", "\\|").replace("\n", " ")
+
+
+def label_text(label) -> str:
+    title = f" ({label['title']})" if label.get("title") else ""
+    date = label.get("effective_date", "")
+    when = f" · {date[:4]}-{date[4:6]}-{date[6:]} 시행" if len(date) == 8 else ""
+    return f"{label['law']} {label['article']}{title}{when}"
+
+
+def cases_markdown(dataset) -> str:
+    """Every question with its answer articles, generated from the JSON so the two never drift apart."""
+    lines = ["# 조문 검색 평가셋 — 문항 전체 목록", "",
+             f"`embedding_retrieval.json` v{dataset['version']}에서 `evaluation/build_embedding_set.py`가 만든 목록이다. "
+             "직접 고치지 말고 스크립트를 다시 실행한다. 평가셋 설명은 [EMBEDDING_RETRIEVAL_SET.md](../EMBEDDING_RETRIEVAL_SET.md).", "",
+             "정답 조문 옆 날짜는 라벨을 확인한 현행 시행본의 시행일이다. **함께 인정**은 찾으면 정답으로 치는 다른 조문이다.", ""]
+    for tier, title in TIER_TITLES.items():
+        selected = [c for c in dataset["cases"] if c["tier"] == tier]
+        lines += [f"## {title} ({len(selected)}문항)", "", "| ID | 질문 | 정답 조문 | 함께 인정 | 비고 |", "|---|---|---|---|---|"]
+        for case in selected:
+            notes = []
+            if case.get("explicit_reference"):
+                notes.append("질문에 조문 번호")
+            if case.get("source_url"):
+                notes.append(f"[해석 원문]({case['source_url']})")
+            if case.get("hard_negatives"):
+                notes.append("헷갈리는 오답: " + ", ".join(f"{h['law']} {h['article']}" for h in case["hard_negatives"]))
+            lines.append(f"| {case['id']} | {cell(case['query'])} | {cell(label_text(case['required'][0]))} | "
+                         f"{cell('; '.join(label_text(a) for a in case['acceptable']))} | {cell(' · '.join(notes))} |")
+        lines.append("")
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":

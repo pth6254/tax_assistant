@@ -190,7 +190,8 @@ LLM-as-judge를 정답 판정기로 사용하지 않는다. 추후 추가하더�
 - `datasets/components.json`: 원문/실제 계산 입력 오류/도구 선택/고정 컨텍스트 생성과
   context/safety/performance 관측 계약 7사례. 합성 승인과 공식 검수 초안을 구분한다.
 
-- `datasets/embedding_retrieval.json`: 임베딩 모델 비교·하이브리드 검색 측정용 203문항이다.
+- `datasets/embedding_retrieval.json`: 임베딩 모델 비교·하이브리드 검색 측정용 203문항이다. 구성·만든 방법·형식·지표·한계는
+  [EMBEDDING_RETRIEVAL_SET.md](EMBEDDING_RETRIEVAL_SET.md), 문항 전체는 [embedding_retrieval_cases.md](datasets/embedding_retrieval_cases.md).
   `build_embedding_set.py`로 다시 만들며, 정답은 현행 조문 하나(`required`)와 함께 정답으로 인정하는
   조문(`acceptable`)이다. 세무 전문가 검수 전 라벨이다. 세 묶음은 따로 집계한다.
 

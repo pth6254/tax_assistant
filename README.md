@@ -27,6 +27,7 @@
 | [인수인계](docs/ai/HANDOFF.md) | 다음 작업·미해결 결함·결과/백업 위치·세션 기록 |
 | [검증 흐름](docs/ai/RELIABILITY_WORKFLOW.md) | 질문·도구·근거·주장·SSE의 실제 연결 |
 | [로드맵](docs/ai/ROADMAP.md) | 평가 지표·검색·답변 모델·배포의 단계별 계획과 채택 기준 |
+| [조문 검색 평가셋](evaluation/EMBEDDING_RETRIEVAL_SET.md) | 세법 질문 203개와 정답 조문: 구성·만든 방법·형식·지표·한계, [문항 전체 목록](evaluation/datasets/embedding_retrieval_cases.md) |
 | [추가 RAG 개선 제안](docs/ai/RAG_IMPROVEMENT_PLAN.md) | Reranker와 시점·근거 구성·실무 자료 확대의 미구현 설계 |
 | [자동 질문·평가 카드](evaluation/AUTO_EVALUATION.md) | 원문/조건/기대 판단 고정·실제 답변 평가·LangSmith 게시·차단 집계·오류 주입 측정 |
 

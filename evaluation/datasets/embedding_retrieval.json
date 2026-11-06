@@ -1,7 +1,7 @@
 {
  "name": "embedding-retrieval",
- "version": "1.0.0",
- "description": "Statute-article retrieval set for comparing embedding models and the hybrid search. Labels are not reviewed by a tax expert; see evaluation/build_embedding_set.py.",
+ "version": "1.1.0",
+ "description": "Statute-article retrieval set for comparing embedding models and the hybrid search. Labels are not reviewed by a tax expert; see evaluation/EMBEDDING_RETRIEVAL_SET.md.",
  "tiers": {
   "colloquial": 64,
   "interpretation": 102,
@@ -20,7 +20,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제12조"
+     "article": "제12조",
+     "title": "비과세소득",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -33,7 +36,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제16조"
+     "article": "제16조",
+     "title": "이자소득",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -46,7 +52,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제17조"
+     "article": "제17조",
+     "title": "배당소득",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -59,7 +68,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제20조"
+     "article": "제20조",
+     "title": "근로소득",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -72,7 +84,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제21조"
+     "article": "제21조",
+     "title": "기타소득",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -85,7 +100,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제22조"
+     "article": "제22조",
+     "title": "퇴직소득",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -98,7 +116,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제52조"
+     "article": "제52조",
+     "title": "특별소득공제",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -111,7 +132,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제59조의2"
+     "article": "제59조의2",
+     "title": "자녀세액공제",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280405"
     }
    ],
    "acceptable": [],
@@ -124,7 +148,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제59조의3"
+     "article": "제59조의3",
+     "title": "연금계좌세액공제",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -137,7 +164,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제59조의4"
+     "article": "제59조의4",
+     "title": "특별세액공제",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280405"
     }
    ],
    "acceptable": [],
@@ -150,7 +180,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제70조"
+     "article": "제70조",
+     "title": "종합소득과세표준 확정신고",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -163,7 +196,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제73조"
+     "article": "제73조",
+     "title": "과세표준확정신고의 예외",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -176,7 +212,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제94조"
+     "article": "제94조",
+     "title": "양도소득의 범위",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -189,7 +228,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제95조"
+     "article": "제95조",
+     "title": "양도소득금액과 장기보유 특별공제액",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -202,7 +244,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제97조"
+     "article": "제97조",
+     "title": "양도소득의 필요경비 계산",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -215,7 +260,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제104조"
+     "article": "제104조",
+     "title": "양도소득세의 세율",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -228,7 +276,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제105조"
+     "article": "제105조",
+     "title": "양도소득과세표준 예정신고",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -241,7 +292,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제127조"
+     "article": "제127조",
+     "title": "원천징수의무",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -254,13 +308,19 @@
    "required": [
     {
      "law": "소득세법 시행령",
-     "article": "제154조"
+     "article": "제154조",
+     "title": "1세대1주택의 범위",
+     "effective_date": "20260701",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=286211"
     }
    ],
    "acceptable": [
     {
      "law": "소득세법",
-     "article": "제89조"
+     "article": "제89조",
+     "title": "비과세 양도소득",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "source": "written for this set; label checked against the stored article"
@@ -272,7 +332,10 @@
    "required": [
     {
      "law": "소득세법 시행령",
-     "article": "제155조"
+     "article": "제155조",
+     "title": "1세대1주택의 특례",
+     "effective_date": "20260701",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=286211"
     }
    ],
    "acceptable": [],
@@ -285,7 +348,10 @@
    "required": [
     {
      "law": "부가가치세법",
-     "article": "제8조"
+     "article": "제8조",
+     "title": "사업자등록",
+     "effective_date": "20260102",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276117"
     }
    ],
    "acceptable": [],
@@ -298,7 +364,10 @@
    "required": [
     {
      "law": "부가가치세법",
-     "article": "제26조"
+     "article": "제26조",
+     "title": "재화 또는 용역의 공급에 대한 면세",
+     "effective_date": "20260102",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276117"
     }
    ],
    "acceptable": [],
@@ -311,7 +380,10 @@
    "required": [
     {
      "law": "부가가치세법",
-     "article": "제38조"
+     "article": "제38조",
+     "title": "공제하는 매입세액",
+     "effective_date": "20260102",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276117"
     }
    ],
    "acceptable": [],
@@ -324,7 +396,10 @@
    "required": [
     {
      "law": "부가가치세법",
-     "article": "제46조"
+     "article": "제46조",
+     "title": "신용카드 등의 사용에 따른 세액공제 등",
+     "effective_date": "20260102",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276117"
     }
    ],
    "acceptable": [],
@@ -337,7 +412,10 @@
    "required": [
     {
      "law": "부가가치세법",
-     "article": "제49조"
+     "article": "제49조",
+     "title": "확정신고와 납부",
+     "effective_date": "20260102",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276117"
     }
    ],
    "acceptable": [],
@@ -350,7 +428,10 @@
    "required": [
     {
      "law": "부가가치세법",
-     "article": "제61조"
+     "article": "제61조",
+     "title": "간이과세의 적용 범위",
+     "effective_date": "20260102",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276117"
     }
    ],
    "acceptable": [],
@@ -363,7 +444,10 @@
    "required": [
     {
      "law": "부가가치세법",
-     "article": "제69조"
+     "article": "제69조",
+     "title": "간이과세자에 대한 납부의무의 면제",
+     "effective_date": "20260102",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276117"
     }
    ],
    "acceptable": [],
@@ -376,7 +460,10 @@
    "required": [
     {
      "law": "법인세법",
-     "article": "제13조"
+     "article": "제13조",
+     "title": "과세표준",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276111"
     }
    ],
    "acceptable": [],
@@ -389,7 +476,10 @@
    "required": [
     {
      "law": "법인세법",
-     "article": "제23조"
+     "article": "제23조",
+     "title": "감가상각비의 손금불산입",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276111"
     }
    ],
    "acceptable": [],
@@ -402,7 +492,10 @@
    "required": [
     {
      "law": "법인세법",
-     "article": "제24조"
+     "article": "제24조",
+     "title": "기부금의 손금불산입",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280349"
     }
    ],
    "acceptable": [],
@@ -415,7 +508,10 @@
    "required": [
     {
      "law": "법인세법",
-     "article": "제25조"
+     "article": "제25조",
+     "title": "기업업무추진비의 손금불산입",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276111"
     }
    ],
    "acceptable": [],
@@ -428,7 +524,10 @@
    "required": [
     {
      "law": "법인세법",
-     "article": "제52조"
+     "article": "제52조",
+     "title": "부당행위계산의 부인",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276111"
     }
    ],
    "acceptable": [],
@@ -441,7 +540,10 @@
    "required": [
     {
      "law": "법인세법",
-     "article": "제55조"
+     "article": "제55조",
+     "title": "세율",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280349"
     }
    ],
    "acceptable": [],
@@ -454,7 +556,10 @@
    "required": [
     {
      "law": "법인세법",
-     "article": "제60조"
+     "article": "제60조",
+     "title": "과세표준 등의 신고",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276111"
     }
    ],
    "acceptable": [],
@@ -467,7 +572,10 @@
    "required": [
     {
      "law": "상속세 및 증여세법",
-     "article": "제13조"
+     "article": "제13조",
+     "title": "상속세 과세가액",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276123"
     }
    ],
    "acceptable": [],
@@ -480,7 +588,10 @@
    "required": [
     {
      "law": "상속세 및 증여세법",
-     "article": "제14조"
+     "article": "제14조",
+     "title": "상속재산의 가액에서 빼는 공과금 등",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276123"
     }
    ],
    "acceptable": [],
@@ -493,7 +604,10 @@
    "required": [
     {
      "law": "상속세 및 증여세법",
-     "article": "제19조"
+     "article": "제19조",
+     "title": "배우자 상속공제",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276123"
     }
    ],
    "acceptable": [],
@@ -506,7 +620,10 @@
    "required": [
     {
      "law": "상속세 및 증여세법",
-     "article": "제20조"
+     "article": "제20조",
+     "title": "그 밖의 인적공제",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276123"
     }
    ],
    "acceptable": [],
@@ -519,7 +636,10 @@
    "required": [
     {
      "law": "상속세 및 증여세법",
-     "article": "제26조"
+     "article": "제26조",
+     "title": "상속세 세율",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276123"
     }
    ],
    "acceptable": [],
@@ -532,7 +652,10 @@
    "required": [
     {
      "law": "상속세 및 증여세법",
-     "article": "제45조"
+     "article": "제45조",
+     "title": "재산 취득자금 등의 증여 추정",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276123"
     }
    ],
    "acceptable": [],
@@ -545,7 +668,10 @@
    "required": [
     {
      "law": "상속세 및 증여세법",
-     "article": "제47조"
+     "article": "제47조",
+     "title": "증여세 과세가액",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276123"
     }
    ],
    "acceptable": [],
@@ -558,7 +684,10 @@
    "required": [
     {
      "law": "상속세 및 증여세법",
-     "article": "제53조"
+     "article": "제53조",
+     "title": "증여재산 공제",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276123"
     }
    ],
    "acceptable": [],
@@ -571,7 +700,10 @@
    "required": [
     {
      "law": "상속세 및 증여세법",
-     "article": "제53조의2"
+     "article": "제53조의2",
+     "title": "혼인ㆍ출산 증여재산 공제",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276123"
     }
    ],
    "acceptable": [],
@@ -584,13 +716,19 @@
    "required": [
     {
      "law": "상속세 및 증여세법",
-     "article": "제56조"
+     "article": "제56조",
+     "title": "증여세 세율",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276123"
     }
    ],
    "acceptable": [
     {
      "law": "상속세 및 증여세법",
-     "article": "제26조"
+     "article": "제26조",
+     "title": "상속세 세율",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276123"
     }
    ],
    "source": "written for this set; label checked against the stored article"
@@ -602,7 +740,10 @@
    "required": [
     {
      "law": "상속세 및 증여세법",
-     "article": "제68조"
+     "article": "제68조",
+     "title": "증여세 과세표준신고",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276123"
     }
    ],
    "acceptable": [],
@@ -615,7 +756,10 @@
    "required": [
     {
      "law": "국세기본법",
-     "article": "제14조"
+     "article": "제14조",
+     "title": "실질과세",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280373"
     }
    ],
    "acceptable": [],
@@ -628,7 +772,10 @@
    "required": [
     {
      "law": "국세기본법",
-     "article": "제26조의2"
+     "article": "제26조의2",
+     "title": "국세의 부과제척기간",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280373"
     }
    ],
    "acceptable": [],
@@ -641,7 +788,10 @@
    "required": [
     {
      "law": "국세기본법",
-     "article": "제45조"
+     "article": "제45조",
+     "title": "수정신고",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280373"
     }
    ],
    "acceptable": [],
@@ -654,7 +804,10 @@
    "required": [
     {
      "law": "국세기본법",
-     "article": "제45조의2"
+     "article": "제45조의2",
+     "title": "경정 등의 청구",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280373"
     }
    ],
    "acceptable": [],
@@ -667,7 +820,10 @@
    "required": [
     {
      "law": "국세기본법",
-     "article": "제47조의2"
+     "article": "제47조의2",
+     "title": "무신고가산세",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280373"
     }
    ],
    "acceptable": [],
@@ -680,7 +836,10 @@
    "required": [
     {
      "law": "국세기본법",
-     "article": "제47조의4"
+     "article": "제47조의4",
+     "title": "납부지연가산세",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280373"
     }
    ],
    "acceptable": [],
@@ -693,7 +852,10 @@
    "required": [
     {
      "law": "국세기본법",
-     "article": "제55조"
+     "article": "제55조",
+     "title": "불복",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280373"
     }
    ],
    "acceptable": [],
@@ -706,7 +868,10 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제30조"
+     "article": "제30조",
+     "title": "중소기업 취업자에 대한 소득세 감면",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
@@ -719,7 +884,10 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제69조"
+     "article": "제69조",
+     "title": "자경농지에 대한 양도소득세의 감면",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
@@ -732,7 +900,10 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제87조"
+     "article": "제87조",
+     "title": "주택청약종합저축 등에 대한 소득공제 등",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
@@ -745,7 +916,10 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제91조의18"
+     "article": "제91조의18",
+     "title": "개인종합자산관리계좌에 대한 과세특례",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
@@ -758,7 +932,10 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제100조의3"
+     "article": "제100조의3",
+     "title": "근로장려금의 신청자격",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
@@ -771,7 +948,10 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제126조의2"
+     "article": "제126조의2",
+     "title": "신용카드 등 사용금액에 대한 소득공제",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
@@ -784,7 +964,10 @@
    "required": [
     {
      "law": "지방세법",
-     "article": "제11조"
+     "article": "제11조",
+     "title": "부동산 취득의 세율",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "acceptable": [],
@@ -797,7 +980,10 @@
    "required": [
     {
      "law": "지방세법",
-     "article": "제20조"
+     "article": "제20조",
+     "title": "신고 및 납부",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "acceptable": [],
@@ -810,7 +996,10 @@
    "required": [
     {
      "law": "지방세법",
-     "article": "제111조"
+     "article": "제111조",
+     "title": "세율",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "acceptable": [],
@@ -823,13 +1012,19 @@
    "required": [
     {
      "law": "지방세법",
-     "article": "제114조"
+     "article": "제114조",
+     "title": "과세기준일",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "acceptable": [
     {
      "law": "지방세법",
-     "article": "제107조"
+     "article": "제107조",
+     "title": "납세의무자",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "source": "written for this set; label checked against the stored article"
@@ -841,7 +1036,10 @@
    "required": [
     {
      "law": "지방세법",
-     "article": "제127조"
+     "article": "제127조",
+     "title": "과세표준과 세율",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "acceptable": [],
@@ -854,7 +1052,10 @@
    "required": [
     {
      "law": "관세법",
-     "article": "제96조"
+     "article": "제96조",
+     "title": "여행자 휴대품 및 이사물품 등의 감면",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280363"
     }
    ],
    "acceptable": [],
@@ -867,12 +1068,16 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제106조의2"
+     "article": "제106조의2",
+     "title": "농업ㆍ임업ㆍ어업용 및 연안여객선박용 석유류에 대한 부가가치세 등의 감면 등",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 09-0133, first cited article"
+   "source": "법제처 법령해석 09-0133, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=312726"
   },
   {
    "id": "int-09-0256",
@@ -881,12 +1086,16 @@
    "required": [
     {
      "law": "관세법",
-     "article": "제211조"
+     "article": "제211조",
+     "title": "잔금처리",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280363"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 09-0256, first cited article"
+   "source": "법제처 법령해석 09-0256, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=311915"
   },
   {
    "id": "int-09-0365",
@@ -895,12 +1104,16 @@
    "required": [
     {
      "law": "국세기본법",
-     "article": "제81조의10"
+     "article": "제81조의10",
+     "title": "장부등의 보관 금지",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280373"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 09-0365, first cited article"
+   "source": "법제처 법령해석 09-0365, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=312699"
   },
   {
    "id": "int-10-0003",
@@ -909,12 +1122,16 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제120조"
+     "article": "제120조",
+     "title": "",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 10-0003, first cited article"
+   "source": "법제처 법령해석 10-0003, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=311980"
   },
   {
    "id": "int-10-0075",
@@ -923,12 +1140,16 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제20조"
+     "article": "제20조",
+     "title": "근로소득",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 10-0075, first cited article"
+   "source": "법제처 법령해석 10-0075, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=312859"
   },
   {
    "id": "int-10-0243",
@@ -937,12 +1158,16 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제105조의2"
+     "article": "제105조의2",
+     "title": "농업ㆍ임업ㆍ어업용 기자재에 대한 부가가치세의 환급에 관한 특례",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 10-0243, first cited article"
+   "source": "법제처 법령해석 10-0243, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=312632"
   },
   {
    "id": "int-10-0297",
@@ -951,12 +1176,16 @@
    "required": [
     {
      "law": "국세기본법",
-     "article": "제81조의13"
+     "article": "제81조의13",
+     "title": "비밀 유지",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280373"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 10-0297, first cited article"
+   "source": "법제처 법령해석 10-0297, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=312802"
   },
   {
    "id": "int-10-0387",
@@ -965,12 +1194,16 @@
    "required": [
     {
      "law": "소득세법 시행규칙",
-     "article": "제83조의5"
+     "article": "제83조의5",
+     "title": "부득이한 사유가 있어 비사업용 토지로 보지 아니하는 토지의 판정기준 등",
+     "effective_date": "20260522",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=286379"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 10-0387, first cited article"
+   "source": "법제처 법령해석 10-0387, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=312261"
   },
   {
    "id": "int-10-0412",
@@ -979,12 +1212,16 @@
    "required": [
     {
      "law": "소득세법 시행령",
-     "article": "제168조의9"
+     "article": "제168조의9",
+     "title": "임야의 범위 등",
+     "effective_date": "20260701",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=286211"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 10-0412, first cited article"
+   "source": "법제처 법령해석 10-0412, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=315807"
   },
   {
    "id": "int-10-0413",
@@ -993,12 +1230,16 @@
    "required": [
     {
      "law": "소득세법 시행령",
-     "article": "제155조"
+     "article": "제155조",
+     "title": "1세대1주택의 특례",
+     "effective_date": "20260701",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=286211"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 10-0413, first cited article"
+   "source": "법제처 법령해석 10-0413, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=313396"
   },
   {
    "id": "int-10-0431",
@@ -1007,12 +1248,16 @@
    "required": [
     {
      "law": "관세법",
-     "article": "제239조"
+     "article": "제239조",
+     "title": "수입으로 보지 아니하는 소비 또는 사용",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280363"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 10-0431, first cited article"
+   "source": "법제처 법령해석 10-0431, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=311475"
   },
   {
    "id": "int-10-0484",
@@ -1021,12 +1266,16 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제89조"
+     "article": "제89조",
+     "title": "비과세 양도소득",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 10-0484, first cited article"
+   "source": "법제처 법령해석 10-0484, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=311934"
   },
   {
    "id": "int-11-0022",
@@ -1035,12 +1284,16 @@
    "required": [
     {
      "law": "지방세특례제한법",
-     "article": "제68조"
+     "article": "제68조",
+     "title": "매매용 및 수출용 중고자동차 등에 대한 감면",
+     "effective_date": "20260331",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=281907"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 11-0022, first cited article"
+   "source": "법제처 법령해석 11-0022, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=322377"
   },
   {
    "id": "int-11-0054",
@@ -1049,12 +1302,16 @@
    "required": [
     {
      "law": "부가가치세법",
-     "article": "제1조"
+     "article": "제1조",
+     "title": "목적",
+     "effective_date": "20260102",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276117"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 11-0054, first cited article"
+   "source": "법제처 법령해석 11-0054, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=311455"
   },
   {
    "id": "int-11-0150",
@@ -1063,12 +1320,16 @@
    "required": [
     {
      "law": "국세기본법",
-     "article": "제47조의2"
+     "article": "제47조의2",
+     "title": "무신고가산세",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280373"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 11-0150, first cited article"
+   "source": "법제처 법령해석 11-0150, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=313517"
   },
   {
    "id": "int-11-0376",
@@ -1077,12 +1338,16 @@
    "required": [
     {
      "law": "법인세법 시행령",
-     "article": "제36조"
+     "article": "제36조",
+     "title": "기부금의 가액 등",
+     "effective_date": "20260227",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=283635"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 11-0376, first cited article"
+   "source": "법제처 법령해석 11-0376, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=313451"
   },
   {
    "id": "int-11-0668",
@@ -1091,12 +1356,16 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제121조의2"
+     "article": "제121조의2",
+     "title": "외국인투자에 대한 조세 감면",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 11-0668, first cited article"
+   "source": "법제처 법령해석 11-0668, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=312244"
   },
   {
    "id": "int-12-0006",
@@ -1105,12 +1374,16 @@
    "required": [
     {
      "law": "국세기본법",
-     "article": "제81조의13"
+     "article": "제81조의13",
+     "title": "비밀 유지",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280373"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 12-0006, first cited article"
+   "source": "법제처 법령해석 12-0006, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=323181"
   },
   {
    "id": "int-12-0261",
@@ -1119,12 +1392,16 @@
    "required": [
     {
      "law": "지방세특례제한법",
-     "article": "제84조"
+     "article": "제84조",
+     "title": "사권 제한토지 등에 대한 감면",
+     "effective_date": "20260602",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=286607"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 12-0261, first cited article"
+   "source": "법제처 법령해석 12-0261, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=324573"
   },
   {
    "id": "int-12-0368",
@@ -1133,12 +1410,16 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제77조"
+     "article": "제77조",
+     "title": "공익사업용 토지 등에 대한 양도소득세의 감면",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 12-0368, first cited article"
+   "source": "법제처 법령해석 12-0368, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=313499"
   },
   {
    "id": "int-12-0700",
@@ -1147,12 +1428,16 @@
    "required": [
     {
      "law": "지방세특례제한법",
-     "article": "제31조"
+     "article": "제31조",
+     "title": "공공임대주택 등에 대한 감면",
+     "effective_date": "20260602",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=286607"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 12-0700, first cited article"
+   "source": "법제처 법령해석 12-0700, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=324755"
   },
   {
    "id": "int-13-0259",
@@ -1161,12 +1446,16 @@
    "required": [
     {
      "law": "지방세기본법",
-     "article": "제114조"
+     "article": "제114조",
+     "title": "범칙 혐의자 등에 대한 심문ㆍ압수ㆍ수색",
+     "effective_date": "20260205",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=283257"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 13-0259, first cited article"
+   "source": "법제처 법령해석 13-0259, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=324763"
   },
   {
    "id": "int-13-0276",
@@ -1175,12 +1464,16 @@
    "required": [
     {
      "law": "지방세법",
-     "article": "제13조"
+     "article": "제13조",
+     "title": "과밀억제권역 안 취득 등 중과",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 13-0276, first cited article"
+   "source": "법제처 법령해석 13-0276, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=324443"
   },
   {
    "id": "int-13-0326",
@@ -1189,12 +1482,16 @@
    "required": [
     {
      "law": "지방세법",
-     "article": "제13조"
+     "article": "제13조",
+     "title": "과밀억제권역 안 취득 등 중과",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 13-0326, first cited article"
+   "source": "법제처 법령해석 13-0326, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=324887"
   },
   {
    "id": "int-13-0426",
@@ -1203,12 +1500,16 @@
    "required": [
     {
      "law": "지방세법",
-     "article": "제54조"
+     "article": "제54조",
+     "title": "과세면제",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 13-0426, first cited article"
+   "source": "법제처 법령해석 13-0426, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=324829"
   },
   {
    "id": "int-13-0446",
@@ -1217,12 +1518,16 @@
    "required": [
     {
      "law": "지방세특례제한법",
-     "article": "제28조"
+     "article": "제28조",
+     "title": "산업인력 등 지원을 위한 감면",
+     "effective_date": "20260602",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=286607"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 13-0446, first cited article"
+   "source": "법제처 법령해석 13-0446, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=324643"
   },
   {
    "id": "int-13-0509",
@@ -1231,12 +1536,16 @@
    "required": [
     {
      "law": "지방세법 시행령",
-     "article": "제136조"
+     "article": "제136조",
+     "title": "과세대상",
+     "effective_date": "20260701",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=287223"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 13-0509, first cited article"
+   "source": "법제처 법령해석 13-0509, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=324727"
   },
   {
    "id": "int-14-0013",
@@ -1245,12 +1554,16 @@
    "required": [
     {
      "law": "지방교부세법",
-     "article": "제9조"
+     "article": "제9조",
+     "title": "특별교부세의 교부",
+     "effective_date": "20250101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=268061"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 14-0013, first cited article"
+   "source": "법제처 법령해석 14-0013, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=324701"
   },
   {
    "id": "int-14-0022",
@@ -1259,12 +1572,16 @@
    "required": [
     {
      "law": "상속세 및 증여세법 시행령",
-     "article": "제38조"
+     "article": "제38조",
+     "title": "공익법인등이 출연받은 재산의 사후관리",
+     "effective_date": "20260227",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=283637"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 14-0022, first cited article"
+   "source": "법제처 법령해석 14-0022, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=314121"
   },
   {
    "id": "int-14-0225",
@@ -1273,12 +1590,16 @@
    "required": [
     {
      "law": "지방세법",
-     "article": "제28조"
+     "article": "제28조",
+     "title": "세율",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 14-0225, first cited article"
+   "source": "법제처 법령해석 14-0225, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=324923"
   },
   {
    "id": "int-14-0463",
@@ -1287,12 +1608,16 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제12조"
+     "article": "제12조",
+     "title": "비과세소득",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 14-0463, first cited article"
+   "source": "법제처 법령해석 14-0463, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=324851"
   },
   {
    "id": "int-14-0577",
@@ -1301,12 +1626,16 @@
    "required": [
     {
      "law": "지방세법",
-     "article": "제10조"
+     "article": "제10조",
+     "title": "과세표준의 기준",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 14-0577, first cited article"
+   "source": "법제처 법령해석 14-0577, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=325035"
   },
   {
    "id": "int-14-0588",
@@ -1315,12 +1644,16 @@
    "required": [
     {
      "law": "지방세특례제한법",
-     "article": "제78조"
+     "article": "제78조",
+     "title": "산업단지 등에 대한 감면",
+     "effective_date": "20260602",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=286607"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 14-0588, first cited article"
+   "source": "법제처 법령해석 14-0588, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=325079"
   },
   {
    "id": "int-14-0871",
@@ -1329,12 +1662,16 @@
    "required": [
     {
      "law": "지방세법",
-     "article": "제9조"
+     "article": "제9조",
+     "title": "비과세",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 14-0871, first cited article"
+   "source": "법제처 법령해석 14-0871, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=314789"
   },
   {
    "id": "int-15-0125",
@@ -1343,12 +1680,16 @@
    "required": [
     {
      "law": "지방세특례제한법",
-     "article": "제57조의2"
+     "article": "제57조의2",
+     "title": "기업합병ㆍ분할 등에 대한 감면",
+     "effective_date": "20260331",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=281907"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 15-0125, first cited article"
+   "source": "법제처 법령해석 15-0125, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=315023"
   },
   {
    "id": "int-15-0133",
@@ -1357,12 +1698,16 @@
    "required": [
     {
      "law": "부가가치세법 시행규칙",
-     "article": "제39조"
+     "article": "제39조",
+     "title": "면세하는 과학용 등의 수입 재화와 관련한 과학용 시설 등의 범위",
+     "effective_date": "20260320",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=284995"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 15-0133, first cited article"
+   "source": "법제처 법령해석 15-0133, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=315168"
   },
   {
    "id": "int-15-0224",
@@ -1371,12 +1716,16 @@
    "required": [
     {
      "law": "지방세법 시행령",
-     "article": "제102조"
+     "article": "제102조",
+     "title": "분리과세대상 토지의 범위",
+     "effective_date": "20260701",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=287223"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 15-0224, first cited article"
+   "source": "법제처 법령해석 15-0224, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=314951"
   },
   {
    "id": "int-15-0228",
@@ -1385,12 +1734,16 @@
    "required": [
     {
      "law": "부가가치세법 시행령",
-     "article": "제46조"
+     "article": "제46조",
+     "title": "국가, 지방자치단체 또는 지방자치단체조합이 공급하는 재화 또는 용역으로서 면세하는 것의 범위",
+     "effective_date": "20260227",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=283641"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 15-0228, first cited article"
+   "source": "법제처 법령해석 15-0228, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=315250"
   },
   {
    "id": "int-15-0261",
@@ -1399,12 +1752,16 @@
    "required": [
     {
      "law": "부가가치세법",
-     "article": "제29조"
+     "article": "제29조",
+     "title": "과세표준",
+     "effective_date": "20260102",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276117"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 15-0261, first cited article"
+   "source": "법제처 법령해석 15-0261, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=315012"
   },
   {
    "id": "int-15-0297",
@@ -1413,12 +1770,16 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제121조의9"
+     "article": "제121조의9",
+     "title": "제주투자진흥지구 또는 제주자유무역지역 입주기업에 대한 법인세 등의 감면",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 15-0297, first cited article"
+   "source": "법제처 법령해석 15-0297, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=315133"
   },
   {
    "id": "int-15-0360",
@@ -1427,12 +1788,16 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제52조"
+     "article": "제52조",
+     "title": "특별소득공제",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 15-0360, first cited article"
+   "source": "법제처 법령해석 15-0360, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=314956"
   },
   {
    "id": "int-15-0651",
@@ -1441,12 +1806,16 @@
    "required": [
     {
      "law": "지방세법",
-     "article": "제28조"
+     "article": "제28조",
+     "title": "세율",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 15-0651, first cited article"
+   "source": "법제처 법령해석 15-0651, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=315393"
   },
   {
    "id": "int-15-0673",
@@ -1455,12 +1824,16 @@
    "required": [
     {
      "law": "소득세법 시행령",
-     "article": "제155조"
+     "article": "제155조",
+     "title": "1세대1주택의 특례",
+     "effective_date": "20260701",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=286211"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 15-0673, first cited article"
+   "source": "법제처 법령해석 15-0673, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=315626"
   },
   {
    "id": "int-15-0726",
@@ -1469,12 +1842,16 @@
    "required": [
     {
      "law": "국세기본법",
-     "article": "제81조의13"
+     "article": "제81조의13",
+     "title": "비밀 유지",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280373"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 15-0726, first cited article"
+   "source": "법제처 법령해석 15-0726, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=315924"
   },
   {
    "id": "int-15-0827",
@@ -1483,12 +1860,16 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제126조의2"
+     "article": "제126조의2",
+     "title": "신용카드 등 사용금액에 대한 소득공제",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 15-0827, first cited article"
+   "source": "법제처 법령해석 15-0827, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=315526"
   },
   {
    "id": "int-16-0196",
@@ -1497,12 +1878,16 @@
    "required": [
     {
      "law": "지방세법 시행령",
-     "article": "제11조"
+     "article": "제11조",
+     "title": "과점주주의 취득 등",
+     "effective_date": "20260424",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285497"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 16-0196, first cited article"
+   "source": "법제처 법령해석 16-0196, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=328469"
   },
   {
    "id": "int-16-0212",
@@ -1511,12 +1896,16 @@
    "required": [
     {
      "law": "지방세법",
-     "article": "제7조"
+     "article": "제7조",
+     "title": "납세의무자 등",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 16-0212, first cited article"
+   "source": "법제처 법령해석 16-0212, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=326905"
   },
   {
    "id": "int-16-0422",
@@ -1525,12 +1914,16 @@
    "required": [
     {
      "law": "상속세 및 증여세법 시행령",
-     "article": "제38조"
+     "article": "제38조",
+     "title": "공익법인등이 출연받은 재산의 사후관리",
+     "effective_date": "20260227",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=283637"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 16-0422, first cited article"
+   "source": "법제처 법령해석 16-0422, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=327689"
   },
   {
    "id": "int-16-0466",
@@ -1539,12 +1932,16 @@
    "required": [
     {
      "law": "지방세법 시행령",
-     "article": "제102조"
+     "article": "제102조",
+     "title": "분리과세대상 토지의 범위",
+     "effective_date": "20260701",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=287223"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 16-0466, first cited article"
+   "source": "법제처 법령해석 16-0466, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=330485"
   },
   {
    "id": "int-17-0422",
@@ -1553,12 +1950,16 @@
    "required": [
     {
      "law": "지방세특례제한법 시행령",
-     "article": "제3조"
+     "article": "제3조",
+     "title": "자경농민 및 직접 경작농지의 기준 등",
+     "effective_date": "20260227",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=283633"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 17-0422, first cited article"
+   "source": "법제처 법령해석 17-0422, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=330143"
   },
   {
    "id": "int-17-0535",
@@ -1567,12 +1968,16 @@
    "required": [
     {
      "law": "지방세특례제한법 시행령",
-     "article": "제3조"
+     "article": "제3조",
+     "title": "자경농민 및 직접 경작농지의 기준 등",
+     "effective_date": "20260227",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=283633"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 17-0535, first cited article"
+   "source": "법제처 법령해석 17-0535, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=327351"
   },
   {
    "id": "int-17-0598",
@@ -1581,12 +1986,16 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제20조"
+     "article": "제20조",
+     "title": "근로소득",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 17-0598, first cited article"
+   "source": "법제처 법령해석 17-0598, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=328047"
   },
   {
    "id": "int-18-0024",
@@ -1595,12 +2004,16 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제106조"
+     "article": "제106조",
+     "title": "부가가치세의 면제 등",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 18-0024, first cited article"
+   "source": "법제처 법령해석 18-0024, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=329149"
   },
   {
    "id": "int-18-0194",
@@ -1609,17 +2022,24 @@
    "required": [
     {
      "law": "지방세특례제한법",
-     "article": "제57조의2"
+     "article": "제57조의2",
+     "title": "기업합병ㆍ분할 등에 대한 감면",
+     "effective_date": "20260331",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=281907"
     }
    ],
    "acceptable": [
     {
      "law": "지방세법",
-     "article": "제13조"
+     "article": "제13조",
+     "title": "과밀억제권역 안 취득 등 중과",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "explicit_reference": false,
-   "source": "법제처 법령해석 18-0194, first cited article"
+   "source": "법제처 법령해석 18-0194, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=330147"
   },
   {
    "id": "int-18-0393",
@@ -1628,12 +2048,16 @@
    "required": [
     {
      "law": "지방세기본법",
-     "article": "제77조"
+     "article": "제77조",
+     "title": "납세자 권리보호",
+     "effective_date": "20260205",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=283257"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 18-0393, first cited article"
+   "source": "법제처 법령해석 18-0393, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=326687"
   },
   {
    "id": "int-18-0428",
@@ -1642,17 +2066,24 @@
    "required": [
     {
      "law": "지방세특례제한법",
-     "article": "제57조의2"
+     "article": "제57조의2",
+     "title": "기업합병ㆍ분할 등에 대한 감면",
+     "effective_date": "20260331",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=281907"
     }
    ],
    "acceptable": [
     {
      "law": "지방세법",
-     "article": "제13조"
+     "article": "제13조",
+     "title": "과밀억제권역 안 취득 등 중과",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "explicit_reference": false,
-   "source": "법제처 법령해석 18-0428, first cited article"
+   "source": "법제처 법령해석 18-0428, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=330875"
   },
   {
    "id": "int-18-0506",
@@ -1661,17 +2092,24 @@
    "required": [
     {
      "law": "지방세특례제한법",
-     "article": "제57조의2"
+     "article": "제57조의2",
+     "title": "기업합병ㆍ분할 등에 대한 감면",
+     "effective_date": "20260331",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=281907"
     }
    ],
    "acceptable": [
     {
      "law": "지방세법",
-     "article": "제13조"
+     "article": "제13조",
+     "title": "과밀억제권역 안 취득 등 중과",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "explicit_reference": false,
-   "source": "법제처 법령해석 18-0506, first cited article"
+   "source": "법제처 법령해석 18-0506, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=328315"
   },
   {
    "id": "int-18-0507",
@@ -1680,17 +2118,24 @@
    "required": [
     {
      "law": "지방세특례제한법",
-     "article": "제57조의2"
+     "article": "제57조의2",
+     "title": "기업합병ㆍ분할 등에 대한 감면",
+     "effective_date": "20260331",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=281907"
     }
    ],
    "acceptable": [
     {
      "law": "지방세법",
-     "article": "제13조"
+     "article": "제13조",
+     "title": "과밀억제권역 안 취득 등 중과",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "explicit_reference": false,
-   "source": "법제처 법령해석 18-0507, first cited article"
+   "source": "법제처 법령해석 18-0507, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=331167"
   },
   {
    "id": "int-18-0783",
@@ -1699,12 +2144,16 @@
    "required": [
     {
      "law": "국세기본법",
-     "article": "제81조의13"
+     "article": "제81조의13",
+     "title": "비밀 유지",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280373"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 18-0783, first cited article"
+   "source": "법제처 법령해석 18-0783, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=329923"
   },
   {
    "id": "int-18-0804",
@@ -1713,12 +2162,16 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제99조의2"
+     "article": "제99조의2",
+     "title": "신축주택 등 취득자에 대한 양도소득세의 과세특례",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 18-0804, first cited article"
+   "source": "법제처 법령해석 18-0804, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=330997"
   },
   {
    "id": "int-19-0005",
@@ -1727,12 +2180,16 @@
    "required": [
     {
      "law": "지방세특례제한법 시행령",
-     "article": "제12조의2"
+     "article": "제12조의2",
+     "title": "국가유공자 등의 범위 등",
+     "effective_date": "20260227",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=283633"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 19-0005, first cited article"
+   "source": "법제처 법령해석 19-0005, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=328675"
   },
   {
    "id": "int-19-0200",
@@ -1741,12 +2198,16 @@
    "required": [
     {
      "law": "지방세특례제한법",
-     "article": "제78조"
+     "article": "제78조",
+     "title": "산업단지 등에 대한 감면",
+     "effective_date": "20260602",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=286607"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 19-0200, first cited article"
+   "source": "법제처 법령해석 19-0200, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=328439"
   },
   {
    "id": "int-19-0304",
@@ -1755,12 +2216,16 @@
    "required": [
     {
      "law": "부가가치세법",
-     "article": "제26조"
+     "article": "제26조",
+     "title": "재화 또는 용역의 공급에 대한 면세",
+     "effective_date": "20260102",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276117"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 19-0304, first cited article"
+   "source": "법제처 법령해석 19-0304, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=327319"
   },
   {
    "id": "int-19-0473",
@@ -1769,12 +2234,16 @@
    "required": [
     {
      "law": "국세기본법",
-     "article": "제81조의13"
+     "article": "제81조의13",
+     "title": "비밀 유지",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280373"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 19-0473, first cited article"
+   "source": "법제처 법령해석 19-0473, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=327015"
   },
   {
    "id": "int-19-0494",
@@ -1783,12 +2252,16 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제11조"
+     "article": "제11조",
+     "title": "",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 19-0494, first cited article"
+   "source": "법제처 법령해석 19-0494, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=326553"
   },
   {
    "id": "int-19-0547",
@@ -1797,12 +2270,16 @@
    "required": [
     {
      "law": "지방세특례제한법",
-     "article": "제41조"
+     "article": "제41조",
+     "title": "학교 및 외국교육기관에 대한 면제",
+     "effective_date": "20260331",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=281907"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 19-0547, first cited article"
+   "source": "법제처 법령해석 19-0547, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=329747"
   },
   {
    "id": "int-19-0620",
@@ -1811,12 +2288,16 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제104조"
+     "article": "제104조",
+     "title": "양도소득세의 세율",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 19-0620, first cited article"
+   "source": "법제처 법령해석 19-0620, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=326545"
   },
   {
    "id": "int-19-0632",
@@ -1825,12 +2306,16 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제11조"
+     "article": "제11조",
+     "title": "",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 19-0632, first cited article"
+   "source": "법제처 법령해석 19-0632, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=328381"
   },
   {
    "id": "int-20-0128",
@@ -1839,12 +2324,16 @@
    "required": [
     {
      "law": "지방세법 시행령",
-     "article": "제83조"
+     "article": "제83조",
+     "title": "오염물질 배출 사업소",
+     "effective_date": "20260424",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285497"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 20-0128, first cited article"
+   "source": "법제처 법령해석 20-0128, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=330213"
   },
   {
    "id": "int-20-0190",
@@ -1853,12 +2342,16 @@
    "required": [
     {
      "law": "지방세법 시행령",
-     "article": "제102조"
+     "article": "제102조",
+     "title": "분리과세대상 토지의 범위",
+     "effective_date": "20260701",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=287223"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 20-0190, first cited article"
+   "source": "법제처 법령해석 20-0190, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=327515"
   },
   {
    "id": "int-20-0254",
@@ -1867,12 +2360,16 @@
    "required": [
     {
      "law": "지방세법 시행령",
-     "article": "제78조의2"
+     "article": "제78조의2",
+     "title": "종업원의 급여총액 범위",
+     "effective_date": "20260424",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285497"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 20-0254, first cited article"
+   "source": "법제처 법령해석 20-0254, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=328223"
   },
   {
    "id": "int-20-0359",
@@ -1881,12 +2378,16 @@
    "required": [
     {
      "law": "상속세 및 증여세법",
-     "article": "제16조"
+     "article": "제16조",
+     "title": "공익법인등에 출연한 재산에 대한 상속세 과세가액 불산입",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276123"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 20-0359, first cited article"
+   "source": "법제처 법령해석 20-0359, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=328843"
   },
   {
    "id": "int-20-0577",
@@ -1895,12 +2396,16 @@
    "required": [
     {
      "law": "소득세법 시행령",
-     "article": "제154조"
+     "article": "제154조",
+     "title": "1세대1주택의 범위",
+     "effective_date": "20260701",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=286211"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 20-0577, first cited article"
+   "source": "법제처 법령해석 20-0577, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=330285"
   },
   {
    "id": "int-21-0135",
@@ -1909,12 +2414,16 @@
    "required": [
     {
      "law": "지방세특례제한법",
-     "article": "제80조"
+     "article": "제80조",
+     "title": "공장의 지방 이전에 따른 감면",
+     "effective_date": "20260331",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=281907"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 21-0135, first cited article"
+   "source": "법제처 법령해석 21-0135, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=330229"
   },
   {
    "id": "int-21-0469",
@@ -1923,12 +2432,16 @@
    "required": [
     {
      "law": "지방세특례제한법",
-     "article": "제19조"
+     "article": "제19조",
+     "title": "어린이집 및 유치원에 대한 감면",
+     "effective_date": "20260331",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=281907"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 21-0469, first cited article"
+   "source": "법제처 법령해석 21-0469, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=332247"
   },
   {
    "id": "int-21-0624",
@@ -1937,12 +2450,16 @@
    "required": [
     {
      "law": "지방세법",
-     "article": "제7조"
+     "article": "제7조",
+     "title": "납세의무자 등",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 21-0624, first cited article"
+   "source": "법제처 법령해석 21-0624, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=332741"
   },
   {
    "id": "int-21-0659",
@@ -1951,12 +2468,16 @@
    "required": [
     {
      "law": "지방세기본법",
-     "article": "제38조"
+     "article": "제38조",
+     "title": "부과의 제척기간",
+     "effective_date": "20260205",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=283257"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 21-0659, first cited article"
+   "source": "법제처 법령해석 21-0659, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=333029"
   },
   {
    "id": "int-21-0804",
@@ -1965,12 +2486,16 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제111조의5"
+     "article": "제111조의5",
+     "title": "연안화물선용 경유에 대한 교통ㆍ에너지ㆍ환경세 감면",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 21-0804, first cited article"
+   "source": "법제처 법령해석 21-0804, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=333103"
   },
   {
    "id": "int-22-0285",
@@ -1979,12 +2504,16 @@
    "required": [
     {
      "law": "지방세기본법",
-     "article": "제86조"
+     "article": "제86조",
+     "title": "비밀유지",
+     "effective_date": "20260205",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=283257"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 22-0285, first cited article"
+   "source": "법제처 법령해석 22-0285, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=334527"
   },
   {
    "id": "int-22-0371",
@@ -1993,12 +2522,16 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제97조"
+     "article": "제97조",
+     "title": "양도소득의 필요경비 계산",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 22-0371, first cited article"
+   "source": "법제처 법령해석 22-0371, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=334901"
   },
   {
    "id": "int-22-0398",
@@ -2007,12 +2540,16 @@
    "required": [
     {
      "law": "지방세특례제한법",
-     "article": "제57조의2"
+     "article": "제57조의2",
+     "title": "기업합병ㆍ분할 등에 대한 감면",
+     "effective_date": "20260331",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=281907"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 22-0398, first cited article"
+   "source": "법제처 법령해석 22-0398, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=334745"
   },
   {
    "id": "int-22-0447",
@@ -2021,12 +2558,16 @@
    "required": [
     {
      "law": "지방세특례제한법",
-     "article": "제36조의3"
+     "article": "제36조의3",
+     "title": "생애최초 주택 구입에 대한 취득세 감면",
+     "effective_date": "20260602",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=286607"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 22-0447, first cited article"
+   "source": "법제처 법령해석 22-0447, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=334903"
   },
   {
    "id": "int-22-0472",
@@ -2035,12 +2576,16 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제50조"
+     "article": "제50조",
+     "title": "기본공제",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 22-0472, first cited article"
+   "source": "법제처 법령해석 22-0472, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=334293"
   },
   {
    "id": "int-22-0605",
@@ -2049,12 +2594,16 @@
    "required": [
     {
      "law": "지방세기본법",
-     "article": "제86조"
+     "article": "제86조",
+     "title": "비밀유지",
+     "effective_date": "20260205",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=283257"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 22-0605, first cited article"
+   "source": "법제처 법령해석 22-0605, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=334533"
   },
   {
    "id": "int-22-0612",
@@ -2063,12 +2612,16 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제12조"
+     "article": "제12조",
+     "title": "비과세소득",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 22-0612, first cited article"
+   "source": "법제처 법령해석 22-0612, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=335059"
   },
   {
    "id": "int-22-0681",
@@ -2077,12 +2630,16 @@
    "required": [
     {
      "law": "지방세법 시행령",
-     "article": "제28조의4"
+     "article": "제28조의4",
+     "title": "주택 수의 산정방법",
+     "effective_date": "20260424",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285497"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 22-0681, first cited article"
+   "source": "법제처 법령해석 22-0681, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=334561"
   },
   {
    "id": "int-22-0879",
@@ -2091,12 +2648,16 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제12조"
+     "article": "제12조",
+     "title": "비과세소득",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 22-0879, first cited article"
+   "source": "법제처 법령해석 22-0879, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=335093"
   },
   {
    "id": "int-23-0176",
@@ -2105,12 +2666,16 @@
    "required": [
     {
      "law": "지방세법",
-     "article": "제35조"
+     "article": "제35조",
+     "title": "신고납부 등",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 23-0176, first cited article"
+   "source": "법제처 법령해석 23-0176, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=336443"
   },
   {
    "id": "int-23-0514",
@@ -2119,12 +2684,16 @@
    "required": [
     {
      "law": "관세법",
-     "article": "제89조"
+     "article": "제89조",
+     "title": "세율불균형물품의 면세",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280363"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 23-0514, first cited article"
+   "source": "법제처 법령해석 23-0514, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=337651"
   },
   {
    "id": "int-23-0683",
@@ -2133,12 +2702,16 @@
    "required": [
     {
      "law": "관세법",
-     "article": "제89조"
+     "article": "제89조",
+     "title": "세율불균형물품의 면세",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280363"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 23-0683, first cited article"
+   "source": "법제처 법령해석 23-0683, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=337655"
   },
   {
    "id": "int-23-0932",
@@ -2147,12 +2720,16 @@
    "required": [
     {
      "law": "소득세법 시행령",
-     "article": "제155조"
+     "article": "제155조",
+     "title": "1세대1주택의 특례",
+     "effective_date": "20260701",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=286211"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 23-0932, first cited article"
+   "source": "법제처 법령해석 23-0932, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=338247"
   },
   {
    "id": "int-24-0009",
@@ -2161,12 +2738,16 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제97조"
+     "article": "제97조",
+     "title": "장기임대주택에 대한 양도소득세의 감면",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 24-0009, first cited article"
+   "source": "법제처 법령해석 24-0009, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=338693"
   },
   {
    "id": "int-24-0169",
@@ -2175,12 +2756,16 @@
    "required": [
     {
      "law": "관세법",
-     "article": "제175조"
+     "article": "제175조",
+     "title": "운영인의 결격사유",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280363"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 24-0169, first cited article"
+   "source": "법제처 법령해석 24-0169, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=338877"
   },
   {
    "id": "int-24-0206",
@@ -2189,12 +2774,16 @@
    "required": [
     {
      "law": "소득세법 시행령",
-     "article": "제154조"
+     "article": "제154조",
+     "title": "1세대1주택의 범위",
+     "effective_date": "20260701",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=286211"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 24-0206, first cited article"
+   "source": "법제처 법령해석 24-0206, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=339625"
   },
   {
    "id": "int-24-0294",
@@ -2203,12 +2792,16 @@
    "required": [
     {
      "law": "지방세특례제한법",
-     "article": "제177조의2"
+     "article": "제177조의2",
+     "title": "지방세 감면 특례의 제한",
+     "effective_date": "20260602",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=286607"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 24-0294, first cited article"
+   "source": "법제처 법령해석 24-0294, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=338971"
   },
   {
    "id": "int-24-0436",
@@ -2217,12 +2810,16 @@
    "required": [
     {
      "law": "관세법",
-     "article": "제175조"
+     "article": "제175조",
+     "title": "운영인의 결격사유",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280363"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 24-0436, first cited article"
+   "source": "법제처 법령해석 24-0436, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=338893"
   },
   {
    "id": "int-24-0588",
@@ -2231,12 +2828,16 @@
    "required": [
     {
      "law": "소득세법 시행령",
-     "article": "제154조"
+     "article": "제154조",
+     "title": "1세대1주택의 범위",
+     "effective_date": "20260701",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=286211"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 24-0588, first cited article"
+   "source": "법제처 법령해석 24-0588, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=339641"
   },
   {
    "id": "int-24-0620",
@@ -2245,12 +2846,16 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제6조"
+     "article": "제6조",
+     "title": "창업중소기업 등에 대한 세액감면",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 24-0620, first cited article"
+   "source": "법제처 법령해석 24-0620, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=340011"
   },
   {
    "id": "int-24-0772",
@@ -2259,12 +2864,16 @@
    "required": [
     {
      "law": "지방세법 시행령",
-     "article": "제28조의4"
+     "article": "제28조의4",
+     "title": "주택 수의 산정방법",
+     "effective_date": "20260424",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285497"
     }
    ],
    "acceptable": [],
    "explicit_reference": false,
-   "source": "법제처 법령해석 24-0772, first cited article"
+   "source": "법제처 법령해석 24-0772, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=340345"
   },
   {
    "id": "int-25-0087",
@@ -2273,12 +2882,16 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제12조"
+     "article": "제12조",
+     "title": "비과세소득",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 25-0087, first cited article"
+   "source": "법제처 법령해석 25-0087, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=341115"
   },
   {
    "id": "int-25-0379",
@@ -2287,12 +2900,16 @@
    "required": [
     {
      "law": "지방세특례제한법",
-     "article": "제73조"
+     "article": "제73조",
+     "title": "토지수용 등으로 인한 대체취득에 대한 감면",
+     "effective_date": "20260331",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=281907"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 25-0379, first cited article"
+   "source": "법제처 법령해석 25-0379, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=341613"
   },
   {
    "id": "int-25-0823",
@@ -2301,12 +2918,16 @@
    "required": [
     {
      "law": "지방세법 시행령",
-     "article": "제101조"
+     "article": "제101조",
+     "title": "별도합산과세대상 토지의 범위",
+     "effective_date": "20260424",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285497"
     }
    ],
    "acceptable": [],
    "explicit_reference": true,
-   "source": "법제처 법령해석 25-0823, first cited article"
+   "source": "법제처 법령해석 25-0823, first cited article",
+   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=342727"
   },
   {
    "id": "leg-inc-01",
@@ -2315,7 +2936,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제55조"
+     "article": "제55조",
+     "title": "세율",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -2329,14 +2953,20 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제50조"
+     "article": "제50조",
+     "title": "기본공제",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
    "hard_negatives": [
     {
      "law": "소득세법",
-     "article": "제103조"
+     "article": "제103조",
+     "title": "양도소득 기본공제",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "source": "evaluation/datasets/retrieval.json (draft labels)"
@@ -2348,14 +2978,20 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제59조의4"
+     "article": "제59조의4",
+     "title": "특별세액공제",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280405"
     }
    ],
    "acceptable": [],
    "hard_negatives": [
     {
      "law": "소득세법",
-     "article": "제59조"
+     "article": "제59조",
+     "title": "근로소득세액공제",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "source": "evaluation/datasets/retrieval.json (draft labels)"
@@ -2367,7 +3003,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제103조"
+     "article": "제103조",
+     "title": "양도소득 기본공제",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -2381,7 +3020,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제104조"
+     "article": "제104조",
+     "title": "양도소득세의 세율",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -2395,7 +3037,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제95조"
+     "article": "제95조",
+     "title": "양도소득금액과 장기보유 특별공제액",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -2409,7 +3054,10 @@
    "required": [
     {
      "law": "상속세 및 증여세법",
-     "article": "제26조"
+     "article": "제26조",
+     "title": "상속세 세율",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276123"
     }
    ],
    "acceptable": [],
@@ -2423,7 +3071,10 @@
    "required": [
     {
      "law": "상속세 및 증여세법",
-     "article": "제18조"
+     "article": "제18조",
+     "title": "기초공제",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276123"
     }
    ],
    "acceptable": [],
@@ -2437,7 +3088,10 @@
    "required": [
     {
      "law": "상속세 및 증여세법",
-     "article": "제21조"
+     "article": "제21조",
+     "title": "일괄공제",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276123"
     }
    ],
    "acceptable": [],
@@ -2451,7 +3105,10 @@
    "required": [
     {
      "law": "상속세 및 증여세법",
-     "article": "제19조"
+     "article": "제19조",
+     "title": "배우자 상속공제",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276123"
     }
    ],
    "acceptable": [],
@@ -2465,14 +3122,20 @@
    "required": [
     {
      "law": "상속세 및 증여세법",
-     "article": "제53조"
+     "article": "제53조",
+     "title": "증여재산 공제",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276123"
     }
    ],
    "acceptable": [],
    "hard_negatives": [
     {
      "law": "상속세 및 증여세법",
-     "article": "제19조"
+     "article": "제19조",
+     "title": "배우자 상속공제",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276123"
     }
    ],
    "source": "evaluation/datasets/retrieval.json (draft labels)"
@@ -2484,7 +3147,10 @@
    "required": [
     {
      "law": "부가가치세법",
-     "article": "제67조"
+     "article": "제67조",
+     "title": "간이과세자의 신고와 납부",
+     "effective_date": "20260102",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276117"
     }
    ],
    "acceptable": [],
@@ -2498,7 +3164,10 @@
    "required": [
     {
      "law": "부가가치세법",
-     "article": "제39조"
+     "article": "제39조",
+     "title": "공제하지 아니하는 매입세액",
+     "effective_date": "20260102",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276117"
     }
    ],
    "acceptable": [],
@@ -2512,7 +3181,10 @@
    "required": [
     {
      "law": "부가가치세법",
-     "article": "제33조"
+     "article": "제33조",
+     "title": "세금계산서 발급의무의 면제 등",
+     "effective_date": "20260102",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276117"
     }
    ],
    "acceptable": [],
@@ -2526,7 +3198,10 @@
    "required": [
     {
      "law": "부가가치세법",
-     "article": "제42조"
+     "article": "제42조",
+     "title": "면세농산물등 의제매입세액 공제특례",
+     "effective_date": "20260102",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276117"
     }
    ],
    "acceptable": [],
@@ -2540,7 +3215,10 @@
    "required": [
     {
      "law": "부가가치세법",
-     "article": "제21조"
+     "article": "제21조",
+     "title": "재화의 수출",
+     "effective_date": "20260102",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276117"
     }
    ],
    "acceptable": [],
@@ -2554,7 +3232,10 @@
    "required": [
     {
      "law": "법인세법",
-     "article": "제25조"
+     "article": "제25조",
+     "title": "기업업무추진비의 손금불산입",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276111"
     }
    ],
    "acceptable": [],
@@ -2568,14 +3249,20 @@
    "required": [
     {
      "law": "법인세법",
-     "article": "제27조의2"
+     "article": "제27조의2",
+     "title": "업무용승용차 관련비용의 손금불산입 등 특례",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276111"
     }
    ],
    "acceptable": [],
    "hard_negatives": [
     {
      "law": "소득세법",
-     "article": "제33조의2"
+     "article": "제33조의2",
+     "title": "업무용승용차 관련 비용 등의 필요경비 불산입 특례",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "source": "evaluation/datasets/retrieval.json (draft labels)"
@@ -2587,7 +3274,10 @@
    "required": [
     {
      "law": "법인세법",
-     "article": "제72조"
+     "article": "제72조",
+     "title": "중소기업의 결손금 소급공제에 따른 환급",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276111"
     }
    ],
    "acceptable": [],
@@ -2601,7 +3291,10 @@
    "required": [
     {
      "law": "법인세법",
-     "article": "제18조"
+     "article": "제18조",
+     "title": "평가이익 등의 익금불산입",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276111"
     }
    ],
    "acceptable": [],
@@ -2615,7 +3308,10 @@
    "required": [
     {
      "law": "국세기본법",
-     "article": "제45조의2"
+     "article": "제45조의2",
+     "title": "경정 등의 청구",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280373"
     }
    ],
    "acceptable": [],
@@ -2629,7 +3325,10 @@
    "required": [
     {
      "law": "국세기본법",
-     "article": "제48조"
+     "article": "제48조",
+     "title": "가산세 감면 등",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280373"
     }
    ],
    "acceptable": [],
@@ -2643,7 +3342,10 @@
    "required": [
     {
      "law": "국세기본법",
-     "article": "제68조"
+     "article": "제68조",
+     "title": "청구기간",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280373"
     }
    ],
    "acceptable": [],
@@ -2657,7 +3359,10 @@
    "required": [
     {
      "law": "국세기본법",
-     "article": "제45조의3"
+     "article": "제45조의3",
+     "title": "기한 후 신고",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280373"
     }
    ],
    "acceptable": [],
@@ -2671,7 +3376,10 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제7조"
+     "article": "제7조",
+     "title": "중소기업에 대한 특별세액감면",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280409"
     }
    ],
    "acceptable": [],
@@ -2685,7 +3393,10 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제29조의7"
+     "article": "제29조의7",
+     "title": "고용을 증대시킨 기업에 대한 세액공제",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
@@ -2699,7 +3410,10 @@
    "required": [
     {
      "law": "조세특례제한법",
-     "article": "제6조"
+     "article": "제6조",
+     "title": "창업중소기업 등에 대한 세액감면",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
     }
    ],
    "acceptable": [],
@@ -2713,7 +3427,10 @@
    "required": [
     {
      "law": "지방세법",
-     "article": "제11조"
+     "article": "제11조",
+     "title": "부동산 취득의 세율",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "acceptable": [],
@@ -2727,7 +3444,10 @@
    "required": [
     {
      "law": "지방세법",
-     "article": "제114조"
+     "article": "제114조",
+     "title": "과세기준일",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
     }
    ],
    "acceptable": [],
@@ -2741,7 +3461,10 @@
    "required": [
     {
      "law": "관세법",
-     "article": "제106조"
+     "article": "제106조",
+     "title": "계약 내용과 다른 물품 등에 대한 관세 환급",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280363"
     }
    ],
    "acceptable": [],
@@ -2755,7 +3478,10 @@
    "required": [
     {
      "law": "법인세법",
-     "article": "제27조의2"
+     "article": "제27조의2",
+     "title": "업무용승용차 관련비용의 손금불산입 등 특례",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276111"
     }
    ],
    "acceptable": [],
@@ -2769,7 +3495,10 @@
    "required": [
     {
      "law": "부가가치세법",
-     "article": "제61조"
+     "article": "제61조",
+     "title": "간이과세의 적용 범위",
+     "effective_date": "20260102",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276117"
     }
    ],
    "acceptable": [],
@@ -2783,14 +3512,20 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제55조"
+     "article": "제55조",
+     "title": "세율",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
    "hard_negatives": [
     {
      "law": "법인세법",
-     "article": "제55조"
+     "article": "제55조",
+     "title": "세율",
+     "effective_date": "20260101",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280349"
     }
    ],
    "source": "evaluation/datasets/retrieval.json (draft labels)"
@@ -2802,14 +3537,20 @@
    "required": [
     {
      "law": "부가가치세법",
-     "article": "제39조"
+     "article": "제39조",
+     "title": "공제하지 아니하는 매입세액",
+     "effective_date": "20260102",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276117"
     }
    ],
    "acceptable": [],
    "hard_negatives": [
     {
      "law": "부가가치세법",
-     "article": "제3조"
+     "article": "제3조",
+     "title": "납세의무자",
+     "effective_date": "20260102",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276117"
     }
    ],
    "source": "evaluation/datasets/retrieval.json (draft labels)"
@@ -2821,7 +3562,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제89조"
+     "article": "제89조",
+     "title": "비과세 양도소득",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -2835,7 +3579,10 @@
    "required": [
     {
      "law": "소득세법",
-     "article": "제137조"
+     "article": "제137조",
+     "title": "근로소득세액의 연말정산",
+     "effective_date": "20260421",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
     }
    ],
    "acceptable": [],
@@ -2849,7 +3596,10 @@
    "required": [
     {
      "law": "상속세 및 증여세법",
-     "article": "제67조"
+     "article": "제67조",
+     "title": "상속세 과세표준신고",
+     "effective_date": "20251001",
+     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276123"
     }
    ],
    "acceptable": [],
