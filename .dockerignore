@@ -14,3 +14,7 @@ tests/eval/results
 evaluation/runs
 evaluation/reviews
 evaluation/sources
+# Database dumps hold members' emails and password hashes; they never belong in an image.
+backups
+# Sample renders from dev scripts.
+output
