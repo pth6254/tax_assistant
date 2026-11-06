@@ -208,6 +208,12 @@ LLM-as-judge를 정답 판정기로 사용하지 않는다. 추후 추가하더�
   `--vectors <embedding_candidate 모델 폴더> --threshold <값>`을 주면 그 모델의 벡터를 메모리에 올려 벡터 단계만 바꾼다(DB는 그대로).
   `--mode hybrid`는 BM25가 없는 예전 단일 질의 경로(`hybrid_search([q])`)로, 서비스 검색 점수로 쓰지 않는다.
 
+- `datasets/interpretation_gold.json`: 공식 회답 정답셋. DB의 법제처 법령해석례에서 질의요지(질문)·회답(정답)·이유를 뽑고, 회답이 기대는 조문의
+  인용 항이 회신일 이후 그대로인지 과거 법령 보관소로 대조해 `validity`(unchanged/changed/unknown)를 붙인다. 현행법 평가는 unchanged만 쓴다.
+  개발·시험(`split`)은 해석 번호 해시로 고정한다. `build_interpretation_gold.py`로 다시 만든다(DB 필요, 모델 호출 없음).
+  `gold_eval.py`가 서비스 경로로 답하고(그 해석례는 검색에서 숨김) 판정 모델이 회답과 결론을 비교한다(유료, `--yes-paid` 없으면 계획만 출력).
+  `abstention_calibration.py`가 결과로 보류 임계값을 정한다. 순서·원칙은 [ROADMAP.md](../docs/ai/ROADMAP.md) 1·3.
+
 이것은 시작 평가셋이지 세무 전 영역을 대표하는 검증 완료 벤치마크가 아니다.
 실제 날짜·예외·복합 법률/시행령 정답 근거 집합과 독립 전문가 검수는 계속 보강해야 한다.
 시점 혼동은 평가기 테스트에서 합성 old/new 버전으로 확인하며 실제 과거법 정답으로 소개하지 않는다.
@@ -226,6 +232,16 @@ source venv-wsl/bin/activate
 python evaluation/build_embedding_set.py                       # 평가셋 다시 만들기(DB 필요)
 python evaluation/embedding_probe.py --mode vector --output evaluation/runs/embedding-probe/<이름>-vector
 python evaluation/embedding_probe.py --mode hybrid --output evaluation/runs/embedding-probe/<이름>-hybrid
+```
+
+공식 회답 정답셋 평가(유료 단계는 `--yes-paid`가 있어야 실행):
+
+```bash
+python evaluation/build_interpretation_gold.py                                   # 정답셋 다시 만들기
+python evaluation/gold_eval.py --split dev --limit 10 --output evaluation/runs/gold/<이름>   # 계획(호출 수)만 출력
+GOLD_JUDGE_MODEL=<다른 계열 OpenRouter 모델> python evaluation/gold_eval.py --split dev --limit 10 \
+  --output evaluation/runs/gold/<이름> --yes-paid                                 # 실행(중단 후 같은 명령으로 이어 감)
+python evaluation/abstention_calibration.py evaluation/runs/gold/<이름>/results.jsonl --alpha 0.1
 ```
 
 WSL 가상환경에서 Windows의 Ollama를 쓸 때는 `OLLAMA_BASE_URL`·`EMBEDDING_BASE_URL`을

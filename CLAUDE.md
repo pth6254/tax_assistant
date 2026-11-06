@@ -25,7 +25,9 @@
 | 쟁점별 근거 충족 판정 | [issue_coverage.py](app/services/issue_coverage.py) |
 | 질문 경로(과거 법령·도구) | [history_context.py](app/services/law/history_context.py), [policy.py](app/services/tools/policy.py), [planner.py](app/services/tools/planner.py) |
 | 검색 후보·Graph 확장 | [hybrid_search_service.py](app/services/search/hybrid_search_service.py), [graph_search_service.py](app/services/search/graph_search_service.py) |
-| 근거·주장 공개 검사 | [evidence.py](app/services/evidence.py), [claim_verification.py](app/services/claim_verification.py) (검사 등록표 `CHECKS`) |
+| 근거·주장 공개 검사 | [evidence.py](app/services/evidence.py), [claim_verification.py](app/services/claim_verification.py) (검사 등록표 `CHECKS`), [legal_figures.py](app/services/legal_figures.py) (세율·금액·기간 대조) |
+| 답변 위험 점수·보류 정책 | [answer_risk.py](app/services/answer_risk.py), 보정 [abstention_calibration.py](evaluation/abstention_calibration.py) |
+| 위임 조문 결합·평가 중 해석례 숨김 | [hybrid_search_service.py](app/services/search/hybrid_search_service.py) (`delegation_targets`, `EXCLUDED_INTERPRETATIONS`) |
 | 사건일과 시행본 비교·사건 당시 조문 | [temporal_scope.py](app/services/temporal_scope.py), [historical_evidence.py](app/services/historical_evidence.py) |
 | 참고 계산 | [formula_workflow.py](app/services/calculator/formula_workflow.py) |
 | 채팅 한 턴(과거 법령·도구·근거 답변·저장, 일반·SSE 공통) | [chat_service.py](app/services/chat_service.py) (`_answer_turn`, `_fetch_rag_and_web_context`), [chat_history.py](app/services/chat_history.py) |
@@ -41,6 +43,7 @@
 | 로그인·회원(해시·토큰·시도 제한·탈퇴) | [security.py](app/core/security.py), [auth_service.py](app/services/auth_service.py), [schemas/auth.py](app/schemas/auth.py) |
 | 답변·근거 표시 | [answerSections.js](frontend/src/components/Chat/answerSections.js), [VerificationPanel.jsx](frontend/src/components/Chat/VerificationPanel.jsx) |
 | 자동 카드·실제 관측·Judge | [auto_cards.py](evaluation/auto_cards.py), [auto_pipeline.py](evaluation/auto_pipeline.py), [auto_cli.py](evaluation/auto_cli.py) |
+| 공식 회답 정답셋·평가 | [build_interpretation_gold.py](evaluation/build_interpretation_gold.py), [gold_eval.py](evaluation/gold_eval.py) |
 | 차단 집계·검사 가치 측정 | [block_report.py](evaluation/block_report.py), [filter_value.py](evaluation/filter_value.py) |
 
 ## 실행 환경 주의

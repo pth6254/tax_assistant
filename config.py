@@ -131,6 +131,27 @@ if ANSWER_JUDGE_MODE not in {"shadow", "enforce"}:
 CLAIM_SIGNAL_GATE = os.getenv("CLAIM_SIGNAL_GATE", "judge").lower()
 if CLAIM_SIGNAL_GATE not in {"judge", "block"}:
     raise ValueError("CLAIM_SIGNAL_GATE must be judge or block")
+# Rates/thresholds/periods absent from the cited text: "signal" (the Judge confirms) until the official-answer
+# set measures how often it flags correct claims; "block" withholds on its own.
+CLAIM_FIGURE_GATE = os.getenv("CLAIM_FIGURE_GATE", "signal").lower()
+if CLAIM_FIGURE_GATE not in {"signal", "block"}:
+    raise ValueError("CLAIM_FIGURE_GATE must be signal or block")
+
+# Calibrated abstention (evaluation/abstention_calibration.py). Empty = not calibrated, no effect.
+# An answer whose risk score is above the threshold gets a notice ("notice") or is withheld ("hold").
+_risk = os.getenv("ANSWER_RISK_THRESHOLD", "").strip()
+ANSWER_RISK_THRESHOLD: float | None = float(_risk) if _risk else None
+ANSWER_RISK_SCORE = os.getenv("ANSWER_RISK_SCORE", "combined").lower()
+if ANSWER_RISK_SCORE not in {"combined", "uncovered", "withheld", "unanswered", "flagged"}:
+    raise ValueError("ANSWER_RISK_SCORE is not a known score")
+ANSWER_RISK_ACTION = os.getenv("ANSWER_RISK_ACTION", "notice").lower()
+if ANSWER_RISK_ACTION not in {"notice", "hold"}:
+    raise ValueError("ANSWER_RISK_ACTION must be notice or hold")
+
+# Delegated provisions: a statute article that leaves a requirement to the enforcement decree brings the decree
+# articles that cite it ("법 제89조…") into the issue's evidence, ranked by similarity to the question.
+SEARCH_DELEGATION_ENABLED = os.getenv("SEARCH_DELEGATION_ENABLED", "true").lower() in {"1", "true", "yes"}
+SEARCH_DELEGATION_LIMIT = int(os.getenv("SEARCH_DELEGATION_LIMIT", "2"))
 
 
 @dataclass(frozen=True)

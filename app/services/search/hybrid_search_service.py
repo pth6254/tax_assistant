@@ -22,6 +22,7 @@ import logging
 import re
 import time
 import uuid as _uuid
+from contextvars import ContextVar
 from dataclasses import replace
 from langsmith import traceable
 from langsmith.run_helpers import get_current_run_tree
@@ -368,6 +369,85 @@ def _fuse_issue_rankings(rankings: list[list[HybridSearchResult]], top_k: int,
 MAX_ISSUE_INTERPRETATIONS = 2
 
 
+# Evaluation only: numbers of the legal interpretations the current question was taken from. Searching them
+# would hand the official answer back, so an evaluation run hides them for one question (contextvars follow
+# the asyncio tasks the search starts). Empty in the service.
+EXCLUDED_INTERPRETATIONS: ContextVar[frozenset] = ContextVar('excluded_interpretations', default=frozenset())
+
+
+def _visible(rows):
+    hidden = EXCLUDED_INTERPRETATIONS.get()
+    if not hidden:
+        return rows
+    return [r for r in rows if not (r.source_type == 'interpretation' and r.article_no in hidden)]
+
+
+_DECREE_DELEGATION = re.compile(r'대통령령으로\s*정하')
+_RULE_DELEGATION = re.compile(r'(?:기획재정부|재정경제부|행정안전부|총리|[가-힣]+부)령으로\s*정하')
+_ARTICLE_NO = re.compile(r'제\d+조(?:의\d+)?')
+_DELEGATED_SQL = f"""
+SELECT id, content_hash, effective_date, law_name, law_type, tax_type, article_no, article_title, article_text,
+       source_url, 1 - ({_EMBEDDING_COLUMN}::halfvec(2560) <=> $1::vector::halfvec(2560)) AS similarity_score
+FROM law_articles
+WHERE is_current = TRUE AND law_name = $2 AND {_EMBEDDING_COLUMN} IS NOT NULL AND article_text ~ $3
+  AND ($4::text IS NULL OR tax_type = $4)
+ORDER BY {_EMBEDDING_COLUMN}::halfvec(2560) <=> $1::vector::halfvec(2560)
+LIMIT $5
+"""
+
+
+def delegation_targets(results):
+    """Decree (or rule) name -> the regex its articles use to cite each delegating article.
+
+    A statute article that leaves a requirement to "대통령령으로 정하는" is filled in by enforcement-decree
+    articles that cite it as "법 제89조…"; a decree article leaving it to a ministry rule is filled in by rule
+    articles citing "영 제154조…". The lookbehind keeps "조세특례제한법 제89조" from matching "법 제89조".
+    """
+    targets = {}
+    for row in results:
+        if (row.source_type == 'interpretation' or row.origin_kind != 'official_law'
+                or not row.article_no or not _ARTICLE_NO.fullmatch(row.article_no)):
+            continue
+        if row.law_name.endswith(' 시행규칙'):
+            continue
+        if row.law_name.endswith(' 시행령'):
+            if not _RULE_DELEGATION.search(row.content):
+                continue
+            target, prefix = row.law_name[:-len(' 시행령')] + ' 시행규칙', '영'
+        else:
+            if not _DECREE_DELEGATION.search(row.content):
+                continue
+            target, prefix = row.law_name + ' 시행령', '법'
+        targets.setdefault(target, set()).add(f'(?<![가-힣]){prefix} {row.article_no}(?![의0-9])')
+    return targets
+
+
+async def _delegated_articles(results, vector, law_filter, limit):
+    """The decree/rule articles that fill in what the found articles delegate, most similar to the question."""
+    targets = delegation_targets(results)
+    if not targets:
+        return []
+    present = {(r.law_name, r.article_no) for r in results}
+    tax_type = None if law_filter == 'ALL' else law_filter
+    pool = await get_pool()
+    rows = []
+    async with pool.acquire() as conn:
+        for law_name, patterns in targets.items():
+            rows += await conn.fetch(_DELEGATED_SQL, vector, law_name, '|'.join(sorted(patterns)), tax_type, limit * 2)
+    found = []
+    for row in sorted(rows, key=lambda r: -float(r['similarity_score'])):
+        key = (row['law_name'], row['article_no'])
+        if key in present:
+            continue
+        present.add(key)
+        result = _row_to_article_result(row)
+        result.retrieval_scores['delegation'] = result.similarity_score
+        found.append(result)
+        if len(found) == limit:
+            break
+    return found
+
+
 def _cap_interpretations(rows, limit, cap=MAX_ISSUE_INTERPRETATIONS):
     """Keep ranking order but let at most `cap` interpretations take the `limit` slots.
 
@@ -541,6 +621,7 @@ async def _search_issue_candidates(queries: list[str], law_filter: str,
         finally:
             timings['lexical'] = round((time.perf_counter() - branch_start) * 1000, 2)
     vector_rankings, keyword_hits = await asyncio.gather(dense(), keyword(queries[0]))
+    vector_rankings, keyword_hits = [_visible(rows) for rows in vector_rankings], _visible(keyword_hits)
     if diagnostics is not None:
         diagnostics['vector_counts'] = [len(rows) for rows in vector_rankings]
         diagnostics['vector_ids'] = [[(row.law_name, row.article_no) for row in rows]
@@ -585,6 +666,16 @@ async def _search_issue_candidates(queries: list[str], law_filter: str,
         results = list({(row.law_name, row.article_no): row for row in [*direct_rows, *results]}.values())[:limit]
     if diagnostics is not None:
         diagnostics['direct_ids'] = [(row.law_name, row.article_no) for row in direct_rows]
+    delegated = []
+    if config.SEARCH_DELEGATION_ENABLED and config.SEARCH_DELEGATION_LIMIT > 0:
+        try:
+            vector = (await cached_embed_queries(_embedding_queries([queries[0]]), embedder=embed_texts))[0]
+            delegated = await _delegated_articles(results, vector, law_filter, config.SEARCH_DELEGATION_LIMIT)
+        except Exception as error:
+            logger.warning('[SEARCH] delegated provisions unavailable (%s)', type(error).__name__)
+            diagnostics['delegation_error'] = type(error).__name__
+        results = results + delegated
+        diagnostics['delegated_ids'] = [(row.law_name, row.article_no) for row in delegated]
     graph_start = time.perf_counter()
     results = await expand_graph(results, original_query or queries[0])
     timings['graph'] = round((time.perf_counter() - graph_start) * 1000, 2)
@@ -600,13 +691,14 @@ async def _search_issue_candidates(queries: list[str], law_filter: str,
             replacement.retrieval_scores = dict(result.retrieval_scores)
             return replacement
         return result
-    final = list(await asyncio.gather(*(recover(result) for result in results)))
+    final = _visible(list(await asyncio.gather(*(recover(result) for result in results))))
     if config.SEARCH_MMR_ENABLED and len(final) >= 3:
         mmr_start = time.perf_counter()
         pins = {(r.law_name, r.article_no) for r in direct_rows}
         pins.update((r.law_name, r.article_no) for r in final if r.graph_evidence)
         pins.update(map(tuple, diagnostics.get('title_rescue_ids', [])))
         pins.update(map(tuple, diagnostics.get('dense_rescue_ids', [])))
+        pins.update(map(tuple, diagnostics.get('delegated_ids', [])))
         try:
             vectors = await _candidate_vectors(final)
             final = mmr_order(final, vectors, pinned=pins, lambda_mult=config.SEARCH_MMR_LAMBDA)

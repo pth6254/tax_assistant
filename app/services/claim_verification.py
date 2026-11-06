@@ -13,6 +13,8 @@ from app.schemas.reliability import AnswerDraft, JudgeReport, strict_schema
 from app.services.evidence import EvidenceContext, is_official, digest
 from app.services.llm_client import call_llm_structured
 from app.services.citation_guard import verify_citations
+from app.services.legal_figures import unsupported_figures
+from app.services.answer_risk import apply_risk_policy
 from app.services.law.reference_parser import extract_law_references, extract_law_reference, reference_spans
 from app.services.law.structure_parser import resolve_reference_target
 from app.services.inference.llm.errors import LLMRequestError
@@ -213,6 +215,9 @@ def check_claims(draft, context, query):
             for money in re.findall(r"\d[\d,]*(?:\.\d+)?\s*(?:억|천만|백만|만|천)?\s*원", claim.text):
                 if re.search(r"세액|세금|가산세|납부|환급", claim.text) and re.sub(r"\s", "", money) not in re.sub(r"\s", "", quoted + query):
                     errors.append("generated_tax_amount_without_calculator")
+            # Rates, thresholds and periods the cited text (or the question) does not contain.
+            if unsupported_figures(claim.text + " " + " ".join(claim.conditions), quoted, query):
+                errors.append("figure_not_in_source")
         # Existing exact law/subunit check also catches citations outside linked IDs.
         if unverified_citations(claim, linked):
             errors.append("reference_mismatch")
@@ -320,6 +325,11 @@ CHECKS = {
     "document_source_required": Check("block", "integrity", False),
     "generated_tax_amount_without_calculator": Check("block", "integrity", False),
     "fact_not_in_question": Check("block", "integrity", False),
+    # A signal until its wrong-block rate is measured on the official-answer set (ROADMAP); then
+    # CLAIM_FIGURE_GATE=block makes it withhold on its own like the tax amount check.
+    "figure_not_in_source": Check(config.CLAIM_FIGURE_GATE, "repairable", False,
+        "주장에 쓴 세율·금액 기준·기간이 인용한 원문에 없습니다. 원문에 적힌 수치를 그대로 쓰거나(예: 100분의 20은 20%), "
+        "그 수치가 적힌 조문을 인용하세요. 원문에 없는 수치는 쓰지 마세요."),
     "prose_reference_mismatch": Check("block", "repairable", True,
         "본문에 쓴 조문이 이 주장의 인용 근거가 아니고 그 원문에도 나오지 않습니다. 조문은 [[E1]]처럼 인용한 근거 ID로 표기하거나, 그 조문 근거를 인용에 추가하세요."),
     "reference_mismatch": Check("block", "repairable", True,
@@ -382,6 +392,9 @@ def describe_problems(claim, codes, context, *, rejected=(), verdict=None):
         "subject_scope_mismatch": lambda: [issue.subject] if issue and issue.subject else [],
         "dependency_withheld": lambda: [key for key in claim.depends_on if key in rejected],
         "semantic_check_not_passed": lambda: [verdict.reason] if verdict else [],
+        "figure_not_in_source": lambda: unsupported_figures(
+            claim.text + " " + " ".join(claim.conditions),
+            "\n".join(r.text for r in linked.records if is_official(r))),
     }
     problems = []
     for code in dict.fromkeys(codes):
@@ -1274,4 +1287,4 @@ async def generate_verified_answer(query, context, *, repair=None, on_progress=N
                       if any(c.kind == "source_summary" for c in released) else
                       "요청한 원문 또는 계산 결과를 확인했습니다." if tool_ids else
                       "근거·조건 검사를 통과한 법적 설명이 없습니다. 쟁점별 부족한 근거와 처리 상태를 확인해 주세요.")
-    return render_structured_answer(released, context, query), report
+    return apply_risk_policy(render_structured_answer(released, context, query), report), report

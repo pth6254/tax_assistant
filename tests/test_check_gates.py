@@ -26,10 +26,10 @@ def test_every_emitted_code_has_one_registered_gate():
     emitted |= {'prose_reference_mismatch'}
     assert emitted <= set(claims.CHECKS), emitted - set(claims.CHECKS)
     assert {check.gate for check in claims.CHECKS.values()} == {'block', 'signal'}
-    # Only word-based guesses are signals; facts about quotes, sources, articles,
-    # amounts and dates keep withholding on their own.
+    # Word-based guesses are signals; facts about quotes, sources, articles, amounts and dates keep
+    # withholding on their own. The figure check is a signal until its wrong-flag rate is measured.
     assert claims.SIGNAL_CHECKS == {'tax_scope_mismatch', 'subject_scope_mismatch',
-                                    'source_scope_unstated', 'historical_scope_unstated'}
+                                    'source_scope_unstated', 'historical_scope_unstated', 'figure_not_in_source'}
 
 
 def scoped_claim():
