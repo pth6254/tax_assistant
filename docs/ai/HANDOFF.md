@@ -31,6 +31,11 @@ Qwen3-Embedding-8B이며, 2048차원 등 다른 차원이면 새 열이나 별�
 hit@10 0.828→0.867, MRR 0.603→0.675. 한쪽만 맞힌 문항(Qwen만/KURE만): 상위 1개 15/34(p=0.009), 상위 5개 13/20(p=0.30).
 일상 표현 hit@5는 0.750→0.719로 낮아졌고 해석례에서 크게 올랐다(0.706→0.814). 문서 전체 임베딩 7.8분, 질문 1개 13ms.
 결과: `evaluation/runs/embedding-candidates/{qwen4b,kure-v3}`. 전환은 결정 전이다(2048차원 열·재색인·서빙 방식 필요).
+답변 파이프라인의 검색 경로(`hybrid_search(official_only, issue_mode)`: 벡터+BM25 RRF·제목 보정·직접 조회·MMR, Graph 끔, 세목 필터 없음)에
+벡터만 메모리로 바꿔 넣어 쟀다(`embedding_probe.py --mode issue --vectors`, BM25 미리 생성, 전환 0건). hit@1/5/10: Qwen 실제 경로 0.512/0.823/0.882,
+Qwen 교체 0.502/0.833/0.887, KURE 임계값 0.4 0.517/0.680/0.695(일상 hit@5 0.359), KURE 0.19 0.498/0.803/0.852. 하이브리드에서는 KURE 이점이
+사라졌다(상위 5개 한쪽만: Qwen 15·KURE 9, p=0.31). `SIMILARITY_THRESHOLD=0.4`는 Qwen 후보의 99.4%, KURE의 42%만 통과시킨다.
+이전 `--mode hybrid` 값(0.788)은 BM25가 없는 단일 질의 경로였다. 결론: 지금 Qwen 4B 유지가 합리적이다.
 
 ### 다음 작업
 

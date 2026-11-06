@@ -202,8 +202,10 @@ LLM-as-judge를 정답 판정기로 사용하지 않는다. 추후 추가하더�
 
   `embedding_probe.py`가 상위 1·5·10·20개 적중률과 MRR을 잰다. `--mode vector`는 임베딩만 쓴다
   (저장된 현행 조문·항 벡터, 법령해석은 후보에서 뺀다). 임베딩 모델 비교는 이 값으로 한다.
-  `--mode hybrid`는 서비스 검색(BM25·벡터·조문 직접 조회, Graph 끔)이며 상위 5개만 돌려준다.
-  interpretation 묶음은 질문의 출처인 해석례가 하이브리드 결과 칸을 차지하므로 hybrid 값이 낮게 나온다.
+  `--mode issue`는 답변 파이프라인이 쓰는 검색 경로(`hybrid_search(official_only=True, issue_mode=True)`:
+  벡터+BM25 결합·제목 보정·조문 직접 조회·MMR, Graph 끔, 세목 필터 없음)이며 BM25 색인을 먼저 만든다.
+  `--vectors <embedding_candidate 모델 폴더> --threshold <값>`을 주면 그 모델의 벡터를 메모리에 올려 벡터 단계만 바꾼다(DB는 그대로).
+  `--mode hybrid`는 BM25가 없는 예전 단일 질의 경로(`hybrid_search([q])`)로, 서비스 검색 점수로 쓰지 않는다.
 
 이것은 시작 평가셋이지 세무 전 영역을 대표하는 검증 완료 벤치마크가 아니다.
 실제 날짜·예외·복합 법률/시행령 정답 근거 집합과 독립 전문가 검수는 계속 보강해야 한다.
