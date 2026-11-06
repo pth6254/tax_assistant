@@ -8,6 +8,17 @@
 - [RAG_IMPROVEMENT_PLAN.md](RAG_IMPROVEMENT_PLAN.md)의 Reranker·후보 풀 확대·시점/실무 자료 개선은 후속 제안이다. 모델 선택·active 적용의 확정 결정은 구현/독립 비교 후 별도 기록한다.
 - 날짜별 결정은 뒤의 변경으로 대체될 수 있다. 실제 실행·검증은 [CURRENT_STATUS.md](CURRENT_STATUS.md), 현재 미완료는 [HANDOFF.md](HANDOFF.md)를 우선한다.
 
+## ADR-079 — 임베딩은 로컬 Ollama Qwen3-Embedding-4B를 유지하고, 모델 교체는 실제 검색 경로로 판정한다
+
+- **결정**: 임베딩은 지금의 Ollama `qwen3-embedding:4b`(Q4_K_M)를 유지한다. OpenRouter 임베딩과 KURE-v3로 바꾸지 않는다.
+  앞으로 임베딩·검색 변경은 벡터 검색만이 아니라 답변 파이프라인의 검색 경로(`embedding_probe.py --mode issue`)에서 판정한다.
+- **이유**: OpenRouter의 같은 이름 모델은 원정밀도라 저장 벡터와 달라(같은 글 코사인 평균 0.98) 전체 재임베딩이 필요하고 질문마다
+  1~1.7초가 더 든다. KURE-v3는 벡터 검색만으로는 1위 적중이 확실히 높았지만, BM25 결합·제목 보정·MMR을 거치는 실제 검색 경로에서는
+  나아지지 않았다(CURRENT_STATUS 2026-11-06). 바꾸려면 새 벡터 열·재색인·별도 추론 서버가 필요한데 그만한 이득이 없다.
+- **바꾸는 조건**: Reranker·검색어 보강·설정 조정([ROADMAP.md](ROADMAP.md) B1~B3) 뒤에도 검색이 막히고, 새 후보가 실제 검색 경로의
+  시험용 문항에서 나아질 때. 이때 유사도 임계값은 후보 통과 비율을 맞춰 다시 정한다. GPU 없는 서버로 옮길 때는 같은 Q4_K_M 모델을 CPU로
+  돌리는 것을 먼저 검토한다.
+
 ## ADR-078 — 첫 공유는 이 PC와 빠른 터널, 비용과 가입을 서버가 막는다
 
 - 사용자가 지인 몇 명에게 먼저 써 보게 하기로 했다. 서버 이전(임베딩 모델 실행 또는 재임베딩, 7GB DB 이전)보다 이 PC를 Cloudflare 빠른 터널로

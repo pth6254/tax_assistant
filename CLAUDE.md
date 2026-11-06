@@ -53,5 +53,6 @@
 
 - 규칙·문서 작성 형식: [AGENTS.md](AGENTS.md). 설치·실행·설정·API: [README.md](README.md).
 - 상태·검증 수치: [CURRENT_STATUS.md](docs/ai/CURRENT_STATUS.md). 다음 작업·결과 위치: [HANDOFF.md](docs/ai/HANDOFF.md).
+- 평가 지표·성능 개선·배포의 단계별 계획: [ROADMAP.md](docs/ai/ROADMAP.md)(계획이며 완료 기록이 아니다).
 - 검증 흐름: [RELIABILITY_WORKFLOW.md](docs/ai/RELIABILITY_WORKFLOW.md). Reranker 등 미구현 제안: [RAG_IMPROVEMENT_PLAN.md](docs/ai/RAG_IMPROVEMENT_PLAN.md)(제안을 구현 완료로 표시하지 않는다).
 - 자동 질문·평가·LangSmith 게시, 차단 집계·오류 주입 측정: [AUTO_EVALUATION.md](evaluation/AUTO_EVALUATION.md). 합성 카드의 자동 진단과 인간 세무 승인을 구분한다.

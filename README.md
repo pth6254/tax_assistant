@@ -26,6 +26,7 @@
 | [설계 결정](docs/ai/DECISIONS.md) | 결정과 그 이유 |
 | [인수인계](docs/ai/HANDOFF.md) | 다음 작업·미해결 결함·결과/백업 위치·세션 기록 |
 | [검증 흐름](docs/ai/RELIABILITY_WORKFLOW.md) | 질문·도구·근거·주장·SSE의 실제 연결 |
+| [로드맵](docs/ai/ROADMAP.md) | 평가 지표·검색·답변 모델·배포의 단계별 계획과 채택 기준 |
 | [추가 RAG 개선 제안](docs/ai/RAG_IMPROVEMENT_PLAN.md) | Reranker와 시점·근거 구성·실무 자료 확대의 미구현 설계 |
 | [자동 질문·평가 카드](evaluation/AUTO_EVALUATION.md) | 원문/조건/기대 판단 고정·실제 답변 평가·LangSmith 게시·차단 집계·오류 주입 측정 |
 

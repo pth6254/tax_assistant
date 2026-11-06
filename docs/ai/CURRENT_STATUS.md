@@ -3,6 +3,21 @@
 이 문서는 **상태와 검증 수치의 원본**이다. 모든 수치는 기록된 날짜와 범위에 한정하며, 다른 문서에 복사하지 않고 링크한다.
 다음 작업은 [HANDOFF.md](HANDOFF.md), 설계 이유는 [DECISIONS.md](DECISIONS.md)에 있다.
 
+## 임베딩 비교·조문 검색 평가셋 — 2026-11-06
+
+- **평가셋**: `evaluation/datasets/embedding_retrieval.json` 203문항(일상 표현 64·법령해석례 102·기존 37), 정답은 현행 조문.
+  라벨은 세무 전문가 검수 전이고 개발·시험 구분이 없다. 측정: `evaluation/embedding_probe.py`, `evaluation/embedding_candidate.py`.
+- **현재 서비스 검색 경로**(`hybrid_search(official_only, issue_mode)`, 질문 원문 하나, 세목 필터 없음, Graph 끔, BM25 미리 생성) · Qwen3-Embedding-4B
+  (Ollama Q4_K_M): hit@1 **0.512**, hit@5 **0.823**, hit@10 **0.882**, MRR 0.643. 일상 표현 hit@1 0.266·hit@5 0.734, 해석례 hit@5 0.824, 기존 0.973.
+- **벡터 검색만**(현행 조문+항 22,774개, 법령해석례 제외) · Qwen 4B: hit@1 0.478, hit@5 0.768, hit@10 0.828.
+- **KURE-v3 비교**(nlpai-lab, 1.1B bf16, 2048차원, 같은 입력 글): 벡터만 hit@1 0.571·hit@5 0.803(1위 기준 한쪽만 맞힘 Qwen 15·KURE 34, p=0.009).
+  서비스 검색 경로에 벡터만 바꿔 넣으면(유사도 임계값을 후보 통과 비율이 같은 0.19로) hit@1 0.498·hit@5 0.803·hit@10 0.852로 Qwen(같은 방식
+  0.502·0.833·0.887)보다 낫지 않았다(상위 5개 한쪽만 Qwen 15·KURE 9, p=0.31). 기존 임계값 0.4 그대로면 KURE 후보의 42%만 남아 hit@5 0.680.
+  KURE 환경·모델·벡터는 측정 후 삭제했다. 질문 계획을 거친 실제 답변 경로와 답변 품질은 재지 않았다.
+- **OpenRouter 임베딩**: `qwen/qwen3-embedding-4b`(DeepInfra 원정밀도)는 로컬 Q4_K_M과 같은 글 코사인 평균 0.98로 저장 벡터와 섞어 쓸 수 없다.
+  시험 코드와 기록은 되돌렸다(ADR-079).
+- **이미지**: `.dockerignore`에 `backups`가 없어 DB 백업(3.3GB)이 백엔드 계열 이미지에 들어 있었다. 제외 후 재빌드해 backend 이미지 8.25GB → 1.25GB.
+
 ## 지인 공유 배포(이 PC + Cloudflare 빠른 터널) — 2026-10-23
 
 - **결정**: 사용자 선택으로 지인 몇 명에게 이 PC의 서비스를 Cloudflare 빠른 터널(`*.trycloudflare.com`, HTTPS)로 공유한다(ADR-078).
