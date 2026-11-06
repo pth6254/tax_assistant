@@ -45,16 +45,22 @@ async def main(args):
     state_path = path.with_suffix('.state.json')
     try:
         if args.command == 'preview':
+            findings = None
             async with pool.acquire() as conn:
-                candidates, rejected = await repair_candidates(
-                    conn, clauses=args.include_clauses, core_only=args.scope == 'core')
+                if args.source == 'archive':
+                    from app.services.law.archive_sync import archive_proposals
+                    candidates, findings = await archive_proposals(conn)
+                    rejected = []
+                else:
+                    candidates, rejected = await repair_candidates(
+                        conn, clauses=args.include_clauses, core_only=args.scope == 'core')
             items = []
             for candidate in candidates:
                 items.append(candidate | {
                     'before': {k: candidate['before'][k] for k in SOURCE_FIELDS},
                     'after': {k: candidate['after'][k] for k in SOURCE_FIELDS}})
-            plan = {'version': 1, 'scope': args.scope, 'run_id': str(uuid4()),
-                    'items': items, 'rejected': rejected}
+            plan = {'version': 1, 'source': args.source, 'scope': args.scope, 'run_id': str(uuid4()),
+                    'items': items, 'rejected': rejected, 'findings': findings}
             if args.graph_backup:
                 from app.services.graph.store import graph_backup
                 write_json(path.parent / 'graph-before.json', await graph_backup())
@@ -102,7 +108,12 @@ async def main(args):
                     continue
                 if not current or any(current[k] != item['before'][k] for k in SOURCE_FIELDS):
                     raise ValueError('repair_plan_stale')
-                restored = await recover_article(current, conn)
+                if plan.get('source') == 'archive':
+                    from app.services.law.archive_sync import archive_article
+                    restored = await archive_article(conn, item['snapshot_source_id'], current['law_name'],
+                                                     current['article_no'])
+                else:
+                    restored = await recover_article(current, conn)
                 if (restored['content_hash'] != item['after']['content_hash']
                         or restored['article_text'] != item['after']['article_text']):
                     raise ValueError('repair_archive_changed')
@@ -132,6 +143,9 @@ if __name__ == '__main__':
     parser.add_argument('command', choices=('preview', 'apply', 'rollback'))
     parser.add_argument('--plan', required=True)
     parser.add_argument('--scope', choices=('core', 'all'), default='core')
+    parser.add_argument('--source', choices=('missing', 'archive'), default='missing',
+                        help='missing: restore detected missing items from the same version; '
+                             'archive: replace truncated or outdated rows from the official archive (all laws)')
     parser.add_argument('--include-clauses', action='store_true')
     parser.add_argument('--graph-backup', action='store_true', help='Back up only current TaxArticle/CITES data')
     parser.add_argument('--limit', type=int, default=20, help='0 explicitly applies the complete fixed plan')

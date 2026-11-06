@@ -28,6 +28,7 @@ import config  # noqa: E402
 ROOT = Path(__file__).resolve().parent
 OUTPUT = ROOT / "datasets" / "embedding_retrieval.json"
 LEGACY = ROOT / "datasets" / "retrieval.json"
+GOLD = ROOT / "datasets" / "interpretation_gold.json"
 
 # (law, article, question, acceptable other articles)
 COLLOQUIAL = [
@@ -145,7 +146,14 @@ async def build():
                       "required": [article(law, art)], "acceptable": [article(*a) for a in acceptable],
                       "source": "written for this set; label checked against the stored article"})
 
+    # A reply whose cited paragraph has since been amended (or the number reused for another provision)
+    # does not name today's answer; interpretation_gold.json records that check (v1.2).
+    validity = {c["interpretation"]: c["validity"] for c in json.loads(GOLD.read_text(encoding="utf-8"))["cases"]} \
+        if GOLD.exists() else {}
     for row in interpretations:
+        if validity and validity.get(row["article_no"]) != "unchanged":
+            skip("cited_article_changed_since_reply" if row["article_no"] in validity else "not_in_official_answer_set")
+            continue
         match = TITLE.match(row["article_title"] or "")
         if not match:
             skip("title_without_issue_and_citation")
@@ -182,7 +190,7 @@ async def build():
         tiers[case["tier"]] = tiers.get(case["tier"], 0) + 1
     dataset = {
         "name": "embedding-retrieval",
-        "version": "1.1.0",
+        "version": "1.2.0",
         "description": "Statute-article retrieval set for comparing embedding models and the hybrid search. "
                        "Labels are not reviewed by a tax expert; see evaluation/EMBEDDING_RETRIEVAL_SET.md.",
         "tiers": tiers,

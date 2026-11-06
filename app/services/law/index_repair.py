@@ -105,10 +105,15 @@ async def apply_repair(conn, prepared, persist_backup):
         # Durable backup must succeed before the first mutation.
         persist_backup(backup)
         # NULL the unwritten vector version: a vector of the old text is not reusable.
+        # A replacement from a newer official version also moves the version identity with the text.
         await conn.execute('''UPDATE law_articles SET article_title=$2, article_text=$3, content_hash=$4,
-            embedding=$5, embedding_v2=$6, index_metadata=$7, updated_at=NOW() WHERE id=$1''', current['id'],
+            embedding=$5, embedding_v2=$6, index_metadata=$7, effective_date=$8, amendment_date=$9, source_url=$10,
+            updated_at=NOW() WHERE id=$1''', current['id'],
             prepared.after['article_title'], prepared.after['article_text'], prepared.after['content_hash'],
-            prepared.embedding, prepared.embedding_v2, prepared.metadata)
+            prepared.embedding, prepared.embedding_v2, prepared.metadata,
+            prepared.after.get('effective_date', current['effective_date']),
+            prepared.after.get('amendment_date', current['amendment_date']),
+            prepared.after.get('source_url', current['source_url']))
         await conn.execute('DELETE FROM law_article_clauses WHERE article_id=$1', current['id'])
         if prepared.clauses:
             await conn.executemany('''INSERT INTO law_article_clauses
@@ -126,8 +131,10 @@ async def restore_backup(conn, backup, expected_hash, run_id):
                 or current['index_metadata'].get('repair_run_id') != run_id):
             raise ValueError('rollback_parent_changed')
         await conn.execute('''UPDATE law_articles SET article_title=$2, article_text=$3, content_hash=$4,
-            embedding=$5, embedding_v2=$6, index_metadata=$7, updated_at=NOW() WHERE id=$1''', old['id'], old['article_title'],
-            old['article_text'], old['content_hash'], old['embedding'], old['embedding_v2'], old['index_metadata'])
+            embedding=$5, embedding_v2=$6, index_metadata=$7, effective_date=$8, amendment_date=$9, source_url=$10,
+            updated_at=NOW() WHERE id=$1''', old['id'], old['article_title'],
+            old['article_text'], old['content_hash'], old['embedding'], old['embedding_v2'], old['index_metadata'],
+            old['effective_date'], old['amendment_date'], old['source_url'])
         await conn.execute('DELETE FROM law_article_clauses WHERE article_id=$1', old['id'])
         if backup['clauses']:
             await conn.executemany('''INSERT INTO law_article_clauses

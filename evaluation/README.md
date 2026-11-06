@@ -190,7 +190,7 @@ LLM-as-judge를 정답 판정기로 사용하지 않는다. 추후 추가하더�
 - `datasets/components.json`: 원문/실제 계산 입력 오류/도구 선택/고정 컨텍스트 생성과
   context/safety/performance 관측 계약 7사례. 합성 승인과 공식 검수 초안을 구분한다.
 
-- `datasets/embedding_retrieval.json`: 임베딩 모델 비교·하이브리드 검색 측정용 203문항이다. 구성·만든 방법·형식·지표·한계는
+- `datasets/embedding_retrieval.json`: 임베딩 모델 비교·하이브리드 검색 측정용 167문항이다(v1.2). 구성·만든 방법·형식·지표·한계는
   [EMBEDDING_RETRIEVAL_SET.md](EMBEDDING_RETRIEVAL_SET.md), 문항 전체는 [embedding_retrieval_cases.md](datasets/embedding_retrieval_cases.md).
   `build_embedding_set.py`로 다시 만들며, 정답은 현행 조문 하나(`required`)와 함께 정답으로 인정하는
   조문(`acceptable`)이다. 세무 전문가 검수 전 라벨이다. 세 묶음은 따로 집계한다.
@@ -198,7 +198,7 @@ LLM-as-judge를 정답 판정기로 사용하지 않는다. 추후 추가하더�
   | 묶음 | 수 | 질문 | 정답 출처 |
   |---|---|---|---|
   | colloquial | 64 | 조문 용어를 피한 일상 표현(예: "월세 받는 집이 한 채뿐인데…") | 이 평가셋을 위해 작성, 저장 조문 제목·본문과 대조 |
-  | interpretation | 102 | 법제처 법령해석 제목의 쟁점 문장(법률 문체) | 그 해석이 처음 인용한 조문. 33문항은 질문에 조문 번호가 있다 |
+  | interpretation | 66 | 법제처 법령해석 제목의 쟁점 문장(법률 문체) | 그 해석이 처음 인용한 조문(회신 후 인용 항이 바뀐 해석은 제외). 24문항은 질문에 조문 번호가 있다 |
   | legacy | 37 | `retrieval.json`의 짧은 용어 질문 | 기존 초안 라벨 |
 
   `embedding_probe.py`가 상위 1·5·10·20개 적중률과 MRR을 잰다. `--mode vector`는 임베딩만 쓴다

@@ -1,15 +1,17 @@
 {
  "name": "embedding-retrieval",
- "version": "1.1.0",
+ "version": "1.2.0",
  "description": "Statute-article retrieval set for comparing embedding models and the hybrid search. Labels are not reviewed by a tax expert; see evaluation/EMBEDDING_RETRIEVAL_SET.md.",
  "tiers": {
   "colloquial": 64,
-  "interpretation": 102,
+  "interpretation": 66,
   "legacy": 37
  },
  "skipped": {
-  "title_without_issue_and_citation": 65,
-  "cited_article_not_in_current_corpus": 40,
+  "not_in_official_answer_set": 56,
+  "cited_article_changed_since_reply": 62,
+  "cited_article_not_in_current_corpus": 13,
+  "title_without_issue_and_citation": 10,
   "legacy_without_current_required_article": 2
  },
  "cases": [
@@ -1062,42 +1064,6 @@
    "source": "written for this set; label checked against the stored article"
   },
   {
-   "id": "int-09-0133",
-   "tier": "interpretation",
-   "query": "석유류에 대한 부가가치세를 면제 또는 감면받을 수 있는 여객선박의 범위",
-   "required": [
-    {
-     "law": "조세특례제한법",
-     "article": "제106조의2",
-     "title": "농업ㆍ임업ㆍ어업용 및 연안여객선박용 석유류에 대한 부가가치세 등의 감면 등",
-     "effective_date": "20260421",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 09-0133, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=312726"
-  },
-  {
-   "id": "int-09-0256",
-   "tier": "interpretation",
-   "query": "보세구역에 반입된 외국물품이 장치기간 경과로 매각된 때 물품의 공매잔금 교부와 관련하여 화물운송인이 유치권자에 해당하는지",
-   "required": [
-    {
-     "law": "관세법",
-     "article": "제211조",
-     "title": "잔금처리",
-     "effective_date": "20260101",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280363"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 09-0256, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=311915"
-  },
-  {
    "id": "int-09-0365",
    "tier": "interpretation",
    "query": "과태료 부과를 위한 정보제공요청이 납세자의 과세정보를 제공할 수 있는 경우에 해당하는지 여부",
@@ -1116,24 +1082,6 @@
    "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=312699"
   },
   {
-   "id": "int-10-0003",
-   "tier": "interpretation",
-   "query": "사모투자전문회사 등이 「독점규제 및 공정거래에 관한 법률」에 따른 지주회사의 요건을 갖춘 경우「조세특례제한법」의 취득세 면제 대상에 해당하는지 여부",
-   "required": [
-    {
-     "law": "조세특례제한법",
-     "article": "제120조",
-     "title": "",
-     "effective_date": "20260421",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 10-0003, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=311980"
-  },
-  {
    "id": "int-10-0075",
    "tier": "interpretation",
    "query": "부당해고기간의 임금 상당액이 「소득세법」 제20조제1항제1호의 근로소득에 해당되는지의 여부",
@@ -1150,24 +1098,6 @@
    "explicit_reference": true,
    "source": "법제처 법령해석 10-0075, first cited article",
    "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=312859"
-  },
-  {
-   "id": "int-10-0243",
-   "tier": "interpretation",
-   "query": "농업용 기자재에 대한 부가가치세를 환급받을 수 있는 범위",
-   "required": [
-    {
-     "law": "조세특례제한법",
-     "article": "제105조의2",
-     "title": "농업ㆍ임업ㆍ어업용 기자재에 대한 부가가치세의 환급에 관한 특례",
-     "effective_date": "20260421",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 10-0243, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=312632"
   },
   {
    "id": "int-10-0297",
@@ -1224,150 +1154,6 @@
    "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=315807"
   },
   {
-   "id": "int-10-0413",
-   "tier": "interpretation",
-   "query": "혼인으로 1세대 2주택이 된 비거주자의 주택 양도 시 양도소득세의 비과세 여부",
-   "required": [
-    {
-     "law": "소득세법 시행령",
-     "article": "제155조",
-     "title": "1세대1주택의 특례",
-     "effective_date": "20260701",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=286211"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 10-0413, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=313396"
-  },
-  {
-   "id": "int-10-0431",
-   "tier": "interpretation",
-   "query": "내항기로 전환된 외국무역기에서 전환 전에 사용하고 남은 연료를 사용하는 경우 관세의 부과 대상이 되는지",
-   "required": [
-    {
-     "law": "관세법",
-     "article": "제239조",
-     "title": "수입으로 보지 아니하는 소비 또는 사용",
-     "effective_date": "20260101",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280363"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 10-0431, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=311475"
-  },
-  {
-   "id": "int-10-0484",
-   "tier": "interpretation",
-   "query": "세대 전원이 출국 후 1주택을 추가 취득하고 추가 취득한 주택의 취득일부터 1년 이내, 출국일부터 2년이 지난 때 종전 주택을 양도하는 경우 1세대 1주택으로 비과세 대상인지 여부",
-   "required": [
-    {
-     "law": "소득세법",
-     "article": "제89조",
-     "title": "비과세 양도소득",
-     "effective_date": "20260421",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 10-0484, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=311934"
-  },
-  {
-   "id": "int-11-0022",
-   "tier": "interpretation",
-   "query": "「지방세특례제한법」 제68조제1항에 따라 취득세가 면제되는 중고 건설기계의 의미",
-   "required": [
-    {
-     "law": "지방세특례제한법",
-     "article": "제68조",
-     "title": "매매용 및 수출용 중고자동차 등에 대한 감면",
-     "effective_date": "20260331",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=281907"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": true,
-   "source": "법제처 법령해석 11-0022, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=322377"
-  },
-  {
-   "id": "int-11-0054",
-   "tier": "interpretation",
-   "query": "보세구역 내 수출품 제조업자에 대한 부품 공급의 부가가치세 과세대상 여부 등",
-   "required": [
-    {
-     "law": "부가가치세법",
-     "article": "제1조",
-     "title": "목적",
-     "effective_date": "20260102",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=276117"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 11-0054, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=311455"
-  },
-  {
-   "id": "int-11-0150",
-   "tier": "interpretation",
-   "query": "2인으로부터 근로소득을 지급받은 자가 「소득세법」 제137조의2 등에 따른 원천징수영수증 제출 및 종합소득과세표준 확정 신고를 하지 않은 경우 무신고가산세 등의 부과 대상 해당 여부",
-   "required": [
-    {
-     "law": "국세기본법",
-     "article": "제47조의2",
-     "title": "무신고가산세",
-     "effective_date": "20260101",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=280373"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": true,
-   "source": "법제처 법령해석 11-0150, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=313517"
-  },
-  {
-   "id": "int-11-0376",
-   "tier": "interpretation",
-   "query": "선출직 후보를 지지·지원하는 정치활동을 한 바 있는 단체를 지정기부금단체등으로 재지정하지 않을 수 있는지 여부",
-   "required": [
-    {
-     "law": "법인세법 시행령",
-     "article": "제36조",
-     "title": "기부금의 가액 등",
-     "effective_date": "20260227",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=283635"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 11-0376, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=313451"
-  },
-  {
-   "id": "int-11-0668",
-   "tier": "interpretation",
-   "query": "「조세특례제한법」 제121조의2제4항에 따른 재산세 감면과 관련한 “해당 재산”의 범위",
-   "required": [
-    {
-     "law": "조세특례제한법",
-     "article": "제121조의2",
-     "title": "외국인투자에 대한 조세 감면",
-     "effective_date": "20260421",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": true,
-   "source": "법제처 법령해석 11-0668, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=312244"
-  },
-  {
    "id": "int-12-0006",
    "tier": "interpretation",
    "query": "「공익사업을 위한 토지 등의 취득 및 보상에 관한 법률」 제8조제1항에 따라 사업시행자가 공익사업의 수행을 위해 필요한 서류(영업손실 보상을 위한 영업개시일의 확인)를 요청하는 경우가 「국세기본법」 제81조의13제1항제6호에 해당하는지 여부",
@@ -1384,78 +1170,6 @@
    "explicit_reference": true,
    "source": "법제처 법령해석 12-0006, first cited article",
    "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=323181"
-  },
-  {
-   "id": "int-12-0261",
-   "tier": "interpretation",
-   "query": "“주차장”으로 도시관리계획의 결정 및 지형도면이 고시된 토지를 행정청이 토지구획정리사업을 시행하여 노외주차장을 설치한 다음 사인(私人)에게 매각하여 사인이 그 주차장을 소유하고 있는 경우 재산세 경감 여부",
-   "required": [
-    {
-     "law": "지방세특례제한법",
-     "article": "제84조",
-     "title": "사권 제한토지 등에 대한 감면",
-     "effective_date": "20260602",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=286607"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 12-0261, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=324573"
-  },
-  {
-   "id": "int-12-0368",
-   "tier": "interpretation",
-   "query": "공익사업용 토지 등에 대한 양도소득세 감면의 적용 범위",
-   "required": [
-    {
-     "law": "조세특례제한법",
-     "article": "제77조",
-     "title": "공익사업용 토지 등에 대한 양도소득세의 감면",
-     "effective_date": "20260421",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285525"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 12-0368, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=313499"
-  },
-  {
-   "id": "int-12-0700",
-   "tier": "interpretation",
-   "query": "「지방세특례제한법」 제31조제1항의 “임대용 부동산 취득일부터 60일 이내에 임대사업자로 등록한 경우”의 적용범위 등",
-   "required": [
-    {
-     "law": "지방세특례제한법",
-     "article": "제31조",
-     "title": "공공임대주택 등에 대한 감면",
-     "effective_date": "20260602",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=286607"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": true,
-   "source": "법제처 법령해석 12-0700, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=324755"
-  },
-  {
-   "id": "int-13-0259",
-   "tier": "interpretation",
-   "query": "가사사정으로 인한 병역감면 대상자의 토지·건축물 등의 재산자료를 확인하기 위해 과세정보를 요청하는 경우가 「지방세기본법」 제114조제1항제5호에 해당하는지",
-   "required": [
-    {
-     "law": "지방세기본법",
-     "article": "제114조",
-     "title": "범칙 혐의자 등에 대한 심문ㆍ압수ㆍ수색",
-     "effective_date": "20260205",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=283257"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": true,
-   "source": "법제처 법령해석 13-0259, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=324763"
   },
   {
    "id": "int-13-0276",
@@ -1530,24 +1244,6 @@
    "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=324643"
   },
   {
-   "id": "int-13-0509",
-   "tier": "interpretation",
-   "query": "“먹는 물로 판매하기 위하여 퍼 올린 지하수”의 범위",
-   "required": [
-    {
-     "law": "지방세법 시행령",
-     "article": "제136조",
-     "title": "과세대상",
-     "effective_date": "20260701",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=287223"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 13-0509, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=324727"
-  },
-  {
    "id": "int-14-0013",
    "tier": "interpretation",
    "query": "경로당 난방비를 특별교부세로 지원할 수 있는지 여부",
@@ -1566,24 +1262,6 @@
    "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=324701"
   },
   {
-   "id": "int-14-0022",
-   "tier": "interpretation",
-   "query": "「상속세 및 증여세법 시행령」 제38조제2항 단서의 “주무관청”의 의미",
-   "required": [
-    {
-     "law": "상속세 및 증여세법 시행령",
-     "article": "제38조",
-     "title": "공익법인등이 출연받은 재산의 사후관리",
-     "effective_date": "20260227",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=283637"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": true,
-   "source": "법제처 법령해석 14-0022, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=314121"
-  },
-  {
    "id": "int-14-0225",
    "tier": "interpretation",
    "query": "등록면허세의 계산 방법",
@@ -1600,42 +1278,6 @@
    "explicit_reference": false,
    "source": "법제처 법령해석 14-0225, first cited article",
    "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=324923"
-  },
-  {
-   "id": "int-14-0463",
-   "tier": "interpretation",
-   "query": "공무상 질병에 따라 지급받는 봉급이 비과세대상에 해당하는지",
-   "required": [
-    {
-     "law": "소득세법",
-     "article": "제12조",
-     "title": "비과세소득",
-     "effective_date": "20260421",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 14-0463, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=324851"
-  },
-  {
-   "id": "int-14-0577",
-   "tier": "interpretation",
-   "query": "지방자치단체가 과점주주의 간주취득세 과세표준을 산정할 때 해당 법인이 「신탁법」에 따라 신탁한 부동산은 과세표준에서 제외되는지?",
-   "required": [
-    {
-     "law": "지방세법",
-     "article": "제10조",
-     "title": "과세표준의 기준",
-     "effective_date": "20260101",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 14-0577, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=325035"
   },
   {
    "id": "int-14-0588",
@@ -1708,42 +1350,6 @@
    "explicit_reference": false,
    "source": "법제처 법령해석 15-0133, first cited article",
    "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=315168"
-  },
-  {
-   "id": "int-15-0224",
-   "tier": "interpretation",
-   "query": "간척한 후 4년이 지나지 않는 토지를 다른 자에게 양도하거나 매립목적을 변경하여 사용하는 등의 경우에는 분리과세 대상에서 제외되는지",
-   "required": [
-    {
-     "law": "지방세법 시행령",
-     "article": "제102조",
-     "title": "분리과세대상 토지의 범위",
-     "effective_date": "20260701",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=287223"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 15-0224, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=314951"
-  },
-  {
-   "id": "int-15-0228",
-   "tier": "interpretation",
-   "query": "지방자치단체의 도로점용허가가 부가가치세 면제 제외 대상인지",
-   "required": [
-    {
-     "law": "부가가치세법 시행령",
-     "article": "제46조",
-     "title": "국가, 지방자치단체 또는 지방자치단체조합이 공급하는 재화 또는 용역으로서 면세하는 것의 범위",
-     "effective_date": "20260227",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=283641"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 15-0228, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=315250"
   },
   {
    "id": "int-15-0261",
@@ -1872,24 +1478,6 @@
    "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=315526"
   },
   {
-   "id": "int-16-0196",
-   "tier": "interpretation",
-   "query": "과점주주가 주식을 전부 양도한 후에 다시 과점주주가 된 경우의 취득세 과세표준",
-   "required": [
-    {
-     "law": "지방세법 시행령",
-     "article": "제11조",
-     "title": "과점주주의 취득 등",
-     "effective_date": "20260424",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285497"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 16-0196, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=328469"
-  },
-  {
    "id": "int-16-0212",
    "tier": "interpretation",
    "query": "배우자 또는 직계존비속의 부동산등을 부담부 증여로 취득하는 경우에 대가를 지급한 사실이 증명되어야만 인수하는 채무액에 상당하는 부분을 유상취득으로 보는지",
@@ -2014,128 +1602,6 @@
    "explicit_reference": false,
    "source": "법제처 법령해석 18-0024, first cited article",
    "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=329149"
-  },
-  {
-   "id": "int-18-0194",
-   "tier": "interpretation",
-   "query": "합병으로 승계취득하는 회원제 골프장에 대해 취득세가 감면되는지 여부",
-   "required": [
-    {
-     "law": "지방세특례제한법",
-     "article": "제57조의2",
-     "title": "기업합병ㆍ분할 등에 대한 감면",
-     "effective_date": "20260331",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=281907"
-    }
-   ],
-   "acceptable": [
-    {
-     "law": "지방세법",
-     "article": "제13조",
-     "title": "과밀억제권역 안 취득 등 중과",
-     "effective_date": "20260101",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
-    }
-   ],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 18-0194, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=330147"
-  },
-  {
-   "id": "int-18-0393",
-   "tier": "interpretation",
-   "query": "납세자보호관의 민원업무 처리절차",
-   "required": [
-    {
-     "law": "지방세기본법",
-     "article": "제77조",
-     "title": "납세자 권리보호",
-     "effective_date": "20260205",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=283257"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 18-0393, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=326687"
-  },
-  {
-   "id": "int-18-0428",
-   "tier": "interpretation",
-   "query": "합병으로 승계취득하는 회원제 골프장에 대해 취득세가 감면되는지 여부",
-   "required": [
-    {
-     "law": "지방세특례제한법",
-     "article": "제57조의2",
-     "title": "기업합병ㆍ분할 등에 대한 감면",
-     "effective_date": "20260331",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=281907"
-    }
-   ],
-   "acceptable": [
-    {
-     "law": "지방세법",
-     "article": "제13조",
-     "title": "과밀억제권역 안 취득 등 중과",
-     "effective_date": "20260101",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
-    }
-   ],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 18-0428, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=330875"
-  },
-  {
-   "id": "int-18-0506",
-   "tier": "interpretation",
-   "query": "합병으로 승계취득하는 회원제 골프장에 대해 취득세가 감면되는지 여부",
-   "required": [
-    {
-     "law": "지방세특례제한법",
-     "article": "제57조의2",
-     "title": "기업합병ㆍ분할 등에 대한 감면",
-     "effective_date": "20260331",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=281907"
-    }
-   ],
-   "acceptable": [
-    {
-     "law": "지방세법",
-     "article": "제13조",
-     "title": "과밀억제권역 안 취득 등 중과",
-     "effective_date": "20260101",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
-    }
-   ],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 18-0506, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=328315"
-  },
-  {
-   "id": "int-18-0507",
-   "tier": "interpretation",
-   "query": "합병으로 승계취득하는 회원제 골프장에 대해 취득세가 감면되는지 여부",
-   "required": [
-    {
-     "law": "지방세특례제한법",
-     "article": "제57조의2",
-     "title": "기업합병ㆍ분할 등에 대한 감면",
-     "effective_date": "20260331",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=281907"
-    }
-   ],
-   "acceptable": [
-    {
-     "law": "지방세법",
-     "article": "제13조",
-     "title": "과밀억제권역 안 취득 등 중과",
-     "effective_date": "20260101",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=282559"
-    }
-   ],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 18-0507, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=331167"
   },
   {
    "id": "int-18-0783",
@@ -2318,24 +1784,6 @@
    "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=328381"
   },
   {
-   "id": "int-20-0128",
-   "tier": "interpretation",
-   "query": "주민세 재산분 중과세 대상이 되는 오염물질 배출 사업소의 범위",
-   "required": [
-    {
-     "law": "지방세법 시행령",
-     "article": "제83조",
-     "title": "오염물질 배출 사업소",
-     "effective_date": "20260424",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285497"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 20-0128, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=330213"
-  },
-  {
    "id": "int-20-0190",
    "tier": "interpretation",
    "query": "도시개발사업의 시행자가 제공하는 토지를 신탁한 경우에도 분리과세대상이 되는지 여부",
@@ -2352,24 +1800,6 @@
    "explicit_reference": false,
    "source": "법제처 법령해석 20-0190, first cited article",
    "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=327515"
-  },
-  {
-   "id": "int-20-0254",
-   "tier": "interpretation",
-   "query": "주민세 종업원분의 과세표준인 종업원의 급여총액에서 제외되는 “육아휴직을 한 종업원이 직무 복귀 후 1년 동안 받는 급여”의 의미",
-   "required": [
-    {
-     "law": "지방세법 시행령",
-     "article": "제78조의2",
-     "title": "종업원의 급여총액 범위",
-     "effective_date": "20260424",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285497"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 20-0254, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=328223"
   },
   {
    "id": "int-20-0359",
@@ -2462,24 +1892,6 @@
    "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=332741"
   },
   {
-   "id": "int-21-0659",
-   "tier": "interpretation",
-   "query": "과세관청이 착오로 재산세를 과다하게 부과하고 이후 「지방세기본법」 제38조에 따른 부과의 제척기간이 경과한 경우 그 부과처분을 취소 또는 감액경정할 수 있는지 여부",
-   "required": [
-    {
-     "law": "지방세기본법",
-     "article": "제38조",
-     "title": "부과의 제척기간",
-     "effective_date": "20260205",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=283257"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": true,
-   "source": "법제처 법령해석 21-0659, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=333029"
-  },
-  {
    "id": "int-21-0804",
    "tier": "interpretation",
    "query": "선박용 연료를 공급하기 위해 항만 밖으로 선박용 연료를 운송한 경우가 유류세 감면 대상인지 여부",
@@ -2552,24 +1964,6 @@
    "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=334745"
   },
   {
-   "id": "int-22-0447",
-   "tier": "interpretation",
-   "query": "부부가 공동명의로 생애 최초 주택을 취득하는 경우 취득세 감면 대상",
-   "required": [
-    {
-     "law": "지방세특례제한법",
-     "article": "제36조의3",
-     "title": "생애최초 주택 구입에 대한 취득세 감면",
-     "effective_date": "20260602",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=286607"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 22-0447, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=334903"
-  },
-  {
    "id": "int-22-0472",
    "tier": "interpretation",
    "query": "「소득세법」 제50조제1항제3호나목에 따른 20세 이하의 의미",
@@ -2604,60 +1998,6 @@
    "explicit_reference": true,
    "source": "법제처 법령해석 22-0605, first cited article",
    "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=334533"
-  },
-  {
-   "id": "int-22-0612",
-   "tier": "interpretation",
-   "query": "「사립학교교직원 연금법」을 적용받는 사립학교 사무직원이 사립학교 내부 규정에 따라 받는 육아휴직수당에 대한 소득세 과세 여부",
-   "required": [
-    {
-     "law": "소득세법",
-     "article": "제12조",
-     "title": "비과세소득",
-     "effective_date": "20260421",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 22-0612, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=335059"
-  },
-  {
-   "id": "int-22-0681",
-   "tier": "interpretation",
-   "query": "「지방세법」 제13조의2제2항에 따라 무상취득하는 주택에 대하여 취득세를 중과하는 경우에 「지방세법 시행령」 제28조의4제5항이 적용되는지 여부",
-   "required": [
-    {
-     "law": "지방세법 시행령",
-     "article": "제28조의4",
-     "title": "주택 수의 산정방법",
-     "effective_date": "20260424",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285497"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": true,
-   "source": "법제처 법령해석 22-0681, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=334561"
-  },
-  {
-   "id": "int-22-0879",
-   "tier": "interpretation",
-   "query": "「사립학교교직원 연금법」을 적용받는 사립학교 사무직원이 사립학교 내부 규정에 따라 받는 육아휴직수당에 대한 소득세 과세 여부",
-   "required": [
-    {
-     "law": "소득세법",
-     "article": "제12조",
-     "title": "비과세소득",
-     "effective_date": "20260421",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": false,
-   "source": "법제처 법령해석 22-0879, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=335093"
   },
   {
    "id": "int-23-0176",
@@ -2874,24 +2214,6 @@
    "explicit_reference": false,
    "source": "법제처 법령해석 24-0772, first cited article",
    "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=340345"
-  },
-  {
-   "id": "int-25-0087",
-   "tier": "interpretation",
-   "query": "「소득세법」 제12조제3호머목2)의 ‘6세 이하인 자녀’의 범위",
-   "required": [
-    {
-     "law": "소득세법",
-     "article": "제12조",
-     "title": "비과세소득",
-     "effective_date": "20260421",
-     "source_url": "https://www.law.go.kr/lsInfoP.do?lsiSeq=285523"
-    }
-   ],
-   "acceptable": [],
-   "explicit_reference": true,
-   "source": "법제처 법령해석 25-0087, first cited article",
-   "source_url": "https://www.law.go.kr/expcInfoP.do?expcSeq=341115"
   },
   {
    "id": "int-25-0379",
