@@ -20,6 +20,12 @@ CI가 실제로 녹색이 되는지는 다음 푸시에서 확인해야 한다. 
 다음은 실제 질문으로 단계별 시간을 재는 일이다(`docker logs tax_backend | grep 'LLM call'`). 남은 후보: 보완 라운드의 검색어 정리 호출.
 **보안**: `JWT_SECRET` 실제 값이 README 예시로 04-15부터 공개돼 있었다. README를 고치고 커밋 전 비밀값 검사(훅·CI)를 더했으며,
 10-15에 `.env`의 값을 새로 바꿨다(CURRENT_STATUS "비밀값 유출 점검"). 다른 PC에서는 `sh dev/install-git-hooks.sh`로 훅을 설치한다.
+**11-06 임베딩 평가셋**: 임베딩은 로컬 Ollama `qwen3-embedding:4b`(Q4_K_M)를 유지하기로 했다(OpenRouter 임베딩은
+시험 후 되돌림). 모델 비교용으로 조문 검색 평가셋 203문항(`evaluation/datasets/embedding_retrieval.json`, 일상 표현 64·법령해석
+102·기존 37)과 `evaluation/embedding_probe.py`를 만들었다(evaluation/README "제공 평가셋"). 현재 4B 기준값, 상위 5개 적중률:
+벡터만 0.768(일상 0.750·해석 0.706·기존 0.973), 하이브리드 0.788(일상 0.781·해석 0.725·기존 0.973). 상위 1개는 벡터 0.478·하이브리드 0.571.
+결과: `evaluation/runs/embedding-probe/qwen4b-{vector,hybrid}`. 다음 후보는 KURE-v3(한국어 검색 자체 보고 0.803 vs 4B 0.774)·
+Qwen3-Embedding-8B이며, 2048차원 등 다른 차원이면 새 열이나 별도 벡터 캐시가 필요하다. 라벨은 세무 전문가 검수 전이다.
 
 ### 다음 작업
 

@@ -190,6 +190,21 @@ LLM-as-judge를 정답 판정기로 사용하지 않는다. 추후 추가하더�
 - `datasets/components.json`: 원문/실제 계산 입력 오류/도구 선택/고정 컨텍스트 생성과
   context/safety/performance 관측 계약 7사례. 합성 승인과 공식 검수 초안을 구분한다.
 
+- `datasets/embedding_retrieval.json`: 임베딩 모델 비교·하이브리드 검색 측정용 203문항이다.
+  `build_embedding_set.py`로 다시 만들며, 정답은 현행 조문 하나(`required`)와 함께 정답으로 인정하는
+  조문(`acceptable`)이다. 세무 전문가 검수 전 라벨이다. 세 묶음은 따로 집계한다.
+
+  | 묶음 | 수 | 질문 | 정답 출처 |
+  |---|---|---|---|
+  | colloquial | 64 | 조문 용어를 피한 일상 표현(예: "월세 받는 집이 한 채뿐인데…") | 이 평가셋을 위해 작성, 저장 조문 제목·본문과 대조 |
+  | interpretation | 102 | 법제처 법령해석 제목의 쟁점 문장(법률 문체) | 그 해석이 처음 인용한 조문. 33문항은 질문에 조문 번호가 있다 |
+  | legacy | 37 | `retrieval.json`의 짧은 용어 질문 | 기존 초안 라벨 |
+
+  `embedding_probe.py`가 상위 1·5·10·20개 적중률과 MRR을 잰다. `--mode vector`는 임베딩만 쓴다
+  (저장된 현행 조문·항 벡터, 법령해석은 후보에서 뺀다). 임베딩 모델 비교는 이 값으로 한다.
+  `--mode hybrid`는 서비스 검색(BM25·벡터·조문 직접 조회, Graph 끔)이며 상위 5개만 돌려준다.
+  interpretation 묶음은 질문의 출처인 해석례가 하이브리드 결과 칸을 차지하므로 hybrid 값이 낮게 나온다.
+
 이것은 시작 평가셋이지 세무 전 영역을 대표하는 검증 완료 벤치마크가 아니다.
 실제 날짜·예외·복합 법률/시행령 정답 근거 집합과 독립 전문가 검수는 계속 보강해야 한다.
 시점 혼동은 평가기 테스트에서 합성 old/new 버전으로 확인하며 실제 과거법 정답으로 소개하지 않는다.
@@ -200,6 +215,18 @@ group과 정규화된 동일 질문의 dev/test 중복은 스키마 검증에서
 기존 질문은 이미 튜닝에 사용됐으므로 test/holdout으로 다시 이름 붙이지 않는다.
 
 ## 4. 실행
+
+임베딩 검색 평가(모델 호출 없음, 질문 임베딩만):
+
+```bash
+source venv-wsl/bin/activate
+python evaluation/build_embedding_set.py                       # 평가셋 다시 만들기(DB 필요)
+python evaluation/embedding_probe.py --mode vector --output evaluation/runs/embedding-probe/<이름>-vector
+python evaluation/embedding_probe.py --mode hybrid --output evaluation/runs/embedding-probe/<이름>-hybrid
+```
+
+WSL 가상환경에서 Windows의 Ollama를 쓸 때는 `OLLAMA_BASE_URL`·`EMBEDDING_BASE_URL`을
+`http://<WSL 기본 게이트웨이>:11434`로 지정한다.
 
 구 `scripts/eval_rag.py`·`scripts/eval_graph_rag.py`는 제거했으며 과거 결과는 보존한다.
 

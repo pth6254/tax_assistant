@@ -1,0 +1,2860 @@
+{
+ "name": "embedding-retrieval",
+ "version": "1.0.0",
+ "description": "Statute-article retrieval set for comparing embedding models and the hybrid search. Labels are not reviewed by a tax expert; see evaluation/build_embedding_set.py.",
+ "tiers": {
+  "colloquial": 64,
+  "interpretation": 102,
+  "legacy": 37
+ },
+ "skipped": {
+  "title_without_issue_and_citation": 65,
+  "cited_article_not_in_current_corpus": 40,
+  "legacy_without_current_required_article": 2
+ },
+ "cases": [
+  {
+   "id": "col-01",
+   "tier": "colloquial",
+   "query": "월세 받는 집이 딱 한 채뿐인데 그 임대 수입에도 세금을 내야 하나요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제12조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-02",
+   "tier": "colloquial",
+   "query": "은행 예금에서 받은 이자도 소득세를 내는 건가요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제16조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-03",
+   "tier": "colloquial",
+   "query": "주식 갖고 있다가 받은 배당금은 어떤 소득으로 잡히나요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제17조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-04",
+   "tier": "colloquial",
+   "query": "월급 말고 회사에서 받은 상여금이나 각종 수당도 근로소득에 들어가나요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제20조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-05",
+   "tier": "colloquial",
+   "query": "가끔 강연하고 받은 강연료나 원고료는 무슨 소득으로 보나요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제21조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-06",
+   "tier": "colloquial",
+   "query": "회사를 그만두면서 받은 퇴직금은 어떤 소득으로 분류되나요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제22조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-07",
+   "tier": "colloquial",
+   "query": "전세 대출 원리금을 갚고 있는데 이것도 연말정산 때 빼주나요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제52조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-08",
+   "tier": "colloquial",
+   "query": "아이 둘 키우는 집은 세금을 얼마나 깎아주나요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제59조의2"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-09",
+   "tier": "colloquial",
+   "query": "연금저축에 돈을 넣으면 연말정산에서 돌려받을 수 있나요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제59조의3"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-10",
+   "tier": "colloquial",
+   "query": "부모님 병원비를 제가 냈는데 연말정산 때 공제받을 수 있나요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제59조의4"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-11",
+   "tier": "colloquial",
+   "query": "프리랜서로 일했는데 5월에 따로 신고를 꼭 해야 하나요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제70조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-12",
+   "tier": "colloquial",
+   "query": "회사 월급만 받는 직장인도 5월에 종합소득 신고를 해야 하나요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제73조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-13",
+   "tier": "colloquial",
+   "query": "땅이나 건물을 팔아서 남긴 돈에도 세금이 붙나요? 어떤 걸 팔면 해당되나요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제94조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-14",
+   "tier": "colloquial",
+   "query": "집을 오래 가지고 있다가 팔면 세금을 좀 깎아주나요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제95조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-15",
+   "tier": "colloquial",
+   "query": "집 팔 때 중개수수료나 고친 비용은 차익에서 빼주나요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제97조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-16",
+   "tier": "colloquial",
+   "query": "집 산 지 1년도 안 돼서 팔면 세금이 더 많이 나오나요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제104조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-17",
+   "tier": "colloquial",
+   "query": "부동산을 팔고 나면 언제까지 세금 신고를 해야 하나요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제105조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-18",
+   "tier": "colloquial",
+   "query": "아르바이트생 월급 줄 때 세금을 떼고 줘야 하나요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제127조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-19",
+   "tier": "colloquial",
+   "query": "집 한 채를 2년 넘게 갖고 있다가 팔면 세금을 안 내도 되나요?",
+   "required": [
+    {
+     "law": "소득세법 시행령",
+     "article": "제154조"
+    }
+   ],
+   "acceptable": [
+    {
+     "law": "소득세법",
+     "article": "제89조"
+    }
+   ],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-20",
+   "tier": "colloquial",
+   "query": "이사하려고 새 집을 먼저 샀는데 예전 집을 팔면 세금이 면제되나요?",
+   "required": [
+    {
+     "law": "소득세법 시행령",
+     "article": "제155조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-21",
+   "tier": "colloquial",
+   "query": "가게를 새로 열면 사업자등록은 언제까지 해야 하나요?",
+   "required": [
+    {
+     "law": "부가가치세법",
+     "article": "제8조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-22",
+   "tier": "colloquial",
+   "query": "병원 진료비나 학원비에도 부가세가 붙나요?",
+   "required": [
+    {
+     "law": "부가가치세법",
+     "article": "제26조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-23",
+   "tier": "colloquial",
+   "query": "가게 물건 살 때 낸 부가세는 나중에 빼주나요?",
+   "required": [
+    {
+     "law": "부가가치세법",
+     "article": "제38조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-24",
+   "tier": "colloquial",
+   "query": "손님이 카드로 결제하면 가게 부가세를 깎아준다던데 맞나요?",
+   "required": [
+    {
+     "law": "부가가치세법",
+     "article": "제46조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-25",
+   "tier": "colloquial",
+   "query": "부가세는 일 년에 몇 번, 언제 신고하나요?",
+   "required": [
+    {
+     "law": "부가가치세법",
+     "article": "제49조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-26",
+   "tier": "colloquial",
+   "query": "매출이 크지 않은 작은 가게는 부가세를 간단하게 내는 방법이 있나요?",
+   "required": [
+    {
+     "law": "부가가치세법",
+     "article": "제61조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-27",
+   "tier": "colloquial",
+   "query": "1년 매출이 아주 적은 작은 가게도 부가세를 내야 하나요?",
+   "required": [
+    {
+     "law": "부가가치세법",
+     "article": "제69조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-28",
+   "tier": "colloquial",
+   "query": "작년에 회사가 적자였는데 그 손실을 올해 이익에서 빼줄 수 있나요?",
+   "required": [
+    {
+     "law": "법인세법",
+     "article": "제13조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-29",
+   "tier": "colloquial",
+   "query": "회사에서 산 기계 값을 몇 년에 걸쳐 비용으로 처리하나요?",
+   "required": [
+    {
+     "law": "법인세법",
+     "article": "제23조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-30",
+   "tier": "colloquial",
+   "query": "회사가 낸 기부금은 전부 비용으로 인정받을 수 있나요?",
+   "required": [
+    {
+     "law": "법인세법",
+     "article": "제24조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-31",
+   "tier": "colloquial",
+   "query": "거래처 접대하는 데 쓴 돈은 얼마까지 회사 경비로 인정되나요?",
+   "required": [
+    {
+     "law": "법인세법",
+     "article": "제25조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-32",
+   "tier": "colloquial",
+   "query": "대표이사한테 회사 건물을 시세보다 싸게 빌려주면 문제가 되나요?",
+   "required": [
+    {
+     "law": "법인세법",
+     "article": "제52조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-33",
+   "tier": "colloquial",
+   "query": "회사가 내는 법인세율은 몇 퍼센트인가요?",
+   "required": [
+    {
+     "law": "법인세법",
+     "article": "제55조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-34",
+   "tier": "colloquial",
+   "query": "법인세 신고는 사업연도가 끝나고 언제까지 해야 하나요?",
+   "required": [
+    {
+     "law": "법인세법",
+     "article": "제60조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-35",
+   "tier": "colloquial",
+   "query": "돌아가시기 몇 년 전에 자식에게 미리 준 재산도 상속세 계산에 들어가나요?",
+   "required": [
+    {
+     "law": "상속세 및 증여세법",
+     "article": "제13조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-36",
+   "tier": "colloquial",
+   "query": "장례식 비용이나 고인의 빚은 상속재산에서 빼주나요?",
+   "required": [
+    {
+     "law": "상속세 및 증여세법",
+     "article": "제14조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-37",
+   "tier": "colloquial",
+   "query": "남편이 돌아가셨을 때 아내가 물려받는 재산은 세금에서 얼마나 빼주나요?",
+   "required": [
+    {
+     "law": "상속세 및 증여세법",
+     "article": "제19조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-38",
+   "tier": "colloquial",
+   "query": "상속받는 사람 중에 미성년 자녀나 연로한 부모님이 있으면 공제가 늘어나나요?",
+   "required": [
+    {
+     "law": "상속세 및 증여세법",
+     "article": "제20조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-39",
+   "tier": "colloquial",
+   "query": "상속받은 재산이 많을수록 상속세율이 얼마나 올라가나요?",
+   "required": [
+    {
+     "law": "상속세 및 증여세법",
+     "article": "제26조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-40",
+   "tier": "colloquial",
+   "query": "소득이 없는 자녀 이름으로 집을 사면 증여받은 걸로 보나요?",
+   "required": [
+    {
+     "law": "상속세 및 증여세법",
+     "article": "제45조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-41",
+   "tier": "colloquial",
+   "query": "같은 사람한테 몇 년에 걸쳐 여러 번 받은 돈은 합쳐서 세금을 매기나요?",
+   "required": [
+    {
+     "law": "상속세 및 증여세법",
+     "article": "제47조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-42",
+   "tier": "colloquial",
+   "query": "부모님이 자녀에게 돈을 줄 때 얼마까지는 세금이 없나요?",
+   "required": [
+    {
+     "law": "상속세 및 증여세법",
+     "article": "제53조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-43",
+   "tier": "colloquial",
+   "query": "결혼할 때 부모님한테 받는 돈은 따로 더 공제해 주나요?",
+   "required": [
+    {
+     "law": "상속세 및 증여세법",
+     "article": "제53조의2"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-44",
+   "tier": "colloquial",
+   "query": "증여받은 금액이 크면 세율이 몇 퍼센트까지 올라가나요?",
+   "required": [
+    {
+     "law": "상속세 및 증여세법",
+     "article": "제56조"
+    }
+   ],
+   "acceptable": [
+    {
+     "law": "상속세 및 증여세법",
+     "article": "제26조"
+    }
+   ],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-45",
+   "tier": "colloquial",
+   "query": "돈을 증여받았으면 언제까지 신고해야 하나요?",
+   "required": [
+    {
+     "law": "상속세 및 증여세법",
+     "article": "제68조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-46",
+   "tier": "colloquial",
+   "query": "사업자 명의만 다른 사람 이름으로 해 두면 세금은 누가 내게 되나요?",
+   "required": [
+    {
+     "law": "국세기본법",
+     "article": "제14조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-47",
+   "tier": "colloquial",
+   "query": "몇 년이 지나면 세무서가 예전 세금을 더 걷어갈 수 없나요?",
+   "required": [
+    {
+     "law": "국세기본법",
+     "article": "제26조의2"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-48",
+   "tier": "colloquial",
+   "query": "세금을 덜 신고한 걸 나중에 알았는데 어떻게 바로잡나요?",
+   "required": [
+    {
+     "law": "국세기본법",
+     "article": "제45조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-49",
+   "tier": "colloquial",
+   "query": "세금을 너무 많이 냈다는 걸 알았는데 돌려받을 수 있나요?",
+   "required": [
+    {
+     "law": "국세기본법",
+     "article": "제45조의2"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-50",
+   "tier": "colloquial",
+   "query": "세금 신고를 아예 안 하면 벌금처럼 얼마가 더 붙나요?",
+   "required": [
+    {
+     "law": "국세기본법",
+     "article": "제47조의2"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-51",
+   "tier": "colloquial",
+   "query": "세금을 늦게 내면 하루하루 이자처럼 더 붙나요?",
+   "required": [
+    {
+     "law": "국세기본법",
+     "article": "제47조의4"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-52",
+   "tier": "colloquial",
+   "query": "세무서 처분이 억울하면 어디에 어떻게 이의를 제기하나요?",
+   "required": [
+    {
+     "law": "국세기본법",
+     "article": "제55조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-53",
+   "tier": "colloquial",
+   "query": "중소기업에 처음 취직한 청년은 소득세를 깎아주나요?",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제30조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-54",
+   "tier": "colloquial",
+   "query": "8년 넘게 직접 농사지은 땅을 팔면 세금이 줄어드나요?",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제69조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-55",
+   "tier": "colloquial",
+   "query": "청약통장에 넣는 돈도 연말정산 때 빼주나요?",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제87조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-56",
+   "tier": "colloquial",
+   "query": "ISA 계좌에서 생긴 이자나 배당에는 세금이 없나요?",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제91조의18"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-57",
+   "tier": "colloquial",
+   "query": "형편이 어려운 맞벌이 부부도 근로장려금을 받을 수 있나요?",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제100조의3"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-58",
+   "tier": "colloquial",
+   "query": "체크카드를 많이 쓰면 연말정산에 도움이 되나요?",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제126조의2"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-59",
+   "tier": "colloquial",
+   "query": "아파트를 살 때 내는 취득세율은 얼마인가요?",
+   "required": [
+    {
+     "law": "지방세법",
+     "article": "제11조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-60",
+   "tier": "colloquial",
+   "query": "집을 산 다음 취득세는 언제까지 내야 하나요?",
+   "required": [
+    {
+     "law": "지방세법",
+     "article": "제20조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-61",
+   "tier": "colloquial",
+   "query": "아파트 재산세는 몇 퍼센트로 매겨지나요?",
+   "required": [
+    {
+     "law": "지방세법",
+     "article": "제111조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-62",
+   "tier": "colloquial",
+   "query": "6월에 집을 팔면 그 해 재산세는 파는 사람과 사는 사람 중 누가 내나요?",
+   "required": [
+    {
+     "law": "지방세법",
+     "article": "제114조"
+    }
+   ],
+   "acceptable": [
+    {
+     "law": "지방세법",
+     "article": "제107조"
+    }
+   ],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-63",
+   "tier": "colloquial",
+   "query": "내 차 자동차세는 어떻게 계산되나요?",
+   "required": [
+    {
+     "law": "지방세법",
+     "article": "제127조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "col-64",
+   "tier": "colloquial",
+   "query": "해외여행 가서 산 물건은 얼마까지 세금 없이 들여올 수 있나요?",
+   "required": [
+    {
+     "law": "관세법",
+     "article": "제96조"
+    }
+   ],
+   "acceptable": [],
+   "source": "written for this set; label checked against the stored article"
+  },
+  {
+   "id": "int-09-0133",
+   "tier": "interpretation",
+   "query": "석유류에 대한 부가가치세를 면제 또는 감면받을 수 있는 여객선박의 범위",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제106조의2"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 09-0133, first cited article"
+  },
+  {
+   "id": "int-09-0256",
+   "tier": "interpretation",
+   "query": "보세구역에 반입된 외국물품이 장치기간 경과로 매각된 때 물품의 공매잔금 교부와 관련하여 화물운송인이 유치권자에 해당하는지",
+   "required": [
+    {
+     "law": "관세법",
+     "article": "제211조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 09-0256, first cited article"
+  },
+  {
+   "id": "int-09-0365",
+   "tier": "interpretation",
+   "query": "과태료 부과를 위한 정보제공요청이 납세자의 과세정보를 제공할 수 있는 경우에 해당하는지 여부",
+   "required": [
+    {
+     "law": "국세기본법",
+     "article": "제81조의10"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 09-0365, first cited article"
+  },
+  {
+   "id": "int-10-0003",
+   "tier": "interpretation",
+   "query": "사모투자전문회사 등이 「독점규제 및 공정거래에 관한 법률」에 따른 지주회사의 요건을 갖춘 경우「조세특례제한법」의 취득세 면제 대상에 해당하는지 여부",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제120조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 10-0003, first cited article"
+  },
+  {
+   "id": "int-10-0075",
+   "tier": "interpretation",
+   "query": "부당해고기간의 임금 상당액이 「소득세법」 제20조제1항제1호의 근로소득에 해당되는지의 여부",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제20조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 10-0075, first cited article"
+  },
+  {
+   "id": "int-10-0243",
+   "tier": "interpretation",
+   "query": "농업용 기자재에 대한 부가가치세를 환급받을 수 있는 범위",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제105조의2"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 10-0243, first cited article"
+  },
+  {
+   "id": "int-10-0297",
+   "tier": "interpretation",
+   "query": "「국세기본법」 제81조의13제1항제6호의 “다른 법률의 규정”의 의미",
+   "required": [
+    {
+     "law": "국세기본법",
+     "article": "제81조의13"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 10-0297, first cited article"
+  },
+  {
+   "id": "int-10-0387",
+   "tier": "interpretation",
+   "query": "도시지역에 편입된 농지에서 재촌·자경하던 자가 해당 농지를 2009년 12월 31일 이전에 양도한 경우 「소득세법 시행규칙」 제83조의5제4항제2호의 적용 여부",
+   "required": [
+    {
+     "law": "소득세법 시행규칙",
+     "article": "제83조의5"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 10-0387, first cited article"
+  },
+  {
+   "id": "int-10-0412",
+   "tier": "interpretation",
+   "query": "구 「군용항공기지법」에 따른 기지보호구역 안의 임야가 「소득세법 시행령」 에 따른 비사업용 토지인지 여부",
+   "required": [
+    {
+     "law": "소득세법 시행령",
+     "article": "제168조의9"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 10-0412, first cited article"
+  },
+  {
+   "id": "int-10-0413",
+   "tier": "interpretation",
+   "query": "혼인으로 1세대 2주택이 된 비거주자의 주택 양도 시 양도소득세의 비과세 여부",
+   "required": [
+    {
+     "law": "소득세법 시행령",
+     "article": "제155조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 10-0413, first cited article"
+  },
+  {
+   "id": "int-10-0431",
+   "tier": "interpretation",
+   "query": "내항기로 전환된 외국무역기에서 전환 전에 사용하고 남은 연료를 사용하는 경우 관세의 부과 대상이 되는지",
+   "required": [
+    {
+     "law": "관세법",
+     "article": "제239조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 10-0431, first cited article"
+  },
+  {
+   "id": "int-10-0484",
+   "tier": "interpretation",
+   "query": "세대 전원이 출국 후 1주택을 추가 취득하고 추가 취득한 주택의 취득일부터 1년 이내, 출국일부터 2년이 지난 때 종전 주택을 양도하는 경우 1세대 1주택으로 비과세 대상인지 여부",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제89조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 10-0484, first cited article"
+  },
+  {
+   "id": "int-11-0022",
+   "tier": "interpretation",
+   "query": "「지방세특례제한법」 제68조제1항에 따라 취득세가 면제되는 중고 건설기계의 의미",
+   "required": [
+    {
+     "law": "지방세특례제한법",
+     "article": "제68조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 11-0022, first cited article"
+  },
+  {
+   "id": "int-11-0054",
+   "tier": "interpretation",
+   "query": "보세구역 내 수출품 제조업자에 대한 부품 공급의 부가가치세 과세대상 여부 등",
+   "required": [
+    {
+     "law": "부가가치세법",
+     "article": "제1조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 11-0054, first cited article"
+  },
+  {
+   "id": "int-11-0150",
+   "tier": "interpretation",
+   "query": "2인으로부터 근로소득을 지급받은 자가 「소득세법」 제137조의2 등에 따른 원천징수영수증 제출 및 종합소득과세표준 확정 신고를 하지 않은 경우 무신고가산세 등의 부과 대상 해당 여부",
+   "required": [
+    {
+     "law": "국세기본법",
+     "article": "제47조의2"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 11-0150, first cited article"
+  },
+  {
+   "id": "int-11-0376",
+   "tier": "interpretation",
+   "query": "선출직 후보를 지지·지원하는 정치활동을 한 바 있는 단체를 지정기부금단체등으로 재지정하지 않을 수 있는지 여부",
+   "required": [
+    {
+     "law": "법인세법 시행령",
+     "article": "제36조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 11-0376, first cited article"
+  },
+  {
+   "id": "int-11-0668",
+   "tier": "interpretation",
+   "query": "「조세특례제한법」 제121조의2제4항에 따른 재산세 감면과 관련한 “해당 재산”의 범위",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제121조의2"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 11-0668, first cited article"
+  },
+  {
+   "id": "int-12-0006",
+   "tier": "interpretation",
+   "query": "「공익사업을 위한 토지 등의 취득 및 보상에 관한 법률」 제8조제1항에 따라 사업시행자가 공익사업의 수행을 위해 필요한 서류(영업손실 보상을 위한 영업개시일의 확인)를 요청하는 경우가 「국세기본법」 제81조의13제1항제6호에 해당하는지 여부",
+   "required": [
+    {
+     "law": "국세기본법",
+     "article": "제81조의13"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 12-0006, first cited article"
+  },
+  {
+   "id": "int-12-0261",
+   "tier": "interpretation",
+   "query": "“주차장”으로 도시관리계획의 결정 및 지형도면이 고시된 토지를 행정청이 토지구획정리사업을 시행하여 노외주차장을 설치한 다음 사인(私人)에게 매각하여 사인이 그 주차장을 소유하고 있는 경우 재산세 경감 여부",
+   "required": [
+    {
+     "law": "지방세특례제한법",
+     "article": "제84조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 12-0261, first cited article"
+  },
+  {
+   "id": "int-12-0368",
+   "tier": "interpretation",
+   "query": "공익사업용 토지 등에 대한 양도소득세 감면의 적용 범위",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제77조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 12-0368, first cited article"
+  },
+  {
+   "id": "int-12-0700",
+   "tier": "interpretation",
+   "query": "「지방세특례제한법」 제31조제1항의 “임대용 부동산 취득일부터 60일 이내에 임대사업자로 등록한 경우”의 적용범위 등",
+   "required": [
+    {
+     "law": "지방세특례제한법",
+     "article": "제31조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 12-0700, first cited article"
+  },
+  {
+   "id": "int-13-0259",
+   "tier": "interpretation",
+   "query": "가사사정으로 인한 병역감면 대상자의 토지·건축물 등의 재산자료를 확인하기 위해 과세정보를 요청하는 경우가 「지방세기본법」 제114조제1항제5호에 해당하는지",
+   "required": [
+    {
+     "law": "지방세기본법",
+     "article": "제114조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 13-0259, first cited article"
+  },
+  {
+   "id": "int-13-0276",
+   "tier": "interpretation",
+   "query": "수탁자가 준공하고 보존등기 등을 한 건축물을 위탁자가 본점사업용으로 사용하는 경우 위탁자에게 취득세 중과기준세율을 적용할 수 있는지 여부",
+   "required": [
+    {
+     "law": "지방세법",
+     "article": "제13조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 13-0276, first cited article"
+  },
+  {
+   "id": "int-13-0326",
+   "tier": "interpretation",
+   "query": "수탁자가 준공하고 보존등기 등을 한 건축물을 위탁자가 본점사업용으로 사용하는 경우 위탁자에게 취득세 중과기준세율을 적용할 수 있는지 여부",
+   "required": [
+    {
+     "law": "지방세법",
+     "article": "제13조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 13-0326, first cited article"
+  },
+  {
+   "id": "int-13-0426",
+   "tier": "interpretation",
+   "query": "외항선 또는 원양어선의 선원에 대한 판매용도로 담배를 반출한 후 이를 수출한 경우 담배소비세를 면제할 수 있는지 여부",
+   "required": [
+    {
+     "law": "지방세법",
+     "article": "제54조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 13-0426, first cited article"
+  },
+  {
+   "id": "int-13-0446",
+   "tier": "interpretation",
+   "query": "재산세 면제대상인 토지의 범위",
+   "required": [
+    {
+     "law": "지방세특례제한법",
+     "article": "제28조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 13-0446, first cited article"
+  },
+  {
+   "id": "int-13-0509",
+   "tier": "interpretation",
+   "query": "“먹는 물로 판매하기 위하여 퍼 올린 지하수”의 범위",
+   "required": [
+    {
+     "law": "지방세법 시행령",
+     "article": "제136조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 13-0509, first cited article"
+  },
+  {
+   "id": "int-14-0013",
+   "tier": "interpretation",
+   "query": "경로당 난방비를 특별교부세로 지원할 수 있는지 여부",
+   "required": [
+    {
+     "law": "지방교부세법",
+     "article": "제9조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 14-0013, first cited article"
+  },
+  {
+   "id": "int-14-0022",
+   "tier": "interpretation",
+   "query": "「상속세 및 증여세법 시행령」 제38조제2항 단서의 “주무관청”의 의미",
+   "required": [
+    {
+     "law": "상속세 및 증여세법 시행령",
+     "article": "제38조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 14-0022, first cited article"
+  },
+  {
+   "id": "int-14-0225",
+   "tier": "interpretation",
+   "query": "등록면허세의 계산 방법",
+   "required": [
+    {
+     "law": "지방세법",
+     "article": "제28조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 14-0225, first cited article"
+  },
+  {
+   "id": "int-14-0463",
+   "tier": "interpretation",
+   "query": "공무상 질병에 따라 지급받는 봉급이 비과세대상에 해당하는지",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제12조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 14-0463, first cited article"
+  },
+  {
+   "id": "int-14-0577",
+   "tier": "interpretation",
+   "query": "지방자치단체가 과점주주의 간주취득세 과세표준을 산정할 때 해당 법인이 「신탁법」에 따라 신탁한 부동산은 과세표준에서 제외되는지?",
+   "required": [
+    {
+     "law": "지방세법",
+     "article": "제10조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 14-0577, first cited article"
+  },
+  {
+   "id": "int-14-0588",
+   "tier": "interpretation",
+   "query": "「지방세특례제한법」 제78조제2항 규정에 의한 취득세등의 감면대상 범위",
+   "required": [
+    {
+     "law": "지방세특례제한법",
+     "article": "제78조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 14-0588, first cited article"
+  },
+  {
+   "id": "int-14-0871",
+   "tier": "interpretation",
+   "query": "사립학교가 「지방세법」 제9조제1항에 규정된 국가 또는 지방자치단체에 해당되는지",
+   "required": [
+    {
+     "law": "지방세법",
+     "article": "제9조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 14-0871, first cited article"
+  },
+  {
+   "id": "int-15-0125",
+   "tier": "interpretation",
+   "query": "과점주주인 지주회사의 취득세 면제 여부",
+   "required": [
+    {
+     "law": "지방세특례제한법",
+     "article": "제57조의2"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 15-0125, first cited article"
+  },
+  {
+   "id": "int-15-0133",
+   "tier": "interpretation",
+   "query": "지방식품의약품안전청에서 직무수행을 위한 시험ㆍ연구장비 수입 시 부가가치세 면제 여부",
+   "required": [
+    {
+     "law": "부가가치세법 시행규칙",
+     "article": "제39조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 15-0133, first cited article"
+  },
+  {
+   "id": "int-15-0224",
+   "tier": "interpretation",
+   "query": "간척한 후 4년이 지나지 않는 토지를 다른 자에게 양도하거나 매립목적을 변경하여 사용하는 등의 경우에는 분리과세 대상에서 제외되는지",
+   "required": [
+    {
+     "law": "지방세법 시행령",
+     "article": "제102조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 15-0224, first cited article"
+  },
+  {
+   "id": "int-15-0228",
+   "tier": "interpretation",
+   "query": "지방자치단체의 도로점용허가가 부가가치세 면제 제외 대상인지",
+   "required": [
+    {
+     "law": "부가가치세법 시행령",
+     "article": "제46조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 15-0228, first cited article"
+  },
+  {
+   "id": "int-15-0261",
+   "tier": "interpretation",
+   "query": "태양광 발전설비 설치 가구에서 발전한 전력의 요금채권과 전기판매사업자로부터 공급받는 전력의 요금채권이 서로 상계되는 부분에 대한 부가가치세 과세 여부",
+   "required": [
+    {
+     "law": "부가가치세법",
+     "article": "제29조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 15-0261, first cited article"
+  },
+  {
+   "id": "int-15-0297",
+   "tier": "interpretation",
+   "query": "제주투자진흥지구로 지정되기 전에 취득한 과세물건에 대한 취득세 감면 여부",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제121조의9"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 15-0297, first cited article"
+  },
+  {
+   "id": "int-15-0360",
+   "tier": "interpretation",
+   "query": "외국국적동포의 장기주택저당차입금 이자상환액 공제 대상자 여부",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제52조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 15-0360, first cited article"
+  },
+  {
+   "id": "int-15-0651",
+   "tier": "interpretation",
+   "query": "저당권 신탁 시 적용되는 등록면허세 세율",
+   "required": [
+    {
+     "law": "지방세법",
+     "article": "제28조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 15-0651, first cited article"
+  },
+  {
+   "id": "int-15-0673",
+   "tier": "interpretation",
+   "query": "혼인합가 후 배우자에게 증여받은 주택을 양도하는 경우에 대한 1세대1주택 특례 적용 여부",
+   "required": [
+    {
+     "law": "소득세법 시행령",
+     "article": "제155조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 15-0673, first cited article"
+  },
+  {
+   "id": "int-15-0726",
+   "tier": "interpretation",
+   "query": "통계 정보가 비밀 유지의 대상인 과세정보에 해당하는지",
+   "required": [
+    {
+     "law": "국세기본법",
+     "article": "제81조의13"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 15-0726, first cited article"
+  },
+  {
+   "id": "int-15-0827",
+   "tier": "interpretation",
+   "query": "거주자의 신용카드 소득공제금액에 배우자가 미취업기간에 사용한 신용카드 사용금액이 포함되는지",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제126조의2"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 15-0827, first cited article"
+  },
+  {
+   "id": "int-16-0196",
+   "tier": "interpretation",
+   "query": "과점주주가 주식을 전부 양도한 후에 다시 과점주주가 된 경우의 취득세 과세표준",
+   "required": [
+    {
+     "law": "지방세법 시행령",
+     "article": "제11조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 16-0196, first cited article"
+  },
+  {
+   "id": "int-16-0212",
+   "tier": "interpretation",
+   "query": "배우자 또는 직계존비속의 부동산등을 부담부 증여로 취득하는 경우에 대가를 지급한 사실이 증명되어야만 인수하는 채무액에 상당하는 부분을 유상취득으로 보는지",
+   "required": [
+    {
+     "law": "지방세법",
+     "article": "제7조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 16-0212, first cited article"
+  },
+  {
+   "id": "int-16-0422",
+   "tier": "interpretation",
+   "query": "공익법인이 출연재산의 매각대금으로 운용기간 6개월 이상인 수익용 재산을 취득한 경우 “직접 공익목적사업에 사용한 실적”에 포함되는지 여부",
+   "required": [
+    {
+     "law": "상속세 및 증여세법 시행령",
+     "article": "제38조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 16-0422, first cited article"
+  },
+  {
+   "id": "int-16-0466",
+   "tier": "interpretation",
+   "query": "과세기준일 현재 6개월 이상 공사가 중단되었으나,  건축기간이 지나지 아니한 경우 분리과세대상 토지에 해당하는지 여부",
+   "required": [
+    {
+     "law": "지방세법 시행령",
+     "article": "제102조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 16-0466, first cited article"
+  },
+  {
+   "id": "int-17-0422",
+   "tier": "interpretation",
+   "query": "농지의 취득세 경감 대상인 자경농민의 거주 요건의 기준",
+   "required": [
+    {
+     "law": "지방세특례제한법 시행령",
+     "article": "제3조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 17-0422, first cited article"
+  },
+  {
+   "id": "int-17-0535",
+   "tier": "interpretation",
+   "query": "농지의 취득세 경감 대상인 자경농민의 거주 요건의 기준",
+   "required": [
+    {
+     "law": "지방세특례제한법 시행령",
+     "article": "제3조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 17-0535, first cited article"
+  },
+  {
+   "id": "int-17-0598",
+   "tier": "interpretation",
+   "query": "공무원에게 지급되는 맞춤형복지비가 근로소득에 포함되는지 여부",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제20조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 17-0598, first cited article"
+  },
+  {
+   "id": "int-18-0024",
+   "tier": "interpretation",
+   "query": "위탁급식의 방법으로 교직원에 대하여 음식용역을 공급하는 경우에 부가가치세를 면제하는지 여부",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제106조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 18-0024, first cited article"
+  },
+  {
+   "id": "int-18-0194",
+   "tier": "interpretation",
+   "query": "합병으로 승계취득하는 회원제 골프장에 대해 취득세가 감면되는지 여부",
+   "required": [
+    {
+     "law": "지방세특례제한법",
+     "article": "제57조의2"
+    }
+   ],
+   "acceptable": [
+    {
+     "law": "지방세법",
+     "article": "제13조"
+    }
+   ],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 18-0194, first cited article"
+  },
+  {
+   "id": "int-18-0393",
+   "tier": "interpretation",
+   "query": "납세자보호관의 민원업무 처리절차",
+   "required": [
+    {
+     "law": "지방세기본법",
+     "article": "제77조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 18-0393, first cited article"
+  },
+  {
+   "id": "int-18-0428",
+   "tier": "interpretation",
+   "query": "합병으로 승계취득하는 회원제 골프장에 대해 취득세가 감면되는지 여부",
+   "required": [
+    {
+     "law": "지방세특례제한법",
+     "article": "제57조의2"
+    }
+   ],
+   "acceptable": [
+    {
+     "law": "지방세법",
+     "article": "제13조"
+    }
+   ],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 18-0428, first cited article"
+  },
+  {
+   "id": "int-18-0506",
+   "tier": "interpretation",
+   "query": "합병으로 승계취득하는 회원제 골프장에 대해 취득세가 감면되는지 여부",
+   "required": [
+    {
+     "law": "지방세특례제한법",
+     "article": "제57조의2"
+    }
+   ],
+   "acceptable": [
+    {
+     "law": "지방세법",
+     "article": "제13조"
+    }
+   ],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 18-0506, first cited article"
+  },
+  {
+   "id": "int-18-0507",
+   "tier": "interpretation",
+   "query": "합병으로 승계취득하는 회원제 골프장에 대해 취득세가 감면되는지 여부",
+   "required": [
+    {
+     "law": "지방세특례제한법",
+     "article": "제57조의2"
+    }
+   ],
+   "acceptable": [
+    {
+     "law": "지방세법",
+     "article": "제13조"
+    }
+   ],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 18-0507, first cited article"
+  },
+  {
+   "id": "int-18-0783",
+   "tier": "interpretation",
+   "query": "「국세기본법」 비밀유지 규정의 예외로 과세정보 제공이 가능한 “다른 법률의 규정에 따라 과세정보를 요구하는 경우”의 의미",
+   "required": [
+    {
+     "law": "국세기본법",
+     "article": "제81조의13"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 18-0783, first cited article"
+  },
+  {
+   "id": "int-18-0804",
+   "tier": "interpretation",
+   "query": "「조세특례제한법」 제99조의2제1항을 적용받는 주택만을 소유하고 있는 사람의 2017. 8. 2. 이전 매매계약 체결 주택이 구 「소득세법 시행령」 부칙 제2조제2항제2호의 적용대상인지 여부",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제99조의2"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 18-0804, first cited article"
+  },
+  {
+   "id": "int-19-0005",
+   "tier": "interpretation",
+   "query": "국가유공자 등에 대한 자동차세 감면 범위",
+   "required": [
+    {
+     "law": "지방세특례제한법 시행령",
+     "article": "제12조의2"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 19-0005, first cited article"
+  },
+  {
+   "id": "int-19-0200",
+   "tier": "interpretation",
+   "query": "SPAC 합병에 따른 부동산의 소유권 변동 이후 해당 부동산을 사용하는 경우가 “직접 사용”에 해당하는지 여부",
+   "required": [
+    {
+     "law": "지방세특례제한법",
+     "article": "제78조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 19-0200, first cited article"
+  },
+  {
+   "id": "int-19-0304",
+   "tier": "interpretation",
+   "query": "산림복지전문업 중 숲해설업 및 유아숲교육업이 부가가치세 면세 대상인 교육 용역에 해당하는지 여부",
+   "required": [
+    {
+     "law": "부가가치세법",
+     "article": "제26조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 19-0304, first cited article"
+  },
+  {
+   "id": "int-19-0473",
+   "tier": "interpretation",
+   "query": "「감사원법」 제27조제1항제2호, 제30조 및 제50조가 「국세기본법」 제81조의13제1항제9호에 따른 “다른 법률의 규정에 따라 과세정보를 요구하는 경우”에 해당하는지 여부",
+   "required": [
+    {
+     "law": "국세기본법",
+     "article": "제81조의13"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 19-0473, first cited article"
+  },
+  {
+   "id": "int-19-0494",
+   "tier": "interpretation",
+   "query": "판매 목적으로 제작한 설비를 연구 및 인력개발을 위해 사용하는 경우 “연구 및 인력개발을 위한 설비투자에 대한 세액공제”를 받을 수 있는지 여부 등",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제11조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 19-0494, first cited article"
+  },
+  {
+   "id": "int-19-0547",
+   "tier": "interpretation",
+   "query": "학교에 대한 취득세 면제 대상의 범위",
+   "required": [
+    {
+     "law": "지방세특례제한법",
+     "article": "제41조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 19-0547, first cited article"
+  },
+  {
+   "id": "int-19-0620",
+   "tier": "interpretation",
+   "query": "「소득세법」 제104조제1항제4호 단서에 따른 양도소득세 세율의 적용 제외 기준",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제104조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 19-0620, first cited article"
+  },
+  {
+   "id": "int-19-0632",
+   "tier": "interpretation",
+   "query": "판매 목적으로 제작한 설비를 연구 및 인력개발을 위해 사용하는 경우 “연구 및 인력개발을 위한 설비투자에 대한 세액공제”를 받을 수 있는지 여부 등",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제11조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 19-0632, first cited article"
+  },
+  {
+   "id": "int-20-0128",
+   "tier": "interpretation",
+   "query": "주민세 재산분 중과세 대상이 되는 오염물질 배출 사업소의 범위",
+   "required": [
+    {
+     "law": "지방세법 시행령",
+     "article": "제83조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 20-0128, first cited article"
+  },
+  {
+   "id": "int-20-0190",
+   "tier": "interpretation",
+   "query": "도시개발사업의 시행자가 제공하는 토지를 신탁한 경우에도 분리과세대상이 되는지 여부",
+   "required": [
+    {
+     "law": "지방세법 시행령",
+     "article": "제102조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 20-0190, first cited article"
+  },
+  {
+   "id": "int-20-0254",
+   "tier": "interpretation",
+   "query": "주민세 종업원분의 과세표준인 종업원의 급여총액에서 제외되는 “육아휴직을 한 종업원이 직무 복귀 후 1년 동안 받는 급여”의 의미",
+   "required": [
+    {
+     "law": "지방세법 시행령",
+     "article": "제78조의2"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 20-0254, first cited article"
+  },
+  {
+   "id": "int-20-0359",
+   "tier": "interpretation",
+   "query": "성실공익법인등의 요건인 공익법인등의 전용계좌 개설 및 사용의 의미",
+   "required": [
+    {
+     "law": "상속세 및 증여세법",
+     "article": "제16조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 20-0359, first cited article"
+  },
+  {
+   "id": "int-20-0577",
+   "tier": "interpretation",
+   "query": "1세대 1주택 양도소득세 비과세 요건 관련 “계약금을 지급한 사실”의 의미",
+   "required": [
+    {
+     "law": "소득세법 시행령",
+     "article": "제154조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 20-0577, first cited article"
+  },
+  {
+   "id": "int-21-0135",
+   "tier": "interpretation",
+   "query": "지방 이전에 따른 취득세 및 재산세의 감면 대상인 “공장”에 “도시형공장”이 포함되는지 여부",
+   "required": [
+    {
+     "law": "지방세특례제한법",
+     "article": "제80조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 21-0135, first cited article"
+  },
+  {
+   "id": "int-21-0469",
+   "tier": "interpretation",
+   "query": "직장어린이집을 위탁하여 운영하는 경우가 취득세 감면 대상인지 여부",
+   "required": [
+    {
+     "law": "지방세특례제한법",
+     "article": "제19조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 21-0469, first cited article"
+  },
+  {
+   "id": "int-21-0624",
+   "tier": "interpretation",
+   "query": "외국회사 소유의 항공기를 직접 사용하기 위하여 운용리스 방식으로 수입하는 경우가 수입하는 자가 취득한 것으로 보는 “임차하여 수입하는 경우”에 해당하는지 여부",
+   "required": [
+    {
+     "law": "지방세법",
+     "article": "제7조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 21-0624, first cited article"
+  },
+  {
+   "id": "int-21-0659",
+   "tier": "interpretation",
+   "query": "과세관청이 착오로 재산세를 과다하게 부과하고 이후 「지방세기본법」 제38조에 따른 부과의 제척기간이 경과한 경우 그 부과처분을 취소 또는 감액경정할 수 있는지 여부",
+   "required": [
+    {
+     "law": "지방세기본법",
+     "article": "제38조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 21-0659, first cited article"
+  },
+  {
+   "id": "int-21-0804",
+   "tier": "interpretation",
+   "query": "선박용 연료를 공급하기 위해 항만 밖으로 선박용 연료를 운송한 경우가 유류세 감면 대상인지 여부",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제111조의5"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 21-0804, first cited article"
+  },
+  {
+   "id": "int-22-0285",
+   "tier": "interpretation",
+   "query": "「지방세기본법」 제86조제1항에 따라 제공 등이 금지되는 “과세정보”의 의미와 같은 항 제10호에 따라 과세정보의 예외적 제공이 가능한 “그 밖에 다른 법률에 따라 과세정보를 요구하는 경우”의 의미",
+   "required": [
+    {
+     "law": "지방세기본법",
+     "article": "제86조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 22-0285, first cited article"
+  },
+  {
+   "id": "int-22-0371",
+   "tier": "interpretation",
+   "query": "양도소득세 산정 시 건설자금이자가 양도가액에서 공제할 필요경비인 취득가액에 포함되는지 여부",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제97조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 22-0371, first cited article"
+  },
+  {
+   "id": "int-22-0398",
+   "tier": "interpretation",
+   "query": "「법인세법」 제44조제3항에 해당하는 합병을 하여 취득세를 경감받은 합병법인에 합병등기일부터 3년 이내에 같은 법 제44조의3제3항 각 호의 어느 하나에 해당하는 사유가 발생한 경우 「지방세특례제한법」 제57조의2제1항 각 호 외의 부분 단서에 따라 경감된 취득세를 추징해야 하는지 여부",
+   "required": [
+    {
+     "law": "지방세특례제한법",
+     "article": "제57조의2"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 22-0398, first cited article"
+  },
+  {
+   "id": "int-22-0447",
+   "tier": "interpretation",
+   "query": "부부가 공동명의로 생애 최초 주택을 취득하는 경우 취득세 감면 대상",
+   "required": [
+    {
+     "law": "지방세특례제한법",
+     "article": "제36조의3"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 22-0447, first cited article"
+  },
+  {
+   "id": "int-22-0472",
+   "tier": "interpretation",
+   "query": "「소득세법」 제50조제1항제3호나목에 따른 20세 이하의 의미",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제50조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 22-0472, first cited article"
+  },
+  {
+   "id": "int-22-0605",
+   "tier": "interpretation",
+   "query": "「지방세기본법」 제86조제1항에 따라 제공 등이 금지되는 “과세정보”의 의미와 같은 항 제10호에 따라 과세정보의 예외적 제공이 가능한 “그 밖에 다른 법률에 따라 과세정보를 요구하는 경우”의 의미",
+   "required": [
+    {
+     "law": "지방세기본법",
+     "article": "제86조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 22-0605, first cited article"
+  },
+  {
+   "id": "int-22-0612",
+   "tier": "interpretation",
+   "query": "「사립학교교직원 연금법」을 적용받는 사립학교 사무직원이 사립학교 내부 규정에 따라 받는 육아휴직수당에 대한 소득세 과세 여부",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제12조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 22-0612, first cited article"
+  },
+  {
+   "id": "int-22-0681",
+   "tier": "interpretation",
+   "query": "「지방세법」 제13조의2제2항에 따라 무상취득하는 주택에 대하여 취득세를 중과하는 경우에 「지방세법 시행령」 제28조의4제5항이 적용되는지 여부",
+   "required": [
+    {
+     "law": "지방세법 시행령",
+     "article": "제28조의4"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 22-0681, first cited article"
+  },
+  {
+   "id": "int-22-0879",
+   "tier": "interpretation",
+   "query": "「사립학교교직원 연금법」을 적용받는 사립학교 사무직원이 사립학교 내부 규정에 따라 받는 육아휴직수당에 대한 소득세 과세 여부",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제12조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 22-0879, first cited article"
+  },
+  {
+   "id": "int-23-0176",
+   "tier": "interpretation",
+   "query": "토지의 형질 변경 사업기간을 연장하기 위하여 개발행위 변경허가를 받는 경우 「지방세법」에 따라 등록면허세를 다시 납부해야 하는지",
+   "required": [
+    {
+     "law": "지방세법",
+     "article": "제35조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 23-0176, first cited article"
+  },
+  {
+   "id": "int-23-0514",
+   "tier": "interpretation",
+   "query": "「관세법」 제89조제6항제1호에 따른 관세감면 대상 물품의 범위",
+   "required": [
+    {
+     "law": "관세법",
+     "article": "제89조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 23-0514, first cited article"
+  },
+  {
+   "id": "int-23-0683",
+   "tier": "interpretation",
+   "query": "「관세법」 제89조제6항제1호에 따른 관세감면 대상 물품의 범위",
+   "required": [
+    {
+     "law": "관세법",
+     "article": "제89조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 23-0683, first cited article"
+  },
+  {
+   "id": "int-23-0932",
+   "tier": "interpretation",
+   "query": "「소득세법 시행령」 제155조제16항의 ‘수도권에 소재한 공공기관이 수도권 밖의 지역으로 이전’하는 경우가 같은 조 제8항의 ‘근무상의 형편’에 포함되는지 여부",
+   "required": [
+    {
+     "law": "소득세법 시행령",
+     "article": "제155조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 23-0932, first cited article"
+  },
+  {
+   "id": "int-24-0009",
+   "tier": "interpretation",
+   "query": "「조세특례제한법」 제97조제1항 본문의 “2000년 12월 31일 이전에 임대를 개시”하였을 것이라는 요건이 같은 항 단서에도 적용되는지 여부",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제97조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 24-0009, first cited article"
+  },
+  {
+   "id": "int-24-0169",
+   "tier": "interpretation",
+   "query": "「관세법」 제175조제2호 및 제3호에 따른 특허보세구역 운영인의 결격사유의 의미",
+   "required": [
+    {
+     "law": "관세법",
+     "article": "제175조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 24-0169, first cited article"
+  },
+  {
+   "id": "int-24-0206",
+   "tier": "interpretation",
+   "query": "「소득세법 시행령」 제154조제1항제5호에 따라 거주기간의 제한을 받지 아니하고 양도소득이 비과세되는 1세대 1주택의 범위 등",
+   "required": [
+    {
+     "law": "소득세법 시행령",
+     "article": "제154조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 24-0206, first cited article"
+  },
+  {
+   "id": "int-24-0294",
+   "tier": "interpretation",
+   "query": "「대외무역법」에 따른 무역을 하는 자가 수출용으로 취득하는 중고자동차의 경우, 「지방세법」에 따라 산출한 취득세액에 관계없이 취득세가 전액 면제되는지 여부",
+   "required": [
+    {
+     "law": "지방세특례제한법",
+     "article": "제177조의2"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 24-0294, first cited article"
+  },
+  {
+   "id": "int-24-0436",
+   "tier": "interpretation",
+   "query": "「관세법」 제175조제2호 및 제3호에 따른 특허보세구역 운영인의 결격사유의 의미",
+   "required": [
+    {
+     "law": "관세법",
+     "article": "제175조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 24-0436, first cited article"
+  },
+  {
+   "id": "int-24-0588",
+   "tier": "interpretation",
+   "query": "「소득세법 시행령」 제154조제1항제5호에 따라 거주기간의 제한을 받지 아니하고 양도소득이 비과세되는 1세대 1주택의 범위 등",
+   "required": [
+    {
+     "law": "소득세법 시행령",
+     "article": "제154조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 24-0588, first cited article"
+  },
+  {
+   "id": "int-24-0620",
+   "tier": "interpretation",
+   "query": "「조세특례제한법」 제6조제1항에 따라 세액을 감면받을 수 있는 기간",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제6조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 24-0620, first cited article"
+  },
+  {
+   "id": "int-24-0772",
+   "tier": "interpretation",
+   "query": "전체 주택의 시가표준액이 1억원을 초과하지만 부속토지를 제외한 주거용 건축물의 시가표준액이 1억원 이하인 경우로서 주거용 건축물만 소유한 경우 해당 주거용 건축물이 취득세 중과를 위한 소유주택 수에 포함되는지",
+   "required": [
+    {
+     "law": "지방세법 시행령",
+     "article": "제28조의4"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": false,
+   "source": "법제처 법령해석 24-0772, first cited article"
+  },
+  {
+   "id": "int-25-0087",
+   "tier": "interpretation",
+   "query": "「소득세법」 제12조제3호머목2)의 ‘6세 이하인 자녀’의 범위",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제12조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 25-0087, first cited article"
+  },
+  {
+   "id": "int-25-0379",
+   "tier": "interpretation",
+   "query": "해외 파견 등 공무(公務)상의 이유로 주민등록 및 거주를 하지 못한 경우는 「지방세특례제한법」 제73조제2항 및 같은 법 시행령 제34조제2항에 따라 취득세를 부과받는 경우에 해당하는지",
+   "required": [
+    {
+     "law": "지방세특례제한법",
+     "article": "제73조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 25-0379, first cited article"
+  },
+  {
+   "id": "int-25-0823",
+   "tier": "interpretation",
+   "query": "「지방세법 시행령」 제101조제1항 단서에 따라 별도합산과세대상 토지에서 제외되는 토지의 범위",
+   "required": [
+    {
+     "law": "지방세법 시행령",
+     "article": "제101조"
+    }
+   ],
+   "acceptable": [],
+   "explicit_reference": true,
+   "source": "법제처 법령해석 25-0823, first cited article"
+  },
+  {
+   "id": "leg-inc-01",
+   "tier": "legacy",
+   "query": "종합소득세 최고세율 구간의 세율과 누진공제액은 얼마인가요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제55조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-inc-02",
+   "tier": "legacy",
+   "query": "종합소득세 기본공제(인적공제) 금액은 얼마인가요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제50조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [
+    {
+     "law": "소득세법",
+     "article": "제103조"
+    }
+   ],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-inc-03",
+   "tier": "legacy",
+   "query": "사업소득자에게 적용되는 표준세액공제 금액은 얼마인가요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제59조의4"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [
+    {
+     "law": "소득세법",
+     "article": "제59조"
+    }
+   ],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-cg-01",
+   "tier": "legacy",
+   "query": "양도소득세 기본공제 금액은 얼마인가요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제103조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-cg-02",
+   "tier": "legacy",
+   "query": "양도소득세 기본세율 구간은 어떻게 되나요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제104조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-cg-03",
+   "tier": "legacy",
+   "query": "부동산 장기보유특별공제에서 15년 이상 보유한 1주택자의 공제율은 얼마인가요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제95조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-inh-01",
+   "tier": "legacy",
+   "query": "상속세율 구간과 누진공제액은 어떻게 되나요?",
+   "required": [
+    {
+     "law": "상속세 및 증여세법",
+     "article": "제26조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-inh-02",
+   "tier": "legacy",
+   "query": "상속세 기초공제 금액은 얼마인가요?",
+   "required": [
+    {
+     "law": "상속세 및 증여세법",
+     "article": "제18조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-inh-03",
+   "tier": "legacy",
+   "query": "상속세 일괄공제 금액은 얼마인가요?",
+   "required": [
+    {
+     "law": "상속세 및 증여세법",
+     "article": "제21조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-inh-04",
+   "tier": "legacy",
+   "query": "배우자상속공제의 최소 보장 금액은 얼마인가요?",
+   "required": [
+    {
+     "law": "상속세 및 증여세법",
+     "article": "제19조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-gift-01",
+   "tier": "legacy",
+   "query": "배우자에게 증여할 때 증여재산공제 한도는 얼마인가요?",
+   "required": [
+    {
+     "law": "상속세 및 증여세법",
+     "article": "제53조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [
+    {
+     "law": "상속세 및 증여세법",
+     "article": "제19조"
+    }
+   ],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-vat-01",
+   "tier": "legacy",
+   "query": "간이과세자의 부가가치세 신고 기준은 어떻게 되나요?",
+   "required": [
+    {
+     "law": "부가가치세법",
+     "article": "제67조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-vat-02",
+   "tier": "legacy",
+   "query": "매입세액 불공제 대상을 알려주세요.",
+   "required": [
+    {
+     "law": "부가가치세법",
+     "article": "제39조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-vat-03",
+   "tier": "legacy",
+   "query": "세금계산서 발급 의무가 없는 경우는 어떤 경우인가요?",
+   "required": [
+    {
+     "law": "부가가치세법",
+     "article": "제33조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-vat-04",
+   "tier": "legacy",
+   "query": "의제매입세액공제는 어떤 사업자가 적용받을 수 있나요?",
+   "required": [
+    {
+     "law": "부가가치세법",
+     "article": "제42조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-vat-05",
+   "tier": "legacy",
+   "query": "수출품에 영세율이 적용되는 요건은 무엇인가요?",
+   "required": [
+    {
+     "law": "부가가치세법",
+     "article": "제21조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-corp-01",
+   "tier": "legacy",
+   "query": "법인의 접대비 한도는 어떻게 계산하나요?",
+   "required": [
+    {
+     "law": "법인세법",
+     "article": "제25조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-corp-02",
+   "tier": "legacy",
+   "query": "법인 업무용승용차 관련 비용의 손금산입 한도는 얼마인가요?",
+   "required": [
+    {
+     "law": "법인세법",
+     "article": "제27조의2"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [
+    {
+     "law": "소득세법",
+     "article": "제33조의2"
+    }
+   ],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-corp-03",
+   "tier": "legacy",
+   "query": "결손금 소급공제 신청 방법을 알려주세요.",
+   "required": [
+    {
+     "law": "법인세법",
+     "article": "제72조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-corp-04",
+   "tier": "legacy",
+   "query": "법인세법상 익금불산입 항목에는 어떤 것들이 있나요?",
+   "required": [
+    {
+     "law": "법인세법",
+     "article": "제18조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-basic-01",
+   "tier": "legacy",
+   "query": "경정청구 기한은 얼마나 되나요?",
+   "required": [
+    {
+     "law": "국세기본법",
+     "article": "제45조의2"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-basic-02",
+   "tier": "legacy",
+   "query": "가산세를 감면받을 수 있는 경우는 어떤 경우인가요?",
+   "required": [
+    {
+     "law": "국세기본법",
+     "article": "제48조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-basic-03",
+   "tier": "legacy",
+   "query": "조세심판청구 기한은 언제까지인가요?",
+   "required": [
+    {
+     "law": "국세기본법",
+     "article": "제68조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-basic-04",
+   "tier": "legacy",
+   "query": "기한후신고를 하면 가산세는 어떻게 되나요?",
+   "required": [
+    {
+     "law": "국세기본법",
+     "article": "제45조의3"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-trc-01",
+   "tier": "legacy",
+   "query": "중소기업 특별세액감면 요건은 무엇인가요?",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제7조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-trc-02",
+   "tier": "legacy",
+   "query": "고용증대세액공제는 어떤 조건에서 적용되나요?",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제29조의7"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-trc-03",
+   "tier": "legacy",
+   "query": "청년 창업 중소기업 세액감면 대상은 누구인가요?",
+   "required": [
+    {
+     "law": "조세특례제한법",
+     "article": "제6조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-local-01",
+   "tier": "legacy",
+   "query": "부동산 취득세 세율은 어떻게 되나요?",
+   "required": [
+    {
+     "law": "지방세법",
+     "article": "제11조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-local-02",
+   "tier": "legacy",
+   "query": "재산세 과세기준일은 언제인가요?",
+   "required": [
+    {
+     "law": "지방세법",
+     "article": "제114조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-cust-01",
+   "tier": "legacy",
+   "query": "관세 환급을 받을 수 있는 요건은 무엇인가요?",
+   "required": [
+    {
+     "law": "관세법",
+     "article": "제106조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-cmp-01",
+   "tier": "legacy",
+   "query": "법인 업무용승용차를 리스로 이용하는 것과 장기렌트로 이용하는 것 중 손금산입 측면에서 어느 쪽이 유리한가요?",
+   "required": [
+    {
+     "law": "법인세법",
+     "article": "제27조의2"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-cmp-02",
+   "tier": "legacy",
+   "query": "간이과세자와 일반과세자 중 연매출 7천만원인 개인사업자에게 유리한 쪽은 어디인가요?",
+   "required": [
+    {
+     "law": "부가가치세법",
+     "article": "제61조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-direct-01",
+   "tier": "legacy",
+   "query": "소득세법 제55조에 뭐라고 되어 있는지 알려줘",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제55조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [
+    {
+     "law": "법인세법",
+     "article": "제55조"
+    }
+   ],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-direct-02",
+   "tier": "legacy",
+   "query": "부가가치세법 제39조 내용이 궁금해",
+   "required": [
+    {
+     "law": "부가가치세법",
+     "article": "제39조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [
+    {
+     "law": "부가가치세법",
+     "article": "제3조"
+    }
+   ],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-hard-01",
+   "tier": "legacy",
+   "query": "1세대 1주택을 팔면 양도소득세가 비과세되는 근거 조문은?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제89조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-hard-02",
+   "tier": "legacy",
+   "query": "회사에서 연말정산은 언제 어떻게 하나요?",
+   "required": [
+    {
+     "law": "소득세법",
+     "article": "제137조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  },
+  {
+   "id": "leg-hard-03",
+   "tier": "legacy",
+   "query": "상속세 신고는 언제까지 해야 하나요?",
+   "required": [
+    {
+     "law": "상속세 및 증여세법",
+     "article": "제67조"
+    }
+   ],
+   "acceptable": [],
+   "hard_negatives": [],
+   "source": "evaluation/datasets/retrieval.json (draft labels)"
+  }
+ ]
+}
