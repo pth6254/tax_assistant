@@ -41,7 +41,9 @@ Qwen 교체 0.502/0.833/0.887, KURE 임계값 0.4 0.517/0.680/0.695(일상 hit@5
 
 **11-07 법령 데이터**: 현행 표를 공식 XML 보관소와 대조해(`scripts/audit_law_data.py`) 잘리거나 이미 바뀐 조문 251개를 교체했다(ADR-081,
 [DATA_STRATEGY.md](DATA_STRATEGY.md) P1, 되돌리기: `python scripts/repair_law_indexes.py rollback --plan evaluation/runs/archive-sync-20261107/plan.json`,
-전체 백업 `backups/tax_db-20261107-0030.dump`). 다음 데이터 단계는 P2(보관소에서 현행 보기 생성, 법인세법 제90조·새 조문 3개 포함).
+전체 백업 `backups/tax_db-20261107-0030.dump`). 같은 날 P2로 현행 표 전체를 오늘 시행본과 같게 맞추고(버전 표시 4,534·글 139·현행 아님 8·추가 3, 되돌리기
+`python scripts/rebuild_current_laws.py rollback --dir evaluation/runs/rebuild-20261107` — 먼저 같은 폴더 `text-plan.json`의 repair rollback,
+백업 `backups/tax_db-20261107-1152.dump`) 그래프를 전체 다시 만들었다(이전 그래프 `graph-before.json`). 다음 데이터 단계는 출처표 보완과 P3.
 조문 검색 평가셋은 v1.2(167문항)로 바뀌어 이전 수치와 직접 비교하지 않는다.
 평가 지표·성능 개선·배포의 순서와 채택 기준은 [ROADMAP.md](ROADMAP.md)(2026-11-07 개정, ADR-080)를 따른다. 11-07에 공식 회답 정답셋
 (`interpretation_gold.json`, 현행 유효 89문항)·평가 실행기(`gold_eval.py`)·보류 보정기(`abstention_calibration.py`)·위임 조문 결합·수치 검사(신호)를

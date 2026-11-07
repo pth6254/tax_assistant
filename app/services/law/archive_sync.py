@@ -74,6 +74,120 @@ def classify(row, same, newer, today: date):
     return None, None
 
 
+DELETION = re.compile(r"^제\d+조(?:의\d+)?\s*삭제")
+
+
+def text_kind(row_text: str, official_text: str, future_texts=()) -> str | None:
+    """How the version in force differs from the stored text; None keeps the row (archive parser gap)."""
+    if wording(official_text) == wording(row_text):
+        return "official_format"
+    if DELETION.match(official_text.strip()):
+        return "deleted_in_force"
+    if len(wording(official_text)) < TRUNCATED * len(wording(row_text)):
+        # The API also served text of versions not in force yet; that is replaced by today's text. A
+        # shorter official text matching no version is a gap of the archive parser and is kept.
+        return "future_text_replaced" if wording(row_text) in {wording(t) for t in future_texts} else None
+    return "official_text"
+
+
+async def rebuild_plan(conn, *, today: date | None = None) -> dict:
+    """Everything that makes the current table equal to the archive's versions in force today (P2).
+
+    text       rows whose text or title differs: replaced through index_repair (backups, vectors, clauses)
+    labels     same text, older version label: effective/promulgation date and source move, vectors kept
+    retire     articles the version in force does not contain (not yet in force, or removed): is_current off
+    insert     articles of the version in force the table lacks
+    duplicates older non-current rows holding exactly the replacement text (unique law/article/text): removed
+    kept       shorter official text matching no version (archive parser gap): left as is, reported
+    """
+    today = today or date.today()
+    rows = [dict(r) for r in await conn.fetch(_LOAD)]
+    versions = [dict(v) for v in await conn.fetch(_VERSIONS)]
+    by_key = {(v["mst"], v["effective_date"].strftime("%Y%m%d")): v for v in versions}
+    newest = newest_in_force(versions, today)
+    future = defaultdict(list)
+    for v in versions:
+        if v["effective_date"] > today:
+            future[v["law_id"]].append(v)
+    stored = defaultdict(list)
+    for r in await conn.fetch("SELECT id, law_name, article_no, content_hash, is_current FROM law_articles"):
+        stored[(r["law_name"], r["article_no"], r["content_hash"])].append(dict(r))
+    parsed = {}
+
+    async def articles(version):
+        key = version["snapshot_id"]
+        if key not in parsed:
+            snapshot = await conn.fetchrow("SELECT raw_xml, content_hash FROM law_history.snapshots WHERE id=$1", key)
+            parsed[key] = None if snapshot is None or digest(snapshot["raw_xml"]) != snapshot["content_hash"] else {
+                re.sub(r"\s", "", a.law_name) + "|" + a.article_no: a for a in parse_articles(snapshot["raw_xml"])}
+        return parsed[key] or {}
+
+    plan = {"text": [], "labels": [], "retire": [], "insert": [], "duplicates": [], "kept": [], "counts": Counter()}
+    present, law_rows = set(), {}
+    for row in rows:
+        key = re.sub(r"\s", "", row["law_name"]) + "|" + row["article_no"]
+        present.add(key)
+        version = by_key.get((row["mst"] or "", _yyyymmdd(row["effective_date"])))
+        if version is None:
+            plan["counts"]["version_not_archived"] += 1
+            continue
+        law_rows.setdefault(version["law_id"], row)
+        target = newest[version["law_id"]]
+        official = (await articles(target)).get(key)
+        identity = {"effective_date": target["effective_date"].strftime("%Y%m%d"),
+                    "amendment_date": _yyyymmdd(target["promulgation_date"]) or row["amendment_date"],
+                    "source_url": source_url(target["mst"])}
+        if official is None:
+            later = [v for v in future[version["law_id"]] if key in await articles(v)]
+            plan["retire"].append({"id": row["id"], "law_name": row["law_name"], "article_no": row["article_no"],
+                                   "content_hash": row["content_hash"],
+                                   "reason": "not_yet_in_force" if later else "not_in_version_in_force"})
+            plan["counts"]["retire"] += 1
+            continue
+        if official.article_text == row["article_text"] and (official.article_title or "") == (row["article_title"] or ""):
+            if target["version_id"] == version["version_id"]:
+                plan["counts"]["current"] += 1
+            else:
+                plan["labels"].append({"id": row["id"], "content_hash": row["content_hash"],
+                                       "before": {k: row[k] for k in identity}, "after": identity})
+                plan["counts"]["labels"] += 1
+            continue
+        future_texts = [a.article_text for v in future[version["law_id"]] if (a := (await articles(v)).get(key))]
+        kind = text_kind(row["article_text"], official.article_text, future_texts)
+        if kind is None:
+            plan["kept"].append([row["law_name"], row["article_no"], len(row["article_text"]), len(official.article_text)])
+            plan["counts"]["kept"] += 1
+            continue
+        others = [r for r in stored[(row["law_name"], row["article_no"], digest(official.article_text))] if r["id"] != row["id"]]
+        if any(r["is_current"] for r in others):
+            plan["kept"].append([row["law_name"], row["article_no"], "current_duplicate"])
+            plan["counts"]["kept"] += 1
+            continue
+        plan["duplicates"] += [{"keep": row["id"], "delete": r["id"]} for r in others]
+        after = dict(row) | identity | {"article_title": official.article_title, "article_text": official.article_text,
+                                        "content_hash": digest(official.article_text)}
+        plan["text"].append({"before": row, "after": after, "kind": kind,
+                             "snapshot_source_id": f"history_snapshot:{target['snapshot_id']}",
+                             "lengths": [len(row["article_text"]), len(official.article_text)]})
+        plan["counts"][kind] += 1
+    for law_id, sample in law_rows.items():
+        target = newest[law_id]
+        for key, article in (await articles(target)).items():
+            if key in present or DELETION.match(article.article_text.strip()):
+                continue
+            plan["insert"].append({"law_name": sample["law_name"], "law_type": sample["law_type"],
+                                   "tax_type": sample["tax_type"], "article_no": article.article_no,
+                                   "article_title": article.article_title, "article_text": article.article_text,
+                                   "content_hash": digest(article.article_text),
+                                   "effective_date": target["effective_date"].strftime("%Y%m%d"),
+                                   "amendment_date": _yyyymmdd(target["promulgation_date"]),
+                                   "source_url": source_url(target["mst"]),
+                                   "snapshot_source_id": f"history_snapshot:{target['snapshot_id']}"})
+            plan["counts"]["insert"] += 1
+    plan["counts"] = dict(plan["counts"])
+    return plan
+
+
 async def archive_article(conn, snapshot_source_id: str, law_name: str, article_no: str) -> dict:
     """Re-read one article from its verified snapshot; apply refuses when it no longer matches the plan."""
     snapshot_id = int(snapshot_source_id.rsplit(":", 1)[1])

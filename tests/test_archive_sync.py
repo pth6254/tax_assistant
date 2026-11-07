@@ -39,6 +39,17 @@ def test_a_row_cut_short_is_restored_from_the_same_version():
     assert sync.classify({"article_text": FULL}, article(CUT), None, TODAY) == ("archive_shorter", None)
 
 
+def test_the_rebuild_takes_todays_text_but_keeps_rows_the_archive_parse_cut_short():
+    assert sync.text_kind(FULL.replace("\n", "\n\n"), FULL) == "official_format"
+    assert sync.text_kind(FULL, "제2조 삭제 <2026.2.27>") == "deleted_in_force"
+    future = FULL + "\n3. \"가상자산\"이란 … (2027년 시행)"
+    # The table held a provision not in force yet: today's (shorter) text replaces it.
+    assert sync.text_kind(future * 2, CUT, future_texts=[future * 2]) == "future_text_replaced"
+    # A shorter official text that matches no version is a parser gap: the row is kept.
+    assert sync.text_kind(future * 2, CUT) is None
+    assert sync.text_kind(CUT, FULL) == "official_text"
+
+
 def test_the_version_in_force_is_the_latest_effective_then_last_promulgated():
     versions = [
         {"law_id": "1", "version_id": 1, "effective_date": date(2026, 1, 1), "promulgation_date": date(2025, 12, 31)},
