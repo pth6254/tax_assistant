@@ -43,7 +43,8 @@ Qwen 교체 0.502/0.833/0.887, KURE 임계값 0.4 0.517/0.680/0.695(일상 hit@5
 [DATA_STRATEGY.md](DATA_STRATEGY.md) P1, 되돌리기: `python scripts/repair_law_indexes.py rollback --plan evaluation/runs/archive-sync-20261107/plan.json`,
 전체 백업 `backups/tax_db-20261107-0030.dump`). 같은 날 P2로 현행 표 전체를 오늘 시행본과 같게 맞추고(버전 표시 4,534·글 139·현행 아님 8·추가 3, 되돌리기
 `python scripts/rebuild_current_laws.py rollback --dir evaluation/runs/rebuild-20261107` — 먼저 같은 폴더 `text-plan.json`의 repair rollback,
-백업 `backups/tax_db-20261107-1152.dump`) 그래프를 전체 다시 만들었다(이전 그래프 `graph-before.json`). 다음 데이터 단계는 출처표 보완과 P3.
+백업 `backups/tax_db-20261107-1152.dump`) 그래프를 전체 다시 만들었다(이전 그래프 `graph-before.json`). 이어서 문구 시행일(`in_force_since`, 날짜 판단용)을 채우고 출처 기록이 없던 벡터를 다시 만들었으며 감사에 날짜·벡터 검사를 더했다
+(CURRENT_STATUS "문구 시행일·검색 데이터 재생성·감사 보강"). 다음은 공식 회답 정답셋 10문항 시험(유료). P3(관계 표)는 정답셋에서 관계 관련 실패가 보일 때.
 조문 검색 평가셋은 v1.2(167문항)로 바뀌어 이전 수치와 직접 비교하지 않는다.
 평가 지표·성능 개선·배포의 순서와 채택 기준은 [ROADMAP.md](ROADMAP.md)(2026-11-07 개정, ADR-080)를 따른다. 11-07에 공식 회답 정답셋
 (`interpretation_gold.json`, 현행 유효 89문항)·평가 실행기(`gold_eval.py`)·보류 보정기(`abstention_calibration.py`)·위임 조문 결합·수치 검사(신호)를

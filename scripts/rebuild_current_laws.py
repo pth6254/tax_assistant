@@ -1,8 +1,9 @@
 """Make the current-law table equal to the archive's versions in force today (docs/ai/DATA_STRATEGY.md P2).
 
     preview  read-only: writes <dir>/rebuild.json and the text replacements as <dir>/text-plan.json
-    apply    in order: remove older duplicate rows, move version labels, retire articles not in force,
-             insert missing articles (with vectors and clauses). Each step writes its backup first.
+    apply    in order: remove older duplicate rows, move version labels, record since when today's wording
+             has been in force (in_force_since), retire articles not in force, insert missing articles (with
+             vectors and clauses). Each step writes its backup first.
              Then run: python scripts/repair_law_indexes.py apply --plan <dir>/text-plan.json --limit 0
     rollback reverse of apply (run the repair rollback for text-plan.json first)
 
@@ -42,7 +43,7 @@ async def preview(conn, folder: Path):
     plan["run_id"] = run_id
     plan["text_items"] = len(text_items)
     write_json(folder / "rebuild.json", plan)
-    return {"counts": plan["counts"], "text": len(text_items), "labels": len(plan["labels"]),
+    return {"counts": plan["counts"], "text": len(text_items), "since": len(plan["since"]), "labels": len(plan["labels"]),
             "retire": len(plan["retire"]), "insert": len(plan["insert"]), "duplicates": len(plan["duplicates"]),
             "kept": plan["kept"]}
 
@@ -84,6 +85,15 @@ async def apply(pool, folder: Path):
                     if status != "UPDATE 1":
                         raise ValueError(f"label_row_changed:{label['id']}")
             mark("labels")
+        if "since" not in done:
+            async with conn.transaction():
+                for item in plan.get("since", []):
+                    status = await conn.execute(
+                        "UPDATE law_articles SET in_force_since=$2 WHERE id=$1 AND in_force_since IS NOT DISTINCT FROM $3",
+                        item["id"], item["after"], item["before"])
+                    if status != "UPDATE 1":
+                        raise ValueError(f"since_row_changed:{item['id']}")
+            mark("since")
         if "retire" not in done:
             async with conn.transaction():
                 for item in plan["retire"]:
@@ -130,6 +140,9 @@ async def rollback(pool, folder: Path):
                 for item in plan["retire"]:
                     await conn.execute("UPDATE law_articles SET is_current=TRUE WHERE id=$1 AND content_hash=$2",
                                        item["id"], item["content_hash"])
+            if "since" in state["done"]:
+                for item in plan.get("since", []):
+                    await conn.execute("UPDATE law_articles SET in_force_since=$2 WHERE id=$1", item["id"], item["before"])
             if "labels" in state["done"]:
                 for label in plan["labels"]:
                     await conn.execute(

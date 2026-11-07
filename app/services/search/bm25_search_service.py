@@ -21,7 +21,7 @@ from app.services.search.korean_analyzer import ANALYZER_VERSION, analyze_many, 
 
 logger = logging.getLogger(__name__)
 _COLUMNS = '''id, content_hash, law_name, law_type, tax_type, article_no,
-    article_title, article_text, source_url, effective_date, amendment_date'''
+    article_title, article_text, source_url, effective_date, amendment_date, in_force_since'''
 _REVISION = '''SELECT count(*) AS count, max(updated_at)::text AS updated
     FROM law_articles WHERE is_current=TRUE AND law_type <> '법령해석례' '''
 _LOAD = f'''SELECT DISTINCT ON (law_name, article_no) {_COLUMNS}

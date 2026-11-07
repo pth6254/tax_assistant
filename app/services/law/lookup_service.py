@@ -9,7 +9,7 @@ from app.services.law.source_recovery import recover_article
 
 _ARTICLE_LOOKUP_SQL = """
 SELECT id, content_hash, law_name, law_type, tax_type, article_no, article_title, article_text,
-       effective_date, amendment_date, source_url
+       effective_date, amendment_date, source_url, in_force_since
 FROM law_articles
 WHERE is_current = TRUE
   AND regexp_replace(law_name, '\\s+', '', 'g') = regexp_replace($1, '\\s+', '', 'g')
@@ -93,4 +93,5 @@ async def get_law_article(law_name: str, article_no: str) -> LawArticleDetail | 
         target=target,
         source_id=str(row.get("id", "")),
         content_hash=row.get("content_hash", ""),
+        in_force_since=row.get("in_force_since") or "",
     )

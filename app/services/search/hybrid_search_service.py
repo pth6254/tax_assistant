@@ -123,7 +123,7 @@ _EMBEDDING_COLUMN = "embedding_v2" if EMBEDDING_VERSION == "v2" else "embedding"
 
 _LAW_ARTICLES_SQL = f"""
 SELECT
-    id, content_hash, effective_date, law_name, law_type, tax_type,
+    id, content_hash, effective_date, in_force_since, law_name, law_type, tax_type,
     article_no, article_title, article_text,
     source_url,
     1 - ({_EMBEDDING_COLUMN}::halfvec(2560) <=> $1::vector::halfvec(2560)) AS similarity_score
@@ -140,7 +140,7 @@ LIMIT $3
 # 조문 벡터에서 희석되는 특정 항의 내용(예: 제59조의4 ⑨항)도 검색에 걸리게 함.
 _LAW_CLAUSES_SQL = f"""
 SELECT
-    la.id, la.content_hash, la.effective_date, la.law_name, la.law_type, la.tax_type,
+    la.id, la.content_hash, la.effective_date, la.in_force_since, la.law_name, la.law_type, la.tax_type,
     la.article_no, la.article_title, la.article_text,
     la.source_url,
     1 - (c.{_EMBEDDING_COLUMN}::halfvec(2560) <=> $1::vector::halfvec(2560)) AS similarity_score
@@ -170,7 +170,7 @@ LIMIT $4
 # Legal terms are searched independently of embedding similarity. The patterns
 # are parameters, and results remain tied to current official source rows.
 _KEYWORD_ARTICLES_SQL = """
-SELECT id, content_hash, effective_date, law_name, law_type, tax_type,
+SELECT id, content_hash, effective_date, in_force_since, law_name, law_type, tax_type,
        article_no, article_title, article_text, source_url,
        0.0 AS similarity_score,
        (SELECT COALESCE(SUM(
@@ -239,6 +239,7 @@ def _row_to_article_result(r) -> HybridSearchResult:
         origin_kind="official_law",
         source_id=str(r.get("id", r.get("source_id", ""))),
         effective_date=str(r.get("effective_date", "") or ""),
+        in_force_since=str(r.get("in_force_since", "") or ""),
         content_hash=r.get("content_hash", ""),
         original_text=r["article_text"],
     )
@@ -386,7 +387,7 @@ _DECREE_DELEGATION = re.compile(r'대통령령으로\s*정하')
 _RULE_DELEGATION = re.compile(r'(?:기획재정부|재정경제부|행정안전부|총리|[가-힣]+부)령으로\s*정하')
 _ARTICLE_NO = re.compile(r'제\d+조(?:의\d+)?')
 _DELEGATED_SQL = f"""
-SELECT id, content_hash, effective_date, law_name, law_type, tax_type, article_no, article_title, article_text,
+SELECT id, content_hash, effective_date, in_force_since, law_name, law_type, tax_type, article_no, article_title, article_text,
        source_url, 1 - ({_EMBEDDING_COLUMN}::halfvec(2560) <=> $1::vector::halfvec(2560)) AS similarity_score
 FROM law_articles
 WHERE is_current = TRUE AND law_name = $2 AND {_EMBEDDING_COLUMN} IS NOT NULL AND article_text ~ $3
@@ -791,6 +792,7 @@ async def _lookup_referenced_article(
         origin_kind="official_law",
         source_id=getattr(article, "source_id", ""),
         effective_date=article.effective_date,
+        in_force_since=getattr(article, "in_force_since", "") or "",
         content_hash=getattr(article, "content_hash", ""),
         original_text=article.article_text,
     )

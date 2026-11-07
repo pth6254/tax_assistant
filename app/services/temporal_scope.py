@@ -48,8 +48,12 @@ def is_event_date(value):
 
 
 def effective_date(record):
+    """Start of the window a record governs: for a current article, when its wording took effect."""
+    start = record.effective_from or ""
+    if getattr(record, "in_force_since", "") and not record.effective_to:
+        start = record.in_force_since
     try:
-        return date.fromisoformat((record.effective_from or "").replace("-", ""))
+        return date.fromisoformat(start.replace("-", ""))
     except ValueError:
         return None
 

@@ -17,7 +17,8 @@ async def lookup(request: LawLookupRequest) -> tuple[str, str]:
         law_name=article.law_name, category=article.law_type, source_type="law",
         similarity_score=1, priority=0, article_no=getattr(article, "article_no", request.article_no),
         origin_kind="official_law", source_id=getattr(article, "source_id", ""),
-        effective_date=article.effective_date, content_hash=getattr(article, "content_hash", ""),
+        effective_date=article.effective_date, in_force_since=getattr(article, "in_force_since", "") or "",
+        content_hash=getattr(article, "content_hash", ""),
         original_text=article.article_text,
     )
     return "ok", context_from_records([record_from_result(result)])

@@ -41,6 +41,8 @@ class HybridSearchResult:
     origin_kind: str = "unknown"
     source_id: str = ""
     effective_date: str = ""
+    # The first day of the earliest version with this wording (current rows only, law_articles.in_force_since).
+    in_force_since: str = ""
     content_hash: str = ""
     original_text: str = ""
     retrieval_scores: dict[str, float] = field(default_factory=dict)
@@ -85,3 +87,4 @@ class LawArticleDetail(BaseModel):
     target: LawReferenceTarget | None = None
     source_id: str = ""
     content_hash: str = ""
+    in_force_since: str = ""

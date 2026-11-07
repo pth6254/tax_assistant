@@ -54,6 +54,9 @@ class EvidenceRecord(Contract):
     version_id: str = ""
     effective_from: str = ""
     effective_to: str = ""
+    # Current records: the wording has governed since this date (earlier than effective_from when later
+    # versions did not change the article). Used by the event-date check, not as the version identity.
+    in_force_since: str = ""
     content_hash: str
     original_hash: str = ""
     text: str

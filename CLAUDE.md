@@ -28,8 +28,8 @@
 | 근거·주장 공개 검사 | [evidence.py](app/services/evidence.py), [claim_verification.py](app/services/claim_verification.py) (검사 등록표 `CHECKS`), [legal_figures.py](app/services/legal_figures.py) (세율·금액·기간 대조) |
 | 답변 위험 점수·보류 정책 | [answer_risk.py](app/services/answer_risk.py), 보정 [abstention_calibration.py](evaluation/abstention_calibration.py) |
 | 위임 조문 결합·평가 중 해석례 숨김 | [hybrid_search_service.py](app/services/search/hybrid_search_service.py) (`delegation_targets`, `EXCLUDED_INTERPRETATIONS`) |
-| 현행 표와 보관소 대조·교체 | [archive_sync.py](app/services/law/archive_sync.py), [index_repair.py](app/services/law/index_repair.py), `scripts/audit_law_data.py`, `scripts/repair_law_indexes.py --source archive` |
-| 사건일과 시행본 비교·사건 당시 조문 | [temporal_scope.py](app/services/temporal_scope.py), [historical_evidence.py](app/services/historical_evidence.py) |
+| 현행 표와 보관소 대조·교체·문구 시행일 | [archive_sync.py](app/services/law/archive_sync.py) (`rebuild_plan`, `wording_since`), [index_repair.py](app/services/law/index_repair.py), [vector_provenance.py](app/services/law/vector_provenance.py), `scripts/audit_law_data.py`, `scripts/rebuild_current_laws.py`, `scripts/reindex_vectors.py`, `scripts/repair_law_indexes.py --source archive` |
+| 사건일과 시행본 비교·사건 당시 조문 | [temporal_scope.py](app/services/temporal_scope.py) (현행 행은 `in_force_since`부터), [historical_evidence.py](app/services/historical_evidence.py) |
 | 참고 계산 | [formula_workflow.py](app/services/calculator/formula_workflow.py) |
 | 채팅 한 턴(과거 법령·도구·근거 답변·저장, 일반·SSE 공통) | [chat_service.py](app/services/chat_service.py) (`_answer_turn`, `_fetch_rag_and_web_context`), [chat_history.py](app/services/chat_history.py) |
 | 채팅 계산 경로(해석기 순서·금액 후속 질문·되묻기 답·6개 세목 모델 선택 생략·과세 사건 날짜) | [planner.py](app/services/tools/planner.py) (`run_tools_for_query`, `answered_calculation`, `followup_question`, `calculator_in_scope`), [tax_date.py](app/services/calculator/tax_date.py) |
