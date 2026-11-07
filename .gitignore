@@ -228,3 +228,46 @@ dist/
 
 # Database dumps (dev/backup-db.sh)
 backups/
+
+# ── 저장소에 올리지 않는 개인·도구별 로컬 파일 ──────────────────────────
+# 개인 편집기·IDE 설정(사람마다 다름)
+.vscode/
+.idea/
+.fleet/
+.zed/
+*.code-workspace
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+# AI 코딩 도구의 로컬 설정·권한·상태. 함께 지킬 작업 규칙은 저장소 맨 위 AGENTS.md·CLAUDE.md로 공유한다.
+.claude/
+.agents/
+.codex/
+.cursor/
+.windsurf/
+.continue/
+.gemini/
+.roo/
+.aider*
+
+# 프런트엔드·빌드 도구의 캐시와 임시 파일
+.vite/
+.parcel-cache/
+.turbo/
+.next/
+.nuxt/
+.svelte-kit/
+.eslintcache
+.stylelintcache
+*.tsbuildinfo
+coverage/
+.nyc_output/
+
+# 운영체제가 만드는 파일
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
