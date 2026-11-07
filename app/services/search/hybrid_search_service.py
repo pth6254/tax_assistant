@@ -523,10 +523,6 @@ def _retrieval_outputs(output):
                           'scores': r.retrieval_scores} for r in rows]}
 
 
-@traceable(name='issue_hybrid_retrieval', run_type='retriever',
-           process_inputs=lambda inputs: {'law_filter': inputs.get('law_filter'),
-                                          'query_count': len(inputs.get('queries', []))},
-           process_outputs=_retrieval_outputs)
 def _names_law(text: str) -> bool:
     """True when the text itself names the statute of its first article reference."""
     references = extract_constraints(text).references if config.SEARCH_REGEX_ENABLED else ()
@@ -812,6 +808,10 @@ def _prepend_direct_hit(
     return [direct] + deduped[: TOP_K - 1]
 
 
+@traceable(name='issue_hybrid_retrieval', run_type='retriever',
+           process_inputs=lambda inputs: {'law_filter': inputs.get('law_filter'),
+                                          'query_count': len(inputs.get('queries', []))},
+           process_outputs=_retrieval_outputs)
 async def hybrid_search(
     queries: list[str],
     law_filter: str = "ALL",
