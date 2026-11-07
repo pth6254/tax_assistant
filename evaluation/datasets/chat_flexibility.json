@@ -1,0 +1,278 @@
+{
+  "version": "1.1",
+  "created": "2026-11-07",
+  "description": "계산 질문을 사람이 실제로 말하는 방식(연도·주소·구어 금액·여러 턴에 나눈 답)으로 물었을 때 채팅이 사실을 제대로 읽고, 필요한 것만 묻고, 아는 만큼 답하는지 재는 평가셋. 실제 대화 2건과 합성 질문으로 구성한다. 기대값은 사용자가 한 말에서 사람이 바로 읽을 수 있는 사실만 적었다.",
+  "fields": {
+    "turns": "사용자가 보낸 메시지 순서. 채점기는 각 턴을 실제 채팅처럼 이어서 보낸다(앞 턴의 시스템 응답이 다음 턴의 대화 기록이 된다).",
+    "expect.reply": "amount = 금액이 나와야 함(경우별 금액도 인정), explain = 금액은 못 내도 설명과 함께 답해야 함(질문만 하면 실패), any = 질문만 하는 답만 아니면 됨",
+    "expect.amount_by_turn": "몇 번째 턴까지 금액이 나와야 하는지(없으면 마지막 턴)",
+    "expect.params": "마지막 금액 답의 계산기 입력 가운데 확인할 값. 목록이면 그중 하나면 맞음(연도만 말해 만 연수가 둘 중 하나인 경우). 경우별 답이면 모든 경우가 이 값이어야 함",
+    "expect.final_tax": "마지막 금액 답의 납부세액(확실한 경우만)",
+    "expect.never_ask": "이 말이 들어간 질문을 하면 불필요한 질문으로 셈(금액 하나로 답한 턴은 질문을 표시하지 않으므로 세지 않음)",
+    "expect.never_ask_from_turn": "never_ask를 몇 번째 턴부터 셀지(사용자가 그 사실을 말한 턴, 없으면 1)",
+    "history": "1.1(2026-11-07): 반포동 사례의 never_ask를 '취득 당시 조정대상지역'으로 좁히고, 1주택 표현 사례에 never_ask_from_turn을 둠"
+  },
+  "cases": [
+    {
+      "id": "cg-real-banpo", "tool": "capital_gains", "source": "실제 대화(2026-11-07)",
+      "why": "연도로 말한 거주기간, 2017년 8월 2일 이전 취득(거주요건 없음), 주소로 답한 조정대상지역, 같은 질문 반복",
+      "turns": ["10년 보유한 아파트를 12억에 팔고 취득가는 7억이면 양도세 계산해줘", "1세대 1주택이야",
+                "2014년 매입해서 2019년까지 거주하다가 지금까지 전세주고 있어", "지역은 서울시 서초구 반포동이야"],
+      "expect": {"reply": "amount", "amount_by_turn": 3,
+                 "params": {"is_one_home": true, "residence_years": [4, 5], "acquired_in_adjusted_area": false},
+                 "final_tax": 0, "never_ask": ["취득 당시 조정대상지역"]}
+    },
+    {
+      "id": "cg-seocho-short-stay", "tool": "capital_gains", "source": "합성",
+      "why": "날짜로만 말한 보유기간, 주소로 정해지는 취득 당시 조정대상지역",
+      "turns": ["서울 서초구에 아파트 한 채 있는데 2019년 3월에 9억에 사서 2026년 10월에 15억에 팔았어. 거주는 1년만 했어. 양도세 얼마야?"],
+      "expect": {"reply": "amount",
+                 "params": {"is_one_home": true, "holding_years": 7, "residence_years": 1, "acquired_in_adjusted_area": true},
+                 "never_ask": ["조정대상지역", "보유기간"]}
+    },
+    {
+      "id": "cg-busan-2018", "tool": "capital_gains", "source": "합성",
+      "why": "지정 이력 표 밖(2018년 부산): 묻기 전에 경우별 금액을 보여 줘야 함",
+      "turns": ["2018년에 부산 해운대 아파트를 3억에 사서 2026년 9월에 5억에 팔았어. 1주택이고 거주는 안 했어. 양도세 계산해줘"],
+      "expect": {"reply": "amount", "params": {"is_one_home": true, "residence_years": 0, "holding_years": [7, 8]}}
+    },
+    {
+      "id": "cg-daegu-2023", "tool": "capital_gains", "source": "합성",
+      "why": "2023년 1월 5일 이후 지방 취득은 조정대상지역이 아님(지정 이력 표)",
+      "turns": ["2023년 6월에 대구 수성구 아파트를 4억에 사서 2026년 8월에 5억 5천에 팔았어. 1주택이고 실거주는 안 했어. 양도세 얼마야?"],
+      "expect": {"reply": "amount", "params": {"is_one_home": true, "acquired_in_adjusted_area": false, "holding_years": 3},
+                 "final_tax": 0, "never_ask": ["조정대상지역", "보유기간"]}
+    },
+    {
+      "id": "cg-pre2017-rented", "tool": "capital_gains", "source": "합성",
+      "why": "2017년 8월 2일 이전 취득이라 거주하지 않았어도 거주요건을 묻지 않아야 함",
+      "turns": ["2015년에 산 아파트 하나 있는데 이번 달에 팔려고 해. 8억에 샀고 11억에 팔 거야. 거주는 안 하고 계속 전세 줬어. 1세대 1주택이야. 세금 얼마 나와?"],
+      "expect": {"reply": "amount", "params": {"is_one_home": true, "acquired_in_adjusted_area": false},
+                 "final_tax": 0, "never_ask": ["조정대상지역", "보유기간"]}
+    },
+    {
+      "id": "cg-one-home-words", "tool": "capital_gains", "source": "합성",
+      "why": "'집은 이거 하나야'처럼 정해진 문구가 아닌 1주택 답, 여러 턴에 나눈 사실",
+      "turns": ["아파트 팔면 양도세 얼마야? 6억에 사서 9억에 팔았어", "5년 갖고 있었고 집은 이거 하나야", "거주는 3년 했어"],
+      "expect": {"reply": "amount", "amount_by_turn": 2,
+                 "params": {"is_one_home": true, "holding_years": 5, "residence_years": 3}, "final_tax": 0,
+                 "never_ask": ["1세대 1주택 여부"], "never_ask_from_turn": 2}
+    },
+    {
+      "id": "cg-dates-only", "tool": "capital_gains", "source": "합성",
+      "why": "보유기간을 날짜로만 말함, '쭉 살았어'",
+      "turns": ["2020년 5월에 7억에 산 아파트를 2026년 10월에 10억에 팔았어. 1세대 1주택이고 2020년부터 쭉 살았어. 양도세는 얼마야?"],
+      "expect": {"reply": "amount", "params": {"is_one_home": true, "holding_years": 6, "residence_years": 6},
+                 "final_tax": 0, "never_ask": ["보유기간", "거주기간", "조정대상지역"]}
+    },
+    {
+      "id": "cg-high-price", "tool": "capital_gains", "source": "합성",
+      "why": "고가주택, 날짜로 말한 보유기간, '10년 내내 거주'",
+      "turns": ["2016년 4월에 10억에 산 서울 아파트를 2026년 9월에 20억에 팔았어. 1세대 1주택이고 10년 내내 거주했어. 양도세 얼마야?"],
+      "expect": {"reply": "amount", "params": {"is_one_home": true, "holding_years": 10, "residence_years": 10},
+                 "never_ask": ["보유기간", "거주기간"]}
+    },
+    {
+      "id": "cg-two-homes-mapo", "tool": "capital_gains", "source": "합성",
+      "why": "다주택: 양도일 현재 조정대상지역을 주소로 판단, 중과 대상 여부는 경우별 금액",
+      "turns": ["집이 두 채인데 그중 마포구 아파트를 2026년 10월에 12억에 팔았어. 2019년에 5억에 샀어. 양도세 얼마야?"],
+      "expect": {"reply": "amount", "params": {"is_one_home": false, "holding_years": [6, 7]},
+                 "never_ask": ["양도일 현재 조정대상지역"]}
+    },
+    {
+      "id": "cg-two-homes-goyang", "tool": "capital_gains", "source": "합성",
+      "why": "다주택이지만 조정대상지역이 아닌 곳(고양): 중과 없이 계산",
+      "turns": ["2주택자인데 경기도 고양시 일산 아파트를 2026년 3월에 4억에 팔았어. 2021년에 3억에 샀고. 양도세 얼마야?"],
+      "expect": {"reply": "amount", "params": {"is_one_home": false, "multi_home_surcharge": "없음", "holding_years": [4, 5]},
+                 "never_ask": ["양도일 현재 조정대상지역"]}
+    },
+    {
+      "id": "cg-no-amounts", "tool": "capital_gains", "source": "합성",
+      "why": "금액이 하나도 없음: 질문만 하지 말고 규칙 설명과 함께 필요한 사실을 물어야 함",
+      "turns": ["집 팔면 양도세 얼마나 나와?"],
+      "expect": {"reply": "explain"}
+    },
+    {
+      "id": "cg-sale-only", "tool": "capital_gains", "source": "합성",
+      "why": "취득가액이 없음: 계산은 못 해도 설명과 함께 물어야 함",
+      "turns": ["아파트를 10억에 팔았는데 양도세 얼마야?"],
+      "expect": {"reply": "explain"}
+    },
+    {
+      "id": "cg-listed-stock", "tool": "capital_gains", "source": "합성",
+      "why": "'1억 어치를 팔았는데' 같은 구어 금액, 공개 사실(상장 여부), 대주주 여부는 경우별 금액",
+      "turns": ["삼성전자 주식 1억 어치를 팔았는데 5천만원에 샀었어. 양도세 얼마야?"],
+      "expect": {"reply": "amount", "params": {"asset_type": "주식", "transfer_price": 100000000, "acquisition_price": 50000000}}
+    },
+    {
+      "id": "cg-idle-land", "tool": "capital_gains", "source": "합성",
+      "why": "'사업용으로 쓴 적 없고 놀리던 땅'(비사업용 토지), '2억 주고 산'",
+      "turns": ["2018년에 2억 주고 산 땅을 2026년 7월에 3억 5천에 팔았어. 사업용으로 쓴 적 없고 그냥 놀리던 땅이야. 양도세 얼마야?"],
+      "expect": {"reply": "amount", "params": {"asset_type": "토지·건물", "non_business_land": true, "acquisition_price": 200000000,
+                                               "holding_years": [7, 8]}}
+    },
+    {
+      "id": "cg-months-stay", "tool": "capital_gains", "source": "합성",
+      "why": "개월로 말한 거주기간, 소재지를 모르는 2022년 취득(경우별 금액)",
+      "turns": ["1주택자고 2022년 2월에 6억에 사서 2026년 11월에 8억에 팔 예정이야. 18개월 살았어. 양도세 얼마야?"],
+      "expect": {"reply": "amount", "params": {"is_one_home": true, "holding_years": 4, "residence_years": 1},
+                 "never_ask": ["거주기간", "보유기간"]}
+    },
+    {
+      "id": "cg-colloquial-money", "tool": "capital_gains", "source": "합성",
+      "why": "'집 판 돈이 9억 5천', '1가구 1주택', 보유기간 없이 거주 4년",
+      "turns": ["집 판 돈이 9억 5천이고 산 건 6억 2천에 샀어. 1가구 1주택이고 4년 살았어. 양도세 얼마야?"],
+      "expect": {"reply": "amount", "params": {"is_one_home": true, "transfer_price": 950000000, "acquisition_price": 620000000,
+                                               "residence_years": 4}, "final_tax": 0}
+    },
+    {
+      "id": "cg-earlier-turn", "tool": "capital_gains", "source": "합성",
+      "why": "앞 턴에 말한 취득 정보와 주소를 이어 받기",
+      "turns": ["서초구에 아파트 한 채 있는데 2020년 1월에 10억에 샀어", "그거 2026년 11월에 17억에 팔면 양도세 얼마야? 2년 살았어"],
+      "expect": {"reply": "amount", "params": {"is_one_home": true, "holding_years": 6, "residence_years": 2},
+                 "never_ask": ["보유기간"]}
+    },
+    {
+      "id": "cg-yes-answer", "tool": "capital_gains", "source": "합성",
+      "why": "되물은 질문에 '네 맞아요'로만 답함",
+      "turns": ["양도세 계산해줘. 아파트 5억에 사서 8억에 팔았고 3년 보유했어. 1주택이야.", "거주는 안 했어", "네 맞아요"],
+      "expect": {"reply": "amount", "amount_by_turn": 2,
+                 "params": {"is_one_home": true, "holding_years": 3, "residence_years": 0, "acquired_in_adjusted_area": true}}
+    },
+    {
+      "id": "cg-amount-followup", "tool": "capital_gains", "source": "합성",
+      "why": "대조군: 이미 잘 되는 금액 바꾼 후속 질문",
+      "turns": ["10년 보유·거주한 1세대 1주택 아파트를 15억에 팔았고 취득가는 5억이야. 양도세 얼마야?", "그럼 18억에 팔면?"],
+      "expect": {"reply": "amount", "params": {"transfer_price": 1800000000, "holding_years": 10, "residence_years": 10}}
+    },
+    {
+      "id": "inh-real-parents", "tool": "inheritance", "source": "실제 대화(2026-11-05)",
+      "why": "'상속'이라는 말 없이 '부모님이 돌아가셔서 받았어', 배우자 없음, 자녀 수 모름",
+      "turns": ["부모님이 돌아가셔서 50억을 받았어 내가 내야하는 세금이 얼마야?"],
+      "expect": {"reply": "amount", "params": {"estate_value": 5000000000, "has_spouse": false}}
+    },
+    {
+      "id": "inh-father-family", "tool": "inheritance", "source": "합성",
+      "why": "재산을 나눠 말함(합계), '어머니랑 나, 동생'(배우자와 자녀 2명)",
+      "turns": ["아버지가 지난달 돌아가셨어. 남은 재산이 아파트 15억이랑 예금 3억이야. 어머니랑 나, 동생이 상속받아. 상속세 얼마야?"],
+      "expect": {"reply": "amount", "params": {"estate_value": 1800000000, "financial_assets": 300000000, "has_spouse": true,
+                                               "children_count": 2}}
+    },
+    {
+      "id": "inh-spouse-unknown", "tool": "inheritance", "source": "합성",
+      "why": "배우자 생존 여부를 말하지 않음: 경우별 금액",
+      "turns": ["어머니가 돌아가셨는데 재산이 30억 정도야. 자녀는 3명이고. 상속세 계산해줘"],
+      "expect": {"reply": "amount", "params": {"estate_value": 3000000000, "children_count": 3}}
+    },
+    {
+      "id": "inh-general", "tool": "inheritance", "source": "합성",
+      "why": "대조군: 계산이 아닌 일반 질문",
+      "turns": ["상속세는 얼마부터 내야 해?"],
+      "expect": {"reply": "explain"}
+    },
+    {
+      "id": "gift-mom-adult", "tool": "gift", "source": "합성",
+      "why": "'서른 살'(숫자 아닌 나이), '보내줬어'",
+      "turns": ["엄마가 전세금 보태라고 1억 보내줬어. 나 서른 살이야. 증여세 얼마 내야 해?"],
+      "expect": {"reply": "amount", "params": {"gift_amount": 100000000, "relation": "직계존비속", "is_minor": false},
+                 "final_tax": 4850000, "never_ask": ["미성년자"]}
+    },
+    {
+      "id": "gift-wife-share", "tool": "gift", "source": "합성",
+      "why": "대조군: 배우자 증여 6억",
+      "turns": ["와이프한테 아파트 지분 절반(시가 6억) 넘겨주려고 하는데 증여세 얼마야?"],
+      "expect": {"reply": "amount", "params": {"gift_amount": 600000000, "relation": "배우자"}, "final_tax": 0}
+    },
+    {
+      "id": "gift-grandpa-minor", "tool": "gift", "source": "합성",
+      "why": "대조군: 조부모→미성년 손자",
+      "turns": ["할아버지가 초등학생 손자한테 3천만원 주시면 증여세 얼마야?"],
+      "expect": {"reply": "amount", "params": {"gift_amount": 30000000, "relation": "직계존비속", "is_minor": true,
+                                               "generation_skipping": true}}
+    },
+    {
+      "id": "gift-friend-prior", "tool": "gift", "source": "합성",
+      "why": "한 메시지 안의 두 금액(이번 증여와 작년 증여)",
+      "turns": ["친구가 2천만원을 줬어. 작년에도 같은 친구한테 1천만원 받았어. 증여세 계산해줘"],
+      "expect": {"reply": "amount", "params": {"gift_amount": 20000000, "relation": "기타", "prior_gifts_10y": 10000000}}
+    },
+    {
+      "id": "gift-no-relation", "tool": "gift", "source": "합성",
+      "why": "관계를 말하지 않음: 관계별 경우 금액",
+      "turns": ["3억 증여받으면 증여세 얼마야?"],
+      "expect": {"reply": "amount", "params": {"gift_amount": 300000000}}
+    },
+    {
+      "id": "gift-married-son", "tool": "gift", "source": "합성",
+      "why": "'결혼했고'만 있고 혼인신고일을 모름: 혼인공제 경우별 금액",
+      "turns": ["아들한테 시가 5억짜리 아파트 넘겨주면 증여세 얼마야? 아들은 결혼했고 35살이야"],
+      "expect": {"reply": "amount", "params": {"gift_amount": 500000000, "relation": "직계존비속", "is_minor": false}}
+    },
+    {
+      "id": "gift-marriage-window", "tool": "gift", "source": "합성",
+      "why": "대조군: 결혼 앞둔 자녀",
+      "turns": ["결혼 앞두고 부모님이 1억 5천 주신대. 나는 32살이야. 증여세 얼마야?"],
+      "expect": {"reply": "amount", "params": {"gift_amount": 150000000, "marriage_birth": true}, "final_tax": 0}
+    },
+    {
+      "id": "inc-salary-family", "tool": "income_tax", "source": "합성",
+      "why": "'연봉 5천', '아내랑 애 하나'(기본공제 3명)",
+      "turns": ["연봉 5천인 직장인인데 종합소득세 얼마 나오는지 계산해줘. 부양가족은 아내랑 애 하나야"],
+      "expect": {"reply": "amount", "params": {"wage_income": 50000000, "personal_deduction_count": 3}}
+    },
+    {
+      "id": "inc-freelancer", "tool": "income_tax", "source": "합성",
+      "why": "'종소세', '3,300 벌었어'",
+      "turns": ["프리랜서로 작년에 3,300만원 벌었어. 경비는 따로 없고 부양가족도 없어. 종소세 얼마 나와?"],
+      "expect": {"reply": "any"}
+    },
+    {
+      "id": "inc-no-amount", "tool": "income_tax", "source": "합성",
+      "why": "금액 없음: 설명과 함께 물어야 함",
+      "turns": ["종합소득세 얼마 나올지 계산해줘"],
+      "expect": {"reply": "explain"}
+    },
+    {
+      "id": "vat-cafe", "tool": "vat", "source": "합성",
+      "why": "'세금계산서 받은 게 2천만원'(매입액)",
+      "turns": ["카페 하는데 이번 1기 매출이 6천만원이고 재료비랑 임대료로 세금계산서 받은 게 2천만원이야. 일반과세자야. 부가세 얼마 내?"],
+      "expect": {"reply": "amount", "params": {"sales": 60000000, "purchases": 20000000, "is_simplified": false}}
+    },
+    {
+      "id": "vat-type-unknown", "tool": "vat", "source": "합성",
+      "why": "과세 유형과 매입액을 모름: 아는 만큼 답해야 함",
+      "turns": ["식당 하는데 올해 매출이 4,500만원이야. 부가세 얼마야?"],
+      "expect": {"reply": "any"}
+    },
+    {
+      "id": "ret-dates", "tool": "retirement", "source": "합성",
+      "why": "입사·퇴사 날짜로만 말한 근속연수",
+      "turns": ["2010년 3월에 입사해서 2026년 10월에 퇴사했어. 퇴직금 1억 2천 받는데 세금 얼마야?"],
+      "expect": {"reply": "amount", "params": {"retirement_pay": 120000000, "service_years": 17}, "never_ask": ["근속연수"]}
+    },
+    {
+      "id": "ret-years", "tool": "retirement", "source": "합성",
+      "why": "'15년 다니고'",
+      "turns": ["15년 다니고 퇴직금 8천만원 받았어. 퇴직소득세 얼마야?"],
+      "expect": {"reply": "amount", "params": {"retirement_pay": 80000000, "service_years": 15}}
+    },
+    {
+      "id": "pen-no-return", "tool": "penalty_tax", "source": "합성",
+      "why": "본세와 무신고, 개월로 말한 지연 기간",
+      "turns": ["양도세 2천만원을 신고 안 하고 3개월 늦게 냈어. 가산세 얼마야?"],
+      "expect": {"reply": "amount"}
+    },
+    {
+      "id": "pen-days-unknown", "tool": "penalty_tax", "source": "합성",
+      "why": "늦게 낸 기간을 모름: 아는 만큼 답해야 함",
+      "turns": ["세금 500만원을 늦게 냈는데 가산세 얼마나 붙어?"],
+      "expect": {"reply": "any"}
+    },
+    {
+      "id": "va-before-2027", "tool": "income_tax", "source": "합성",
+      "why": "대조군: 가상자산 과세 시행 전",
+      "turns": ["비트코인 5천만원에 산 거 8천만원에 팔았어 세금 얼마야?"],
+      "expect": {"reply": "any"}
+    }
+  ]
+}

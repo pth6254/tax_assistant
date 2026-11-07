@@ -146,7 +146,7 @@
 
 ## 생성 모델 작업별 설정 (2026-10-01 기준)
 
-- `app/services/llm_client.py`는 `answer`, `history_answer`, `citation_extraction`, `query_classification`, `tool_selection`, `document_classification`, `question_planning`, `answer_judge`의 8개 고정 호출 목적별 설정을 선택한다.
+- `app/services/llm_client.py`는 `answer`, `history_answer`, `citation_extraction`, `query_classification`, `tool_selection`, `document_classification`, `question_planning`, `answer_judge`, `fact_reading`(채팅 계산의 대화 사실 읽기)의 9개 고정 호출 목적별 설정을 선택한다.
 - 모두 `LLM_PROVIDER`/`CHAT_MODEL`을 상속한다. 현행 서비스는 OpenRouter `openai/gpt-6-luna`를 명시한다. 작업별 `LLM_TASK_<NAME>_*` 설정으로 provider·모델·endpoint·추론 수준·thinking·timeout·temperature·출력 예산을 분리할 수 있다.
 - 로컬 Ollama 작업은 `THINK_ENABLED`로 thinking을 제어하며 원격 모델의 `REASONING_EFFORT`를 Ollama에 적용한다고 주장하지 않는다. 법령·계산 근거 검증은 모델 선택과 독립적으로 유지한다.
 

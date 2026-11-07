@@ -23,6 +23,12 @@ class ToolRun:
     calculation: CalcRun | None = None
     error_code: str | None = None
     retryable: bool = False
+    # A calculator turn that still needs facts: what it asks (stored with the reply, so the next turn's
+    # 네/아니요 answers it), what it understood, the whole question, and whether to explain the rules too.
+    asked: tuple = ()
+    understood: tuple = ()
+    question: str | None = None
+    explain: bool = False
 
 
 async def execute_tool(tool: str, params: dict, *, user_id: str) -> ToolRun:

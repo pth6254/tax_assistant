@@ -32,6 +32,16 @@ import pytest
 from fastapi.testclient import TestClient
 
 
+@pytest.fixture(autouse=True)
+def _conversation_reading_without_a_model(monkeypatch):
+    """The calculation chat's conversation reader calls a model; a test that needs it supplies the answer."""
+    from app.services.calculator import fact_reading
+
+    async def unavailable(*args, **kwargs):
+        return None
+    monkeypatch.setattr(fact_reading, "read_facts", unavailable)
+
+
 def pytest_addoption(parser):
     parser.addoption('--run-neo4j', action='store_true', help='Run isolated Docker Neo4j tests')
     parser.addoption('--graph-real-sample', action='store_true', help='Also read public law sample from tax_backend; requires --run-neo4j')

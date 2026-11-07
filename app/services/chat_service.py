@@ -123,7 +123,7 @@ async def _fetch_rag_and_web_context(
     t0 = time.perf_counter()
 
     # The calculator's pending question travels with the history; the archive context does not.
-    history = [{k: m[k] for k in ("role", "content", "calculator_request") if k in m}
+    history = [{k: m[k] for k in MEMORY_KEYS if k in m}
                for m in (history_override if history_override is not None else await _fetch_history(conversation_id))]
     laws = _match_laws_by_keyword(query)
     # Composite tasks must not be consumed by a single tool's early return.
@@ -140,6 +140,17 @@ async def _fetch_rag_and_web_context(
         return context, '웹 검색 생략', history, calc_run
     calc_run = tool_run.calculation if tool_run else None
     if tool_run and tool_run.status != "ok" and (tool_run.tool in CALCULATORS or tool_run.tool == "none"):
+        if tool_run.explain:
+            # The first question for facts of a calculation also answers what the rules are, from evidence.
+            question = tool_run.question or query
+            try:
+                context = await prepare_context(question, _match_laws_by_keyword(question), user_id, history,
+                                                hybrid_search, on_tool_event)
+            except Exception as exc:
+                logger.warning("Explanation for the calculator's question unavailable (%s)", type(exc).__name__)
+            else:
+                context.pending_calculation = tool_run
+                return context, "웹 검색 생략", history, None
         return tool_run.context, "웹 검색 생략", history, None
     # 명시적 원문/문서 조회는 중복 검색과 다른 자료 혼합을 피한다.
     if tool_run and tool_run.tool in {"law_lookup", "document_search"}:
@@ -241,14 +252,35 @@ async def _answer_turn(query, conv_id, user_id, emit, progress=None, history_ove
         query, conv_id, user_id, on_tool_event=record,
         **({"history_override": history_override} if history_override is not None else {}))
     is_first = len(history) == 0
-    failure = _failed_tool_answer(events)
+    pending = getattr(context, "pending_calculation", None)
+    failure = None if pending else _failed_tool_answer(events)
     if failure:
         return _Turn(failure, unavailable_verification(events), None, is_first, events, failed=True)
     if not isinstance(context, EvidenceContext):
         # Every successful path returns server-built evidence; a bare string here is a routing bug.
         raise TypeError("chat context must be an EvidenceContext")
-    answer, verification = await _answer_evidence_context(query, context, calc_run, user_id, progress)
+    answer, verification = await _answer_evidence_context(pending.question or query if pending else query,
+                                                          context, calc_run, user_id, progress)
+    if pending:
+        answer = with_calculation_request(answer, pending)
     return _Turn(answer, verification, _calc_meta(calc_run), is_first, events)
+
+
+# The history keys the next turn needs: the calculator's pending question and what it asked.
+MEMORY_KEYS = ("role", "content", "calculator_request", "calculator_asked")
+
+
+def with_calculation_request(answer, run):
+    """An explained answer followed by the facts the calculator still needs."""
+    return (f"{answer}\n\n## 정확한 세액 계산에 필요한 정보\n\n{run.context}\n\n"
+            "알려주시면 이어서 계산합니다.")
+
+
+def needs_input_reply(run):
+    """How the chat answers a calculator's question for facts (for evaluation)."""
+    if getattr(run, "explain", False):
+        return "explain_ask"
+    return "summary_ask" if getattr(run, "understood", ()) else "ask_only"
 
 
 async def _store(conv_id, query, turn, regeneration=None):

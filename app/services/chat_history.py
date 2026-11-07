@@ -13,7 +13,13 @@ def history_entry(message) -> dict:
     for tool in msg.get("tools", []):
         if tool.get("tool") == "history_lookup" and tool.get("history_context"):
             entry["history_context"] = tool["history_context"]
-        if (tool.get("status") == "needs_input" and tool.get("scope") != "issue"
-                and tool.get("error_code") == "calculation_inputs_required"):
+        if tool.get("scope") == "issue":
+            continue
+        # The calculator asked for facts, or answered by cases and asked which one applies: the next
+        # turn continues that calculation.
+        if (tool.get("status") == "needs_input" and tool.get("error_code") == "calculation_inputs_required") or (
+                tool.get("status") == "ok" and tool.get("asked")):
             entry["calculator_request"] = tool.get("tool")
+            if tool.get("asked"):
+                entry["calculator_asked"] = list(tool["asked"])
     return entry

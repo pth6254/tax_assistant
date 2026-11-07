@@ -38,7 +38,9 @@ def stated_tax_date(tool, texts):
     # Another year in between belongs to another event; an amount ("10억에") does not end the link.
     gap = r"(?:(?!샀|사서|(?<![가-힣])산\s|취득|매수|구입|구매|분양|입사|(?:19|20)\d{2}\s*년)[^.\n]){0,20}?"
     after = re.compile(DATE + gap + r"(?:" + event + ")")
-    before = re.compile(r"(?:" + event + r")\S{0,3}\s*(?:은|는|이|:)?\s*" + DATE)
+    # "양도일은 2024-05-01"; the few letters after the event word never cross a sentence end
+    # ("…팔았어. 2019년에 샀어" does not date the sale 2019).
+    before = re.compile(r"(?:" + event + r")[가-힣]{0,3}\s*(?:은|는|이|:)?\s*" + DATE)
     for text in reversed(texts):
         found = set()
         if tool == "vat":

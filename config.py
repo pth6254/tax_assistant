@@ -43,12 +43,12 @@ OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 CHAT_MODEL: str      = os.getenv("CHAT_MODEL",  "qwen3.5:9b")          # LLM
 LLM_TASK_NAMES = (
     "answer", "history_answer", "citation_extraction", "query_classification",
-    "tool_selection", "document_classification", "question_planning", "answer_judge",
+    "tool_selection", "document_classification", "question_planning", "answer_judge", "fact_reading",
 )
 _DEFAULT_EFFORT = {
     "answer": "low", "history_answer": "low", "citation_extraction": "low",
     "query_classification": "low", "tool_selection": "low", "document_classification": "none",
-    "question_planning": "low", "answer_judge": "low",
+    "question_planning": "low", "answer_judge": "low", "fact_reading": "low",
 }
 _VALID_EFFORT = {"none", "minimal", "low", "medium", "high", "xhigh", "max"}
 

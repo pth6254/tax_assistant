@@ -33,6 +33,7 @@
 | 참고 계산 | [formula_workflow.py](app/services/calculator/formula_workflow.py) |
 | 채팅 한 턴(과거 법령·도구·근거 답변·저장, 일반·SSE 공통) | [chat_service.py](app/services/chat_service.py) (`_answer_turn`, `_fetch_rag_and_web_context`), [chat_history.py](app/services/chat_history.py) |
 | 채팅 계산 경로(해석기 순서·금액 후속 질문·되묻기 답·6개 세목 모델 선택 생략·과세 사건 날짜) | [planner.py](app/services/tools/planner.py) (`run_tools_for_query`, `answered_calculation`, `followup_question`, `calculator_in_scope`), [tax_date.py](app/services/calculator/tax_date.py) |
+| 채팅 계산의 대화 이해(모델 사실 읽기·인용 증명·경우별 계산·공개 사실 조회) | [fact_reading.py](app/services/calculator/fact_reading.py), [understanding.py](app/services/calculator/understanding.py), [adjusted_areas.py](app/services/calculator/adjusted_areas.py), [public_facts.py](app/services/calculator/public_facts.py), [planner.py](app/services/tools/planner.py) (`_understood`, `unused_amounts`, `_asking`), 평가 [chat_flexibility.py](evaluation/chat_flexibility.py) |
 | 종합소득세(금융소득 포함) 계산기·채팅 입력 해석 | [income_tax.py](app/services/calculator/income_tax.py), [financial_income_tax.py](app/services/calculator/financial_income_tax.py), [income_tax_inputs.py](app/services/calculator/income_tax_inputs.py) |
 | 양도소득세 계산기·채팅 입력 해석 | [capital_gains.py](app/services/calculator/capital_gains.py), [capital_gains_inputs.py](app/services/calculator/capital_gains_inputs.py) |
 | 증여세 계산기·채팅 입력 해석 | [gift_tax.py](app/services/calculator/gift_tax.py), [gift_inputs.py](app/services/calculator/gift_inputs.py) |

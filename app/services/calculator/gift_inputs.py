@@ -19,7 +19,7 @@ GRANDPARENT = r"할아버지|할머니|조부모|조부|조모|외할아버지|�
 CHILD = r"아들|딸|(?<!손)자녀|자식"
 GRANDCHILD = r"손자|손녀|손주|외손자|외손녀"
 RELATIVE = (r"삼촌|숙부|이모(?!티)|고모|외삼촌|형(?:님|이|에게|한테|으로부터|이랑)|누나|오빠|언니|동생|형제|자매|"
-            r"장인|장모|시아버지|시어머니|사위|며느리|조카|사촌")
+            r"장인|장모|시아버지|시어머니|사위|며느리|조카|사촌|친족|친척")
 STRANGER = r"친구|지인|애인|타인"
 GIVE = r"(?:을|를)?\s*(?:증여|물려|주|줬|준|받|넘겨|이전|송금|보내)"
 AMOUNT_LABEL = r"증여재산가액|증여가액|증여금액|증여액|증여재산|증여|시가|평가액"
@@ -30,6 +30,8 @@ ADULT = re.compile(r"성년|성인|대학생|직장인|사회초년생|(?<!\d)(?
 MARRIAGE = re.compile(r"결혼|혼인|출산|출생|아이를 낳|아기를 낳|입양")
 WINDOW = re.compile(r"2\s*년\s*(?:이내|안)|(?:결혼|혼인|출산)\s*(?:을\s*)?(?:예정|앞두|준비)|"
                     r"(?:결혼|혼인|출산|태어난|낳은)\s*(?:한\s*)?지\s*(?:1\s*년|[1-9]\s*개월|\d{1,2}\s*개월)")
+# "혼인·출산 공제 대상 아님": the standard sentence for a marriage outside the two-year window.
+NOT_WINDOW = re.compile(r"혼인·?출산\s*공제\s*(?:대상\s*)?(?:아님|아니|제외)")
 CHILD_GIVES = re.compile(r"(?:아들|딸|(?<!손)자녀|자식)(?:에게서|한테서|으로부터|로부터|이|가|께서)")
 DECEASED_PARENT = re.compile(r"(?:아버지|어머니|아빠|엄마|부모|아들|딸|자녀)(?:가|는|께서)?\s*(?:돌아가|사망|별세)")
 PRIOR_MENTION = re.compile(r"(?:이전|전에|예전에|작년|재작년|\d+\s*년\s*전)[^.?!\n]{0,20}(?:증여|받았|받은)")
@@ -103,7 +105,7 @@ def stated_gift_inputs(query, history=None):
     minor = True if MINOR.search(text) else False if ADULT.search(text) else None
     if ascendant and minor is None:
         missing.append("받는 사람이 미성년자인지(부모·조부모에게 받으면 공제가 5천만원 또는 2천만원)")
-    marriage = ascendant and bool(MARRIAGE.search(text))
+    marriage = ascendant and bool(MARRIAGE.search(text)) and not NOT_WINDOW.search(text)
     if marriage and not WINDOW.search(text):
         missing.append("혼인신고일 전후 2년 또는 자녀 출생일부터 2년 이내에 받는 증여인지(혼인·출산 공제 1억원)")
     if PRIOR_MENTION.search(text) and prior is None:

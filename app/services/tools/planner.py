@@ -59,7 +59,9 @@ def is_calculation_followup(query, history):
         return False
     return bool(re.fullmatch(
         r"\s*(?:(?:그럼|그러면|대신)\s*)?(?:(?:소득|수입|매출|매입|경비|증여액)(?:은|는|이|가|을|를)?\s*)?"
-        r"\d[\d,.]*\s*(?:억|천만|백만|천|만)?\s*원?(?:이면|이라면|으로|으로 바꾸면)?\s*[?.!]*\s*", query
+        r"(?:\d[\d,.]*\s*(?:억|천만|백만|천|만)\s*)*\d[\d,.]*\s*(?:억|천만|백만|천|만)?\s*원?"
+        r"(?:이면|이라면|으로|으로 바꾸면|(?:에|으로|로)\s*(?:팔면|팔았으면|팔았다면|판다면|사면|샀으면|샀다면|받으면|주면|증여하면|벌면))?"
+        r"\s*[?.!]*\s*", query
     ) and _AMOUNT_RE.search(query))
 
 
@@ -114,6 +116,8 @@ async def select_tool(query: str, history: list[dict] | None = None) -> tuple[st
 
 
 async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] | None = None, on_event=None) -> ToolRun | None:
+    # The conversation as written: the model reads it with the calculator's questions in place.
+    conversation = (history or [], query)
     # "거주 10년이야" right after the calculator asked for it answers that question: read it
     # together with the question it completes, as if both had been asked at once.
     if (answered := answered_calculation(query, history)) is not None:
@@ -127,20 +131,36 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
         if calculation_followup and not re.search(r"소득|수입|매출|매입|경비|증여액", query):
             calc_query = followup_question(query, history)
             if isinstance(calc_query, ToolRun):
-                _emit_result(calc_query, {}, on_event)
-                return calc_query
-        result = await tax_calculation(calc_query, history, on_event)
-        if result is not None:
-            return result
-        if penalty_scope(calc_query, history):
+                # "그럼 18억에 팔면?" after a question with several amounts: the words say which one.
+                better = await _understood(query, history, conversation, None)
+                result = _asking(better or calc_query, conversation[0])
+                _emit_result(result, result.calculation.params if result.calculation else {}, on_event)
+                return result
+        # The readers' events wait: a reading of the whole conversation may replace their result.
+        held = []
+        hold = held.append if on_event else None
+        result = await tax_calculation(calc_query, history, hold)
+        if result is None and penalty_scope(calc_query, history):
             # 본세를 말한 가산세 질문은 가산세만 계산한다. 본세 대신 세목 계산 사실을 말했으면
             # '가산세'를 뺀 질문으로 그 세목 계산기를 실행하고 가산세를 옵션으로 붙인다.
-            result = await penalty_calculation(calc_query, history, on_event)
-            if result is not None:
-                return result
-            result = await tax_calculation(PENALTY_WORD.sub("", calc_query), history, on_event, facts_query=calc_query)
-            if result is not None:
-                return result
+            result = await penalty_calculation(calc_query, history, hold)
+            if result is None:
+                result = await tax_calculation(PENALTY_WORD.sub("", calc_query), history, hold, facts_query=calc_query)
+        complete = result is not None and result.status == "ok" and not unused_amounts(
+            _texts(calc_query, history), result.calculation.params if result.calculation else {})
+        if not complete and (result is None or result.status in ("ok", "needs_input")):
+            better = await _understood(calc_query, history, conversation, result)
+            if better is not None:
+                better = _asking(better, conversation[0], question=calc_query)
+                _emit_result(better, better.calculation.params if better.calculation else {}, on_event)
+                return better
+        if result is not None:
+            result = _asking(result, conversation[0], question=calc_query)
+            for event in held:
+                if event.get("status") == "needs_input" and result.asked:
+                    event["asked"] = list(result.asked)
+                on_event(event)
+            return result
         # The six calculators have readers; a model proposal for them is rejected by the input
         # proofs anyway, so no selection is paid for. Amounts the reader could not use mean a case
         # the calculator does not model (국외 자산, 창업자금 특례 …): the sourced reference formula
@@ -149,7 +169,7 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
         if tool is not None and _AMOUNT_RE.search(calc_query):
             return ToolRun("formula_calculation", "planned", "공식 근거를 확인한 산식으로 참고 계산을 준비합니다.")
         if tool is not None:
-            result = ask_calculator_facts(tool)
+            result = _asking(ask_calculator_facts(tool), conversation[0], question=calc_query)
             _emit_result(result, {}, on_event)
             return result
     if on_event:
@@ -218,6 +238,61 @@ async def run_tools_for_query(query: str, *, user_id: str, history: list[dict] |
     result = await execute_tool(*selection, user_id=user_id)
     _emit_result(result, selection[1], on_event)
     return result
+
+
+def unused_amounts(texts, params):
+    """Amounts the user wrote that no calculator input uses: the reader missed what they were for."""
+    from app.services.calculator.fact_reading import money_values
+    from app.services.calculator.financial_inputs import _MONEY
+    used = {v for v in params.values() if isinstance(v, int) and not isinstance(v, bool)}
+    return [m.group().strip() for text in texts for m in _MONEY.finditer(text)
+            if not money_values(m.group()) & used]
+
+
+async def _understood(calc_query, history, conversation, result):
+    """The calculation from the conversation's proven facts, or None to keep the readers' result.
+
+    The model is asked only when the conversation states a number: without one there is no amount to
+    compute with, and the reply asks for the facts with an explanation instead.
+    """
+    from app.services.calculator.understanding import understood_calculation
+    talk_history, talk_query = conversation
+    users = [str(m.get("content", "")) for m in talk_history if m.get("role") == "user"] + [talk_query]
+    if not any(re.search(r"\d", text) for text in users) or penalty_scope(calc_query, history) \
+            or virtual_asset_scope(calc_query, history) or financial_income_scope(calc_query, history):
+        return None
+    hint = result.tool if result is not None else calculator_in_scope(calc_query, history)
+    try:
+        return await understood_calculation(calc_query, history, conversation=conversation, tool_hint=hint)
+    except Exception as exc:   # A failure here leaves the readers' own answer in place.
+        logger.warning("Conversation reading not used (%s)", type(exc).__name__)
+        return None
+
+
+def _asking(result, history, question=None):
+    """Mark a calculator's question: the first one of a calculation also explains the rules."""
+    if result.status == "needs_input" and result.error_code == "calculation_inputs_required" \
+            and result.tool in CALCULATOR_FACTS:
+        pending = bool(history) and bool(history[-1].get("calculator_request"))
+        labels = result.asked or _labels(result.context)
+        return replace(result, asked=tuple(labels), explain=not pending,
+                       question=result.question or question)
+    return result
+
+
+def _labels(context):
+    """The facts a reader's question names ("…다음 사실을 알려주세요: A, B.")."""
+    tail = context.split("알려주세요:", 1)[-1].strip().split(". ")[0].rstrip(".")
+    parts, depth, current = [], 0, ""
+    for char in tail:
+        depth += char == "("
+        depth -= char == ")"
+        if char == "," and depth == 0:
+            parts.append(current.strip())
+            current = ""
+        else:
+            current += char
+    return [p for p in [*parts, current.strip()] if p]
 
 
 ASKS_BACK = re.compile(r"\?|뭐|무엇|어떻게|왜|요건|설명|알려\s*(?:줘|주세요)|궁금")
@@ -442,4 +517,6 @@ def _emit_result(result, params, callback):
             "error_code": result.error_code, "retryable": result.retryable,
             "params": result.calculation.params if result.calculation else params,
             "context": result.calculation.context if result.calculation else result.context,
+            # What the reply asks: stored with it so the next turn's 네/아니요 can answer it.
+            **({"asked": list(result.asked)} if result.asked else {}),
         })

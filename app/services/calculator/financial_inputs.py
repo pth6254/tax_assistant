@@ -33,10 +33,15 @@ def parse_money(text):
     return int(round(total)) if found else None
 
 
+# "'5천'은 50,000,000원": a unit the conversation reading proved from context (연봉 5천).
+RESOLVED_UNIT = re.compile(r"'([^'\n]+)'은\s*[\d,]+원")
+
+
 def ambiguous_thousands(text):
     """'경비 7천' alone is spoken for 7천만원 as often as 7천원; only '1억 5천' is certain."""
+    resolved = {re.sub(r"\s", "", m.group(1)) for m in RESOLVED_UNIT.finditer(text)}
     return [m.group(0).strip() for m in re.finditer(r"\d[\d,]*\s*천(?!\s*만|\s*원|\s*\d)", text)
-            if not re.search(r"억\s*$", text[:m.start()])]
+            if not re.search(r"억\s*$", text[:m.start()]) and re.sub(r"\s", "", m.group(0)) not in resolved]
 
 
 def stated_amount(label, text):
