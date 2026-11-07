@@ -21,8 +21,9 @@ async def expand_graph(results, query=''):
     # This index is current-law only, not an as-of-date legal engine.
     if re.search(r'\d{4}\s*년|\d{4}[-./]\d|과거|종전|개정\s*전|당시', query):
         return results
+    stages = {}   # the step under way and the seconds each step took, for a timeout's log line
     try:
-        expanded = await asyncio.wait_for(_expand(results, query), config.GRAPH_TIMEOUT_SEC)
+        expanded = await asyncio.wait_for(_expand(results, query, stages), config.GRAPH_TIMEOUT_SEC)
         logger.info('[GRAPH] expansion completed base=%d added=%d', len(results), len(expanded) - len(results))
         return expanded
     except Exception as error:
@@ -32,8 +33,9 @@ async def expand_graph(results, query=''):
                           if 'app/services/' in frame.filename.replace('\\', '/')), None)
         location = (f'{Path(app_frame.filename).name}:{app_frame.lineno}'
                     if app_frame else 'external_dependency')
-        logger.warning('[GRAPH] expansion unavailable (%s at %s); base results retained',
-                       type(error).__name__, location)
+        logger.warning('[GRAPH] expansion unavailable (%s at %s, step %s, %s); base results retained',
+                       type(error).__name__, location, stages.get('at', 'start'),
+                       ' '.join(f'{k}={v:.2f}s' for k, v in stages.items() if k != 'at') or 'no step finished')
         return results
 
 
@@ -49,8 +51,17 @@ def relevance(query, article):
     return sum(2 if t in article.article_title else 1 for t in tokens if t in article.article_title or t in article.article_text)
 
 
-async def _expand(results, query=''):
+async def _expand(results, query='', stages=None):
     from app.services.search.hybrid_search_service import _row_to_article_result
+    import time
+    stages = {} if stages is None else stages
+    clock = {'t': time.perf_counter()}
+
+    def step(name):
+        now = time.perf_counter()
+        if 'at' in stages:
+            stages[stages['at']] = now - clock['t']
+        stages['at'], clock['t'] = name, now
 
     # Bound DB fan-out and reuse identities within one expansion. Every article
     # still comes through the canonical source/version checks in lookup_service.
@@ -68,6 +79,7 @@ async def _expand(results, query=''):
     # Interpretations often lead the ranking; they cite no delegation, so the seeds
     # are the three highest-ranked statute articles instead of the first three rows.
     starts = [r for r in results if r.article_no and r.source_type != 'interpretation'][:SEED_COUNT]
+    step('seed_lookup')
     await prefetch((r.law_name, r.article_no) for r in starts)
     for result in starts:
         article = lookups[(result.law_name, result.article_no)]
@@ -77,6 +89,7 @@ async def _expand(results, query=''):
                 seeds[article_key(article.model_dump())] = article
     if not seeds:
         return results
+    step('neighbors')
     edges = await neighbors(list(seeds), bidirectional=True)
     seen = {(r.law_name, r.article_no) for r in results if r.article_no}
     additions = []
@@ -96,7 +109,9 @@ async def _expand(results, query=''):
     identities = [(edge['law_name'], edge['article_no']) for edge in candidate_edges]
     identities.extend((edge.get('alias_definition_law'), edge.get('alias_definition_article') or '제1조')
                       for edge in candidate_edges if edge.get('alias_definition_key'))
+    step('candidate_lookup')
     await prefetch(identities)
+    step('done')
     for edge in candidate_edges:
         identity = (edge['law_name'], edge['article_no'])
         if identity in seen:

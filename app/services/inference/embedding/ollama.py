@@ -16,9 +16,13 @@ class OllamaEmbeddingProvider:
         return self._client
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
+        from config import EMBEDDING_KEEP_ALIVE
+        # Ollama unloads a model 5 minutes after its last use by default; reloading the embedding model
+        # took 6.4 s of the first question after an idle spell (2026-11-07). It is kept loaded for
+        # EMBEDDING_KEEP_ALIVE seconds instead (-1: until Ollama stops), then frees the graphics memory.
         response = await self._http().post(
             f"{self.base_url}/api/embed",
-            json={"model": self.model, "input": texts},
+            json={"model": self.model, "input": texts, "keep_alive": EMBEDDING_KEEP_ALIVE},
         )
         response.raise_for_status()
         return response.json()["embeddings"]

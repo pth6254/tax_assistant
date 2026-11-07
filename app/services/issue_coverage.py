@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import Field
 
+import config
 from app.schemas.reliability import Contract, strict_schema
 from app.services.evidence import is_official
 from app.services.law.reference_parser import extract_law_reference
@@ -92,8 +93,8 @@ async def assess_issues(issues, records_by_issue, scope_issues=None):
                             for r in _budget_records(records)]})
     if not payload:
         return decisions
-    # Four issues at once: the usual plan size. Paid OpenRouter calls are no longer paced (2026-10-15).
-    semaphore = asyncio.Semaphore(4)
+    # Issues assessed at once (config.ANSWER_ISSUE_CONCURRENCY). Paid OpenRouter calls are not paced (2026-10-15).
+    semaphore = asyncio.Semaphore(config.ANSWER_ISSUE_CONCURRENCY)
 
     async def assess_one(item):
         issue_id = item["issue_id"]

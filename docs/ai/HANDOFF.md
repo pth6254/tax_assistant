@@ -45,6 +45,9 @@ Qwen 교체 0.502/0.833/0.887, KURE 임계값 0.4 0.517/0.680/0.695(일상 hit@5
 마지막 수정 전 코드) ② 웹에서 실제 대화로 확인(금액 없는 질문의 설명 답변·경우별 표 표시·"네" 답 이어 가기, 이미지 재빌드 필요) ③ 공식 사이트
 조회(`public_facts.py`)의 실제 동작 확인(Tavily로 "부산 해운대 조정대상지역", "삼성전자 상장" 각 1회) ④ 증명 단서에서 버려진 사실은
 결과 `readings[].rejected`로 보고 단서를 넓히거나 좁힌다. 평가 실행: `python -m evaluation.chat_flexibility --output <폴더> [--yes-paid]`.
+같은 날 답변 시간을 같은 호출·같은 입력을 지키는 범위에서 줄였다(ADR-083: 동시 처리 8, 끝난 쟁점부터 미리보기, 임베딩 1시간 상주, 그래프 연결 재사용).
+남은 일: 실제 분석 질문 1건으로 수정 전후 시간 비교(`docker logs tax_backend | grep -E 'LLM call|STREAM'`, 이전 값은 CURRENT_STATUS "답변 시간 단축"),
+그래프 시간 초과가 다시 나면 로그의 `step` 값으로 원인 확인. 그 이상 단축(판정 생략·보완 축소·빠른 모델)은 정답셋 비교 뒤에 결정한다.
 
 **11-07 법령 데이터**: 현행 표를 공식 XML 보관소와 대조해(`scripts/audit_law_data.py`) 잘리거나 이미 바뀐 조문 251개를 교체했다(ADR-081,
 [DATA_STRATEGY.md](DATA_STRATEGY.md) P1, 되돌리기: `python scripts/repair_law_indexes.py rollback --plan evaluation/runs/archive-sync-20261107/plan.json`,

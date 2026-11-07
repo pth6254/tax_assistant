@@ -7,12 +7,14 @@ from app.services.inference.embedding.factory import create_embedding_provider
 
 
 @pytest.mark.asyncio
-async def test_ollama_embedding_does_not_request_permanent_residency():
+async def test_ollama_embedding_keeps_the_model_loaded_for_a_set_time_not_forever():
+    import config
+
     async def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/api/embed"
         payload = json.loads(request.content)
-        assert payload == {"model": "model", "input": ["세무 상담"]}
-        assert "keep_alive" not in payload
+        assert payload == {"model": "model", "input": ["세무 상담"], "keep_alive": config.EMBEDDING_KEEP_ALIVE}
+        assert config.EMBEDDING_KEEP_ALIVE == 3600   # an hour by default, then the graphics memory is freed
         return httpx.Response(200, json={"embeddings": [[0.1, 0.2]]})
 
     provider = create_embedding_provider("ollama", "http://ollama", "model", 10)

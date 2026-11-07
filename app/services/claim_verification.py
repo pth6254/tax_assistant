@@ -1101,14 +1101,22 @@ async def generate_issue(query, issue, context, on_progress=None, feedback=None)
         return AnswerDraft(), {}, None, None, type(exc).__name__
 
 
-def first_round_answer(results, issues, context, query, mode):
-    """The answer made of the claims the first round released, or '' when none passed."""
+def first_round_answer(results, issues, context, query, mode, *, finished_only=False):
+    """The answer made of the claims the first round released, or '' when none passed.
+
+    `finished_only`: `results` holds only the issues checked so far. Release still sees the whole plan (a
+    claim resting on an unfinished issue stays withheld), but unfinished issues are not shown as withheld.
+    """
     draft = AnswerDraft.model_construct(claims=[c for i in issues for c in results[i.id][0].claims])
     checks = {key: errors for row in results.values() for key, errors in row[1].items()}
     judges = [row[2] for row in results.values() if row[2]]
     judge = JudgeReport(claims=[j for value in judges for j in value.claims],
                         missing_issue_ids=sorted({key for value in judges for key in value.missing_issue_ids})) if judges else None
     released, _ = release_claims(draft, checks, judge, context.plan, mode=mode, coverage=context.coverage)
+    if finished_only:
+        plan = context.plan.model_copy(update={"issues": [
+            i for i in context.plan.issues if i.id in results or i.kind in {"exact_lookup", "calculation"}]})
+        context = EvidenceContext("", context.records, plan=plan, coverage=context.coverage)
     return render_structured_answer(released, context, query) if any(c.kind != "fact" for c in released) else ""
 
 
@@ -1128,21 +1136,28 @@ async def generate_verified_answer(query, context, *, repair=None, on_progress=N
               "evidence_checks": evidence_checks,
               "checks": {"citation": "not_assessed", "calculation": "not_applicable", "legal_application": "not_assessed"}}
     results = {}
-    # Four issues at once: the usual plan size. Paid OpenRouter calls are no longer paced (2026-10-15).
-    semaphore = asyncio.Semaphore(4)
+    # Issues answered at once (config.ANSWER_ISSUE_CONCURRENCY). Paid OpenRouter calls are not paced (2026-10-15).
+    semaphore = asyncio.Semaphore(config.ANSWER_ISSUE_CONCURRENCY)
     async def run(issue, feedback=None):
         async with semaphore:
             result = await generate_issue(query, issue, context, on_progress, feedback)
             return issue.id, result
     issues = [i for i in context.plan.issues if i.kind not in {"exact_lookup", "calculation"}]
-    # A bounded batch keeps already completed issues if another call times out.
-    async def batch(selected, budget, feedback=None):
+    # A bounded batch keeps already completed issues if another call times out. `on_done` sees the
+    # issues finished so far while others still run.
+    async def batch(selected, budget, feedback=None, on_done=None):
         tasks = {asyncio.create_task(run(i, (feedback or {}).get(i.id))): i.id for i in selected}
         if not tasks:
             return {}
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + budget
+        output, pending = {}, set(tasks)
         try:
-            done, pending = await asyncio.wait(tasks, timeout=budget)
-            output = dict(task.result() for task in done)
+            while pending and (remaining := deadline - loop.time()) > 0:
+                done, pending = await asyncio.wait(pending, timeout=remaining, return_when=asyncio.FIRST_COMPLETED)
+                output.update(task.result() for task in done)
+                if done and pending and on_done:
+                    on_done(dict(output))
             output.update({tasks[t]: (AnswerDraft(), {}, None, None, "issue_timeout") for t in pending})
             return output
         finally:
@@ -1151,7 +1166,25 @@ async def generate_verified_answer(query, context, *, repair=None, on_progress=N
                     task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
 
-    results.update(await batch(issues, FIRST_ROUND_SEC))
+    shown_early = {"text": ""}
+
+    def show_finished(partial):
+        # What passed in the issues already finished is shown while the others are still checked. Claims
+        # resting on an unfinished issue stay withheld here, so the final answer only adds to this.
+        if not on_progress:
+            return
+        try:
+            shown = first_round_answer(partial, [i for i in issues if i.id in partial], context, query, mode,
+                                       finished_only=True)
+        except Exception as exc:  # A preview must never cost the answer itself.
+            logger.warning("finished-issue preview unavailable (%s)", type(exc).__name__)
+            return
+        if shown and shown != shown_early["text"]:
+            shown_early["text"] = shown
+            on_progress({"type": "verification", "status": "partial", "issue_ids": sorted(partial)})
+            on_progress({"type": "draft", "text": shown})
+
+    results.update(await batch(issues, FIRST_ROUND_SEC, on_done=show_finished))
     missing, feedback = set(), {}
     for issue_id, (value, checked, judged, error, generation_error) in results.items():
         passed, rejected = release_claims(value, checked, judged, context.plan, mode=mode, coverage=context.coverage)

@@ -204,6 +204,9 @@ KG_JUDGE_SETTINGS: KGJudgeSettings = _kg_judge_settings()
 OLLAMA_NUM_CTX: int = int(os.getenv("OLLAMA_NUM_CTX", "4096"))
 # 유휴 시 모델 언로드 금지 (-1) — 5분 유휴 후 콜드 스타트(27~48초) 방지
 OLLAMA_KEEP_ALIVE: int = int(os.getenv("OLLAMA_KEEP_ALIVE_SEC", "-1"))
+# Ollama 임베딩 모델을 마지막 사용 뒤 올려 두는 시간(초). Ollama 기본 5분이 지나면 다음 첫 질문이 재적재로
+# 6.4초 늦어졌다(2026-11-07). 그래픽 메모리 약 3.4GB를 그동안 쓴다. -1은 Ollama가 멈출 때까지.
+EMBEDDING_KEEP_ALIVE: int = int(os.getenv("EMBEDDING_KEEP_ALIVE_SEC", "3600"))
 
 # ── RAG 파라미터 ────────────────────────────────────────────────
 CHUNK_SIZE: int         = 800
@@ -213,6 +216,9 @@ MEMORY_TURNS: int       = 3     # 채팅 메모리 최근 N 턴
 GRAPH_RAG_ENABLED: bool = os.getenv("GRAPH_RAG_ENABLED", "false").lower() == "true"
 HISTORY_GRAPH_RAG_ENABLED: bool = os.getenv("HISTORY_GRAPH_RAG_ENABLED", "false").lower() == "true"
 GRAPH_TIMEOUT_SEC: float = float(os.getenv("GRAPH_TIMEOUT_SEC", "3"))
+# Issues whose sufficiency check and answer run at once. A plan has up to 12 issues; with 4, the fifth
+# waited for a free slot (2026-11-07: about 19 s of a 103 s answer). Each slot is one model call.
+ANSWER_ISSUE_CONCURRENCY: int = int(os.getenv("ANSWER_ISSUE_CONCURRENCY", "8"))
 NEO4J_URI: str = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
 NEO4J_USER: str = os.getenv("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD: str = os.getenv("NEO4J_PASSWORD", "")

@@ -17,24 +17,50 @@ async def connect():
         yield driver
 
 
+# The answer path asks for neighbours once per search; opening a driver each time repeated the
+# connection and login on every call. One driver per event loop is reused (closed on shutdown).
+_shared = {}
+
+
+def _reader():
+    import asyncio
+    loop = asyncio.get_running_loop()
+    driver = _shared.get(loop)
+    if driver is None:
+        if not config.NEO4J_PASSWORD:
+            raise ValueError('NEO4J_PASSWORD is required')
+        _shared.clear()   # a driver of a finished loop cannot be used or closed from this one
+        driver = _shared[loop] = AsyncGraphDatabase.driver(
+            config.NEO4J_URI, auth=(config.NEO4J_USER, config.NEO4J_PASSWORD),
+            connection_timeout=2, connection_acquisition_timeout=2,
+            max_transaction_retry_time=0, max_connection_pool_size=8,
+        )
+    return driver
+
+
+async def close_graph_reader():
+    for driver in list(_shared.values()):
+        await driver.close()
+    _shared.clear()
+
+
 async def neighbors(keys: list[str], bidirectional: bool = False) -> list[dict]:
-    async with connect() as driver:
-        records, _, _ = await driver.execute_query(Query('''
-            UNWIND $keys AS key
-            MATCH (s:TaxArticle {key: key})-[r:CITES]-(t:TaxArticle)
-            WHERE $bidirectional OR startNode(r) = s
-            RETURN s.key AS source_key, t.key AS target_key,
-                   s.law_name AS source_law, s.article_no AS source_article,
-                   t.law_name AS law_name, t.article_no AS article_no,
-                   r.evidence AS evidence, r.reference AS reference,
-                   CASE WHEN startNode(r) = s THEN 'outgoing' ELSE 'incoming' END AS direction,
-                   r.alias_definition_key AS alias_definition_key,
-                   r.alias_definition_article AS alias_definition_article,
-                   r.alias_definition_law AS alias_definition_law
-            ORDER BY source_key, target_key, reference LIMIT 24
-        ''', timeout=2), keys=keys[:3], bidirectional=bidirectional, database_=config.NEO4J_DATABASE,
-            routing_='r')
-        return [dict(record) for record in records]
+    records, _, _ = await _reader().execute_query(Query('''
+        UNWIND $keys AS key
+        MATCH (s:TaxArticle {key: key})-[r:CITES]-(t:TaxArticle)
+        WHERE $bidirectional OR startNode(r) = s
+        RETURN s.key AS source_key, t.key AS target_key,
+               s.law_name AS source_law, s.article_no AS source_article,
+               t.law_name AS law_name, t.article_no AS article_no,
+               r.evidence AS evidence, r.reference AS reference,
+               CASE WHEN startNode(r) = s THEN 'outgoing' ELSE 'incoming' END AS direction,
+               r.alias_definition_key AS alias_definition_key,
+               r.alias_definition_article AS alias_definition_article,
+               r.alias_definition_law AS alias_definition_law
+        ORDER BY source_key, target_key, reference LIMIT 24
+    ''', timeout=2), keys=keys[:3], bidirectional=bidirectional, database_=config.NEO4J_DATABASE,
+        routing_='r')
+    return [dict(record) for record in records]
 
 
 async def save_graph(nodes: list[dict], edges: list[dict], *, replace_all: bool = False):

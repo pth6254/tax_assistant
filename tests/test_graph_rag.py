@@ -169,11 +169,16 @@ async def test_failure_and_timeout_keep_base_results(monkeypatch):
     results = [object()]
     monkeypatch.setattr(service, '_expand', AsyncMock(side_effect=RuntimeError('private')))
     assert await service.expand_graph(results) is results
-    async def slow(_, query=''):
+    async def slow(_, query='', stages=None):
+        stages.update(at='neighbors', seed_lookup=0.01)
         await asyncio.sleep(10)
     monkeypatch.setattr(service, '_expand', slow)
     monkeypatch.setattr(service.config, 'GRAPH_TIMEOUT_SEC', 0.01)
+    warnings = []
+    monkeypatch.setattr(service.logger, 'warning', lambda message, *args: warnings.append(message % args))
     assert await service.expand_graph(results) is results
+    # A timeout says which step was under way, so a slow step can be found from the log.
+    assert 'TimeoutError' in warnings[-1] and 'step neighbors' in warnings[-1] and 'seed_lookup=0.01s' in warnings[-1]
 
 
 @pytest.mark.asyncio
@@ -288,3 +293,23 @@ async def test_reverse_other_family_and_large_context_excluded(monkeypatch):
     target['article_text'] = '의료비 공제' * 1000
     edge.update(direction='outgoing', target_key=article_key(target))
     assert await service.expand_graph(base, '의료비 공제') == base
+
+
+@pytest.mark.asyncio
+async def test_neighbours_reuse_one_driver_until_shutdown(monkeypatch):
+    from app.services.graph import store
+    monkeypatch.setattr(store.config, 'NEO4J_PASSWORD', 'test')
+    seen = []
+
+    class Driver:
+        async def execute_query(self, *args, **kwargs):
+            return [], None, None
+
+        async def close(self):
+            seen.append('closed')
+    monkeypatch.setattr(store.AsyncGraphDatabase, 'driver', lambda *args, **kwargs: seen.append('opened') or Driver())
+    await store.neighbors(['a'])
+    await store.neighbors(['b'])
+    assert seen == ['opened']   # no new connection and login per search
+    await store.close_graph_reader()
+    assert seen == ['opened', 'closed']

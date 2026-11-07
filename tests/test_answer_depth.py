@@ -64,9 +64,38 @@ async def test_claims_that_passed_are_shown_before_a_repair_round(monkeypatch):
     answer, report = await claims.generate_verified_answer('질문', ctx, repair=repair, on_progress=events.append)
     kinds = [e.get('status') or e['type'] for e in events]
     retry = len(kinds) - 1 - kinds[::-1].index('generating')   # I2 is generated again after the preview
-    assert kinds.index('repairing') < kinds.index('draft') < retry
-    draft = next(e for e in events if e['type'] == 'draft')['text']
+    # A draft follows the repair notice (an earlier one may already show I1 if it finished first).
+    assert kinds.index('repairing') < kinds.index('draft', kinds.index('repairing')) < retry
+    draft = [e for e in events if e['type'] == 'draft'][-1]['text']
     assert '조건을 충족하면' in draft and '조건을 충족하면' in answer   # the final answer keeps what was shown
+
+
+@pytest.mark.asyncio
+async def test_a_finished_issue_is_shown_while_another_is_still_checked(monkeypatch):
+    import asyncio
+    import json
+    from tests.test_scoped_answers import supported
+    ctx = two_issues()
+    events = []
+
+    async def generate(messages, schema, **kwargs):
+        issue_id = json.loads(messages[1]['content'])['plan']['issues'][0]['id']
+        if issue_id == 'I2':
+            await asyncio.sleep(0.2)   # the second issue is still being answered
+        return wire_claim(issue_id)
+
+    async def judge(query, draft, context):
+        return supported(draft), None
+
+    monkeypatch.setattr(claims, 'call_llm_structured', generate)
+    monkeypatch.setattr(claims, 'judge_claims', judge)
+    answer, report = await claims.generate_verified_answer('질문', ctx, on_progress=events.append)
+    statuses = [e.get('status') or e['type'] for e in events]
+    assert 'partial' in statuses and statuses.index('partial') < len(statuses) - 1
+    early = next(e for e in events if e['type'] == 'draft')['text']
+    assert '조건을 충족하면' in early and '부가가치세' not in early   # I2 is still checked, not "withheld"
+    assert all(line in answer for line in early.splitlines() if line.strip())   # the final keeps what was shown
+    assert report['status'] == 'checked'
 
 
 @pytest.mark.asyncio

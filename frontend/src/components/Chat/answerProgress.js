@@ -7,6 +7,7 @@ export const PROGRESS = {
   assessing: '찾은 근거가 쟁점에 충분한지 확인하고 있습니다',
   generating: '확보한 근거로 답변을 작성하고 있습니다',
   checking: '답변의 근거와 조건을 대조하고 있습니다',
+  partial: '검사를 마친 쟁점부터 보여 드립니다. 나머지 쟁점을 검사하고 있습니다',
   repairing: '검사를 통과한 내용부터 보여 드립니다. 보류된 부분의 근거를 다시 찾아 보완하고 있습니다',
 }
 
@@ -22,8 +23,9 @@ export function progressText(progress, seconds = 0) {
   return step + elapsed
 }
 
-// The server sends the final answer once ('chunk'); before a repair round it may send the
-// part that already passed ('draft'). The final answer replaces the draft, never follows it.
+// The server sends the final answer once ('chunk'); before that it may send what already passed
+// ('draft': the issues checked so far, again before a repair round). The final answer replaces the
+// draft, never follows it.
 export function streamText(message, type, text) {
   if (type === 'draft') return { ...message, content: text, draft: true }
   if (type === 'replace') return { ...message, content: text, draft: false }

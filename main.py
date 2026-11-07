@@ -76,6 +76,8 @@ async def lifespan(app: FastAPI):
     await close_pool()
     await close_http_client()
     await close_llm_client()
+    from app.services.graph.store import close_graph_reader
+    await close_graph_reader()
     print("🔌 종료 완료")
 
 
