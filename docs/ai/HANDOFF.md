@@ -48,6 +48,10 @@ Qwen 교체 0.502/0.833/0.887, KURE 임계값 0.4 0.517/0.680/0.695(일상 hit@5
 같은 날 답변 시간을 같은 호출·같은 입력을 지키는 범위에서 줄였다(ADR-083: 동시 처리 8, 끝난 쟁점부터 미리보기, 임베딩 1시간 상주, 그래프 연결 재사용).
 실측: 같은 질문 103.2초 → 78.2초(CURRENT_STATUS "답변 시간 단축"). 남은 일:
 그래프 시간 초과가 다시 나면 로그의 `step` 값으로 원인 확인. 그 이상 단축(판정 생략·보완 축소·빠른 모델)은 정답셋 비교 뒤에 결정한다.
+**11-07 문서 재구성**: README를 처음 방문한 사람용 첫 화면(소개·실제 화면·기능·동작 구조·완성도 요약 표·한계·빠른 실행·문서 안내)으로
+새로 쓰고, 기존 README 내용은 `docs/FEATURES.md`·`ARCHITECTURE.md`·`SETUP.md`·`API.md`로 옮겼다(문서 목록 `docs/README.md`, 규칙 AGENTS.md).
+화면 캡처는 저장된 실제 답변을 지금 화면에 띄워 `docs/portfolio/capture-readme.cjs`로 다시 찍는다(모델 호출 없음). README 완성도 표는
+기준일 2026-11-07이며, 정답셋 실행·배포 등으로 항목이 바뀌면 함께 고친다. 푸시 전이라 GitHub에는 아직 반영되지 않았다.
 
 **11-07 법령 데이터**: 현행 표를 공식 XML 보관소와 대조해(`scripts/audit_law_data.py`) 잘리거나 이미 바뀐 조문 251개를 교체했다(ADR-081,
 [DATA_STRATEGY.md](DATA_STRATEGY.md) P1, 되돌리기: `python scripts/repair_law_indexes.py rollback --plan evaluation/runs/archive-sync-20261107/plan.json`,

@@ -10,7 +10,7 @@
 2. [PROJECT_CONTEXT.md](docs/ai/PROJECT_CONTEXT.md) — 목적, 코드 책임, 도메인 불변 규칙
 3. [CURRENT_STATUS.md](docs/ai/CURRENT_STATUS.md) — 현재 상태와 검증 수치
 4. [DECISIONS.md](docs/ai/DECISIONS.md) — 설계 결정과 이유
-5. 현재 작업과 관련된 README 절·실제 코드·테스트
+5. 현재 작업과 관련된 사람용 문서(README, `docs/FEATURES.md`·`ARCHITECTURE.md`·`SETUP.md`·`API.md`)의 절·실제 코드·테스트
 6. 이어 작업할 때 [HANDOFF.md](docs/ai/HANDOFF.md) 맨 위의 "현재 인계"
 
 세션을 마칠 때는 AGENTS.md의 "작업 종료 규칙"에 따라 해당 문서를 갱신한다. 인수인계에 적힌 후속 작업을 문서
@@ -56,7 +56,9 @@
 
 ## 문서 찾기
 
-- 규칙·문서 작성 형식: [AGENTS.md](AGENTS.md). 설치·실행·설정·API: [README.md](README.md).
+- 규칙·문서 작성 형식: [AGENTS.md](AGENTS.md). 첫 화면·완성도 요약: [README.md](README.md). 기능 상세: [FEATURES.md](docs/FEATURES.md),
+  구조: [ARCHITECTURE.md](docs/ARCHITECTURE.md), 설치·실행·테스트·문제 해결: [SETUP.md](docs/SETUP.md), API: [API.md](docs/API.md),
+  문서 전체 목록: [docs/README.md](docs/README.md).
 - 상태·검증 수치: [CURRENT_STATUS.md](docs/ai/CURRENT_STATUS.md). 다음 작업·결과 위치: [HANDOFF.md](docs/ai/HANDOFF.md).
 - 평가 지표·성능 개선·배포의 단계별 계획: [ROADMAP.md](docs/ai/ROADMAP.md), 법령 데이터 구조: [DATA_STRATEGY.md](docs/ai/DATA_STRATEGY.md)(둘 다 계획이며 완료 기록이 아니다).
 - 검증 흐름: [RELIABILITY_WORKFLOW.md](docs/ai/RELIABILITY_WORKFLOW.md). Reranker 등 미구현 제안: [RAG_IMPROVEMENT_PLAN.md](docs/ai/RAG_IMPROVEMENT_PLAN.md)(제안을 구현 완료로 표시하지 않는다).

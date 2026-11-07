@@ -337,7 +337,7 @@ evaluation/
 
 - 평가 UI는 LangSmith 사용: `evaluation/LANGSMITH.md`. 자체 대시보드는 제거했다. `scripts/evaluate.py langsmith prepare/publish`로 선택한 결과만 전송하고 원본 평가 규약은 로컬에 유지한다. 서비스 채팅은 별도 루트 실행으로 LangSmith 추적을 활성화한다. 실제 키를 Git에 커밋하지 않는다.
 
-- 전체 기능·실행·트러블슈팅: `README.md`
+- 프로젝트 소개·완성도 요약: `README.md`. 기능 상세 `docs/FEATURES.md`, 구조 `docs/ARCHITECTURE.md`, 설치·실행·테스트·문제 해결 `docs/SETUP.md`, API `docs/API.md`
 - 배치 CLI: `scripts/README.md`
 - 현재 진행 상태: `docs/ai/CURRENT_STATUS.md`
 - 설계 결정: `docs/ai/DECISIONS.md`
