@@ -1,6 +1,7 @@
 # 세무 AI 어시스턴트
 
-**한국 세법 질문에 법령 원문을 근거로 답하고, 세금은 검증된 계산기로 계산하는 AI 세무 상담 서비스**
+**한국 세법 질문에 법령 원문을 근거로 답하고, 세금은 검증된 계산기로 계산하는 AI 세무 상담 서비스**<br>
+*Korean tax AI assistant with statute-grounded answers, per-claim citation checks and verified tax calculators*
 
 [![CI](https://github.com/pth6254/tax_assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/pth6254/tax_assistant/actions/workflows/ci.yml)
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
