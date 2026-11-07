@@ -1275,7 +1275,7 @@ async def generate_verified_answer(query, context, *, repair=None, on_progress=N
         report["repeats"] = repeats
     report["citations"] = [dict(evidence_id=r.id, law_name=r.law_name, reference=r.reference,
                                  label=r.category, origin=r.origin, version_id=r.version_id,
-                                 effective_from=r.effective_from, source=r.source,
+                                 effective_from=r.effective_from, in_force_since=r.in_force_since, source=r.source,
                                  content_hash=r.content_hash, text=r.text, location=r.location,
                                  quotes=cited_passages(r, released, context.records))
                            for r in distinct_sources([r for r in context.records if r.id in used])]

@@ -22,7 +22,7 @@ const fs = require('node:fs')
       plan: { issues: [{ id: 'I1', subject: 'H', law: '법인세법' }] },
       claims: [{ id: 'C1', issue_id: 'I1', released: true }],
       citations: [{ evidence_id: 'display-source', label: '법률', law_name: '시험법', reference: '제1조',
-        effective_from: '2025-01-01', text: '제1조\n① 표시 테스트입니다.' }] }
+        effective_from: '20260701', in_force_since: '20220101', text: '제1조\n① 표시 테스트입니다.' }] }
     await page.route('**/api/**', async route => {
       const path = new URL(route.request().url()).pathname
       let body = {}
@@ -59,6 +59,9 @@ const fs = require('node:fs')
     await panel.locator(':scope > summary').click()
     assert.equal(await panel.locator('.verification-sources details').count(), verification.citations.length)
     assert.equal(await panel.getByText('계산기를 사용하지 않았습니다.', { exact: true }).count(), 0)
+    await panel.locator('.verification-sources details > summary').first().click()
+    assert.ok((await panel.locator('.verification-sources details').first().innerText())
+      .includes('자료 시행일: 2026-07-01 (이 문구는 2022-01-01부터 같음)'))
     await panel.locator(':scope > summary').click()
     await page.locator('.assistant-message').evaluate(el => el.scrollIntoView({ block: 'start' }))
     if (process.env.UI_SCREENSHOT) await page.screenshot({ path: process.env.UI_SCREENSHOT, fullPage: true })
