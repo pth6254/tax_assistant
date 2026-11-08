@@ -108,6 +108,8 @@ bash dev/docker-up-wsl.sh backend frontend            # DB 마이그레이션 �
 python scripts/ingest_laws.py --embed                 # 처음 한 번: 법령 수집과 임베딩
 ```
 
+데이터를 크게 바꾸기 전에는 `./dev/backup-db.sh`로 DB를 백업합니다(`backups/`, 최신 3개 보관).
+
 단계별 설치, 환경 변수, 테스트 실행, 자주 생기는 문제는 [설치·실행·테스트](docs/SETUP.md), HTTP API는 [API](docs/API.md)에 있습니다.
 
 ## 문서 안내

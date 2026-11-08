@@ -31,6 +31,7 @@
 | 현행 표와 보관소 대조·교체·문구 시행일 | [archive_sync.py](app/services/law/archive_sync.py) (`rebuild_plan`, `wording_since`), [index_repair.py](app/services/law/index_repair.py), [vector_provenance.py](app/services/law/vector_provenance.py), `scripts/audit_law_data.py`, `scripts/rebuild_current_laws.py`, `scripts/reindex_vectors.py`, `scripts/repair_law_indexes.py --source archive` |
 | 사건일과 시행본 비교·사건 당시 조문 | [temporal_scope.py](app/services/temporal_scope.py) (현행 행은 `in_force_since`부터), [historical_evidence.py](app/services/historical_evidence.py) |
 | 참고 계산 | [formula_workflow.py](app/services/calculator/formula_workflow.py) |
+| 답변 대기 시간(쟁점 동시 처리·끝난 쟁점부터 미리보기·그래프 연결 재사용·임베딩 상주) | [claim_verification.py](app/services/claim_verification.py) (`generate_verified_answer`, `first_round_answer`), [issue_coverage.py](app/services/issue_coverage.py), [graph/store.py](app/services/graph/store.py) (`neighbors`), [embedding/ollama.py](app/services/inference/embedding/ollama.py), `config.py`의 `ANSWER_ISSUE_CONCURRENCY`·`EMBEDDING_KEEP_ALIVE` |
 | 채팅 한 턴(과거 법령·도구·근거 답변·저장, 일반·SSE 공통) | [chat_service.py](app/services/chat_service.py) (`_answer_turn`, `_fetch_rag_and_web_context`), [chat_history.py](app/services/chat_history.py) |
 | 채팅 계산 경로(해석기 순서·금액 후속 질문·되묻기 답·6개 세목 모델 선택 생략·과세 사건 날짜) | [planner.py](app/services/tools/planner.py) (`run_tools_for_query`, `answered_calculation`, `followup_question`, `calculator_in_scope`), [tax_date.py](app/services/calculator/tax_date.py) |
 | 채팅 계산의 대화 이해(모델 사실 읽기·인용 증명·경우별 계산·공개 사실 조회) | [fact_reading.py](app/services/calculator/fact_reading.py), [understanding.py](app/services/calculator/understanding.py), [adjusted_areas.py](app/services/calculator/adjusted_areas.py), [public_facts.py](app/services/calculator/public_facts.py), [planner.py](app/services/tools/planner.py) (`_understood`, `unused_amounts`, `_asking`), 평가 [chat_flexibility.py](evaluation/chat_flexibility.py) |
@@ -44,6 +45,7 @@
 | 가상자산(종합소득세의 분리과세 항목)·채팅 입력 해석 | [virtual_asset.py](app/services/calculator/virtual_asset.py), [virtual_asset_inputs.py](app/services/calculator/virtual_asset_inputs.py), [income_tax.py](app/services/calculator/income_tax.py) (`calculate`) |
 | 로그인·회원(해시·토큰·시도 제한·탈퇴) | [security.py](app/core/security.py), [auth_service.py](app/services/auth_service.py), [schemas/auth.py](app/schemas/auth.py) |
 | 답변·근거 표시 | [answerSections.js](frontend/src/components/Chat/answerSections.js), [VerificationPanel.jsx](frontend/src/components/Chat/VerificationPanel.jsx) |
+| DB 백업·복원 | `dev/backup-db.sh` (최신 3개, 복원 명령은 파일 머리말) |
 | 자동 카드·실제 관측·Judge | [auto_cards.py](evaluation/auto_cards.py), [auto_pipeline.py](evaluation/auto_pipeline.py), [auto_cli.py](evaluation/auto_cli.py) |
 | 공식 회답 정답셋·평가 | [build_interpretation_gold.py](evaluation/build_interpretation_gold.py), [gold_eval.py](evaluation/gold_eval.py) |
 | 차단 집계·검사 가치 측정 | [block_report.py](evaluation/block_report.py), [filter_value.py](evaluation/filter_value.py) |
@@ -52,6 +54,10 @@
 
 - 이 환경의 셸은 Windows(PowerShell/Git Bash)다. 프로젝트 가상환경과 Docker는 **WSL**에서 쓴다. 테스트·서비스 재빌드는 `wsl -e bash -lc "cd '/mnt/c/Users/Laptop PC/Desktop/tax_assistant' && source venv-wsl/bin/activate && ..."` 형태로 실행한다. Windows 쪽 Python에는 프로젝트 의존성이 없다.
 - 셸 heredoc으로 파이썬 코드를 쓸 때 `\n`·`\\` 같은 이스케이프가 변형될 수 있다. 이스케이프가 필요한 코드는 파일로 작성해 실행한다.
+- Windows 쪽 `python3`는 Microsoft Store 연결이라 입력을 기다리며 멈춘다. 파이썬은 WSL(`wsl -e bash -lc "python3 …"`)에서 실행한다.
+- 서비스 로그는 `docker logs tax_backend`(모델 호출별 시간은 `LLM call`, 한 턴 전체는 `[STREAM]`). 백엔드 컨테이너 안에서 진단 스크립트를 돌릴 때는
+  `docker cp`로 넣고 `docker exec -w /app -e PYTHONPATH=/app tax_backend python …`.
+- WSL Docker 설정은 `/etc/docker/daemon.json`(빌드 캐시가 20GB를 넘으면 자동 정리)이며, 고칠 때는 `wsl -u root`로 쓰고 `systemctl restart docker`한다.
 - 실제 모델(OpenRouter)을 호출하는 평가는 유료다. 호출 수와 서로 다른 질문 수를 밝히고 코드·테스트·저장 결과로 먼저 확인한다.
 
 ## 문서 찾기

@@ -64,7 +64,7 @@
 
 - 생성·질문 계획·Judge: OpenRouter `openai/gpt-6-luna`. 임베딩: Windows Ollama `qwen3-embedding:4b`, `v1`, 2,560차원.
 - `config.py`의 기본 생성 provider는 `ollama`이므로 실제 실행 환경에는 `LLM_PROVIDER=openrouter`, `CHAT_MODEL=openai/gpt-6-luna`를 명시한다. 사용자 요청 없이 모델 역할이나 벡터 버전을 바꾸지 않는다.
-- LLM 작업은 `answer`, `history_answer`, `citation_extraction`, `query_classification`, `tool_selection`, `document_classification`, `question_planning`, `answer_judge`의 8개다. 작업별 설정은 공통 provider/model을 상속한다.
+- LLM 작업은 `answer`, `history_answer`, `citation_extraction`, `query_classification`, `tool_selection`, `document_classification`, `question_planning`, `answer_judge`, `fact_reading`(채팅 계산의 대화 사실 읽기)의 9개다. 작업별 설정은 공통 provider/model을 상속한다.
 - 공식 현행 쟁점 검색은 BM25·벡터·검증된 GraphRAG와 Fuzzy·Regex·MMR을 사용한다. 사용자 문서 소유권과 과거 법령의 별도 경로를 유지한다.
 - 전용 Reranker는 미구현이다. `docs/ai/RAG_IMPROVEMENT_PLAN.md`의 모델·서비스·설정은 제안이며 현재 기능으로 기술하지 않는다.
 - 운영자 평가·검수는 LangSmith다. 사용자에게는 SSE 진행 상태와 채팅 근거 패널을 제공한다.
@@ -80,6 +80,7 @@
 | 검색 | 공식 현행 쟁점 검색에 한국어 BM25·벡터를 RRF로 결합하고 검증된 GraphRAG를 확장한다. 법령명이 명시된 조문은 쟁점의 법 필터와 무관하게 정확 조회한다. Regex로 참조·수치를 보호하고 제한된 Fuzzy 확장·MMR 순위 조정을 적용한다. 사용자 문서와 과거 법령은 별도 경로다. |
 | 원문·색인 | 동일 시행본 보관 XML로 계획·백업·임베딩 사전 준비·트랜잭션 교체·감사·rollback 경로를 구현했다. 다른 시행본이나 추측으로 원문을 대체하지 않는다. |
 | 계산 | 세목·과세 단위별 전용 계산기 6종(종합소득세·퇴직소득세·양도소득세·상속세·증여세·부가가치세, 가산세는 각 계산기의 옵션, 가상자산은 종합소득세의 분리과세 항목)과 공식 근거 기반 제한 JSON 산식/Decimal 참고 계산을 사용한다. 전용 계산기의 산식은 공식 계산 사례로 검증하고 법정 수치는 DB에서 읽는다. 모델이 작성한 임의 코드를 실행하지 않는다. |
+| 채팅 계산 사실 | 규칙 해석기가 먼저 읽고, 끝내지 못할 때만 모델이 대화를 읽는다. 모델이 낸 사실은 사용자 말 인용으로 코드가 증명한 것만 쓰고, 기간·세액·시행일은 코드가 정한다. 정해지지 않은 사실은 가정하지 않고 경우별로 계산하거나 묻는다(`fact_reading.py`, `understanding.py`). |
 | 답변·웹 | 생성 단계의 표시 역할과 검증된 주장으로 질문별 구조를 만든다. SSE 진행·채팅 근거 패널·저장된 검사 결과를 제공한다. |
 | 자동 평가 | 공식 보관 XML → 규칙·합성 질문·평가 카드 → 코드 검사/별도 원문 감사 → 실제 채팅 관측 → 11항목 평가 → 선택적 LangSmith 게시. 채팅에는 질문만 전달하고 기준·기대 조문은 주입하지 않는다. 저장 결과 분석은 `auto blocks`(차단 집계)와 `auto filters`(오류 주입 탐지). |
 
@@ -115,7 +116,8 @@ docker exec tax_backend pytest -q
 
 - 프런트엔드 변경은 `frontend/`에서 `npm test`, `npm run build`로 확인한다. 실제 모델/화면 검증과 독립 세무 정답 검수를 구분한다.
 - DB 스키마 변경은 수동 SQL 적용이 아니라 Alembic revision으로 작성한다.
-- 데이터 전체 재수집, 삭제, 대규모 백필처럼 기존 상태를 바꾸는 작업은 범위를 확인한 후 실행한다.
+- 데이터 전체 재수집, 삭제, 대규모 백필처럼 기존 상태를 바꾸는 작업은 범위를 확인한 후 실행한다. 그 전에 `dev/backup-db.sh`로 DB를 백업한다
+  (`backups/`, 최신 3개 보관, Git 제외). 오래된 백업이나 결과 폴더를 지울 때는 최신 백업이 읽히는지 먼저 확인한다.
 
 ## 비밀값
 
