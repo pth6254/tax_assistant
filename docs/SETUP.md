@@ -293,7 +293,7 @@ npm run dev
    `https://….trycloudflare.com` 주소와 초대 코드를 공유합니다. 창을 닫으면 공유가 끝나고, 다시 열면 주소가 바뀝니다.
 
 DB(5433)·프런트엔드(3001)·pgAdmin(5050) 포트는 이 PC에서만 열리며 pgAdmin은 `--profile admin`으로만 뜹니다. 질문 한도는 답변이 시작되기
-전에 기록되므로 중단한 답변도 1회로 셉니다(`chat_usage`). 백업은 WSL에서 `./dev/backup-db.sh`(최근 7개 보관, `backups/`). 백업 파일은 같은
+전에 기록되므로 중단한 답변도 1회로 셉니다(`chat_usage`). 백업은 WSL에서 `./dev/backup-db.sh`(최근 3개 보관, `backups/`). 백업 파일은 같은
 PC에 있으므로 다른 저장소에도 복사해 두세요. 고정 주소가 필요하면 Cloudflare 계정·도메인으로 이름 있는 터널을 만들거나 서버로 옮깁니다.
 
 ### Vercel에 화면 배포하기(백엔드는 이 PC)
